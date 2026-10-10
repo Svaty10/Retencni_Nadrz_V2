@@ -30,50 +30,40 @@ int main(void)
     /* 3. Configure RTC Periodic Interrupt Timer */
     rtc_pit_init();
 
-    /* Initial measurement and boot notification */
+    /* Initial measurement variables */
     uint16_t vbat_mv = 0;
     uint16_t probe_raw = 0;
     uint16_t probe_mv = 0;
-    int16_t  temp_c_x10 = 0;
-    uint16_t hum_rh_x10 = 0;
+    int16_t  temp_x100 = 0;
+    uint16_t hum_x100 = 0;
+    uint16_t level_mm = 0;
 
     /* Primary application loop */
     while (1) {
         wdt_kick();
 
-        uint8_t status_flags = 0;
-
         /* ------------------------------------------------------------------ */
         /* Phase A: Battery Voltage Measurement & Failsafe Check              */
         /* ------------------------------------------------------------------ */
         bool bat_ok = adc_measure_battery(&vbat_mv);
-        if (bat_ok) {
-            status_flags |= STATUS_FLAG_ADC_OK;
-        } else {
+        if (!bat_ok) {
             vbat_mv = 0;
         }
 
         /* Li-FeS2 Battery Protection Failsafe:
          * Below 3000 mV (1.0 V/cell), cells are at the end of their discharge knee.
-         * Firing the transmitter under this condition causes severe voltage sag,
-         * resulting in repetitive brown-out reset loops. */
+         * Firing transmitter under this condition causes severe voltage sag and brown-out loop. */
         if (bat_ok && (vbat_mv < BATTERY_CRITICAL_MV)) {
-            /* Assemble emergency message */
             telemetry_packet_t emg_pkt;
-            memset(&emg_pkt, 0, sizeof(emg_pkt));
-            emg_pkt.magic       = TELEMETRY_MAGIC_BYTE;
-            emg_pkt.node_id     = NODE_ID_DEFAULT;
-            emg_pkt.packet_type = PACKET_TYPE_BAT_LOW;
-            emg_pkt.seq_id      = g_seq_counter++;
-            emg_pkt.vbat_mv     = vbat_mv;
-            emg_pkt.status_flags = status_flags;
-            emg_pkt.crc16       = cc1101_calc_crc16((const uint8_t *)&emg_pkt,
-                                                    sizeof(telemetry_packet_t) - 2);
+            emg_pkt.vbat_raw_mv = vbat_mv;
+            emg_pkt.temp_x100   = 0;
+            emg_pkt.hum_x100    = 0;
+            emg_pkt.level_mm    = 0xFFFF; /* Special marker for critical battery */
 
             /* Attempt single emergency transmission */
             (void)cc1101_transmit_packet(&emg_pkt, sizeof(emg_pkt));
 
-            /* Shut down permanently to prevent cell destruction */
+            /* Shut down permanently to protect battery cells */
             power_enter_permanent_sleep();
         }
 
@@ -83,39 +73,31 @@ int main(void)
         wdt_kick();
         bool probe_ok = adc_measure_probe(&probe_raw, &probe_mv);
         if (probe_ok) {
-            status_flags |= STATUS_FLAG_PROBE_OK;
+            /* Standard hydrostatic level sensor: 0-2000 mm tank depth (zero at 500 mV, span 4000 mV) */
+            level_mm = adc_probe_mv_to_depth_mm(probe_mv, 500, 4000, 2000);
         } else {
-            probe_raw = 0;
             probe_mv = 0;
+            level_mm = 0;
         }
 
         /* ------------------------------------------------------------------ */
         /* Phase C: SHT40 Temperature and Humidity Measurement                */
         /* ------------------------------------------------------------------ */
         wdt_kick();
-        bool sht_ok = sht40_read_measurements(&temp_c_x10, &hum_rh_x10);
-        if (sht_ok) {
-            status_flags |= STATUS_FLAG_SHT40_OK;
-        } else {
-            temp_c_x10 = -999;
-            hum_rh_x10 = 0;
+        bool sht_ok = sht40_read_measurements(&temp_x100, &hum_x100);
+        if (!sht_ok) {
+            temp_x100 = -9999;
+            hum_x100  = 0;
         }
 
         /* ------------------------------------------------------------------ */
-        /* Phase D: Telemetry Packet Assembly & RF Transmission               */
+        /* Phase D: Telemetry Packet Assembly & RF Transmission (8 Bytes)     */
         /* ------------------------------------------------------------------ */
         telemetry_packet_t packet;
-        packet.magic            = TELEMETRY_MAGIC_BYTE;
-        packet.node_id          = NODE_ID_DEFAULT;
-        packet.packet_type      = PACKET_TYPE_REGULAR;
-        packet.seq_id           = g_seq_counter++;
-        packet.vbat_mv          = vbat_mv;
-        packet.water_level_raw  = probe_raw;
-        packet.temperature_c_x10 = temp_c_x10;
-        packet.humidity_rh_x10   = hum_rh_x10;
-        packet.status_flags     = status_flags;
-        packet.crc16            = cc1101_calc_crc16((const uint8_t *)&packet,
-                                                    sizeof(telemetry_packet_t) - 2);
+        packet.vbat_raw_mv = vbat_mv;
+        packet.temp_x100   = temp_x100;
+        packet.hum_x100    = hum_x100;
+        packet.level_mm    = level_mm;
 
         wdt_kick();
         (void)cc1101_transmit_packet(&packet, sizeof(packet));

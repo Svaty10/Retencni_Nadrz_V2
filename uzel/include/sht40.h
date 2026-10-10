@@ -37,11 +37,11 @@ void sht40_deinit(void);
 /**
  * @brief Perform a high-precision measurement on SHT40 with timeout and CRC validation.
  *
- * @param[out] temp_c_x10 Pointer to store temperature in 0.1 deg C (e.g. 215 = 21.5 C).
- * @param[out] hum_rh_x10 Pointer to store relative humidity in 0.1 % RH (e.g. 652 = 65.2 %).
+ * @param[out] temp_x100 Pointer to store temperature in 0.01 deg C (e.g. 2150 = 21.50 C).
+ * @param[out] hum_x100 Pointer to store relative humidity in 0.01 % RH (e.g. 6540 = 65.40 %).
  * @return true if measurement and CRC-8 checks succeeded, false on bus/timeout/CRC error.
  */
-bool sht40_read_measurements(int16_t *temp_c_x10, uint16_t *hum_rh_x10);
+bool sht40_read_measurements(int16_t *temp_x100, uint16_t *hum_x100);
 
 /**
  * @brief Calculate Sensirion 8-bit CRC.

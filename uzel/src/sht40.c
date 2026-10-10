@@ -168,9 +168,9 @@ static void twi_stop(void)
     TWI0.MCTRLB = TWI_MCMD_STOP_gc;
 }
 
-bool sht40_read_measurements(int16_t *temp_c_x10, uint16_t *hum_rh_x10)
+bool sht40_read_measurements(int16_t *temp_x100, uint16_t *hum_x100)
 {
-    if (temp_c_x10 == NULL || hum_rh_x10 == NULL) {
+    if (temp_x100 == NULL || hum_x100 == NULL) {
         return false;
     }
 
@@ -226,29 +226,29 @@ bool sht40_read_measurements(int16_t *temp_c_x10, uint16_t *hum_rh_x10)
         return false; /* Humidity CRC mismatch */
     }
 
-    /* 5. Calculate physical values using integer arithmetic without precision loss */
+    /* 5. Calculate physical values using exact integer arithmetic without precision loss */
     uint16_t raw_temp = ((uint16_t)rx_buf[0] << 8) | rx_buf[1];
     uint16_t raw_hum  = ((uint16_t)rx_buf[3] << 8) | rx_buf[4];
 
     /*
      * Sensirion formula:
      * T [deg C] = -45 + 175 * (raw_temp / 65535)
-     * T_x10 [0.1 deg C] = -450 + (1750 * raw_temp) / 65535
+     * T_x100 [0.01 deg C] = -4500 + (17500 * raw_temp) / 65535
      */
-    int32_t t_calc = -450L + (int32_t)(((uint32_t)1750UL * raw_temp) / 65535UL);
-    *temp_c_x10 = (int16_t)t_calc;
+    int32_t t_calc = -4500L + (int32_t)(((uint32_t)17500UL * raw_temp) / 65535UL);
+    *temp_x100 = (int16_t)t_calc;
 
     /*
      * RH [%] = -6 + 125 * (raw_hum / 65535)
-     * RH_x10 [0.1 %] = -60 + (1250 * raw_hum) / 65535
+     * RH_x100 [0.01 %] = -600 + (12500 * raw_hum) / 65535
      */
-    int32_t rh_calc = -60L + (int32_t)(((uint32_t)1250UL * raw_hum) / 65535UL);
+    int32_t rh_calc = -600L + (int32_t)(((uint32_t)12500UL * raw_hum) / 65535UL);
     if (rh_calc < 0) {
         rh_calc = 0;
-    } else if (rh_calc > 1000) {
-        rh_calc = 1000;
+    } else if (rh_calc > 10000) {
+        rh_calc = 10000;
     }
-    *hum_rh_x10 = (uint16_t)rh_calc;
+    *hum_x100 = (uint16_t)rh_calc;
 
     return true;
 }

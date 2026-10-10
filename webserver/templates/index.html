@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retenční Nádrž – Telemetrický Uzel</title>
+    <!-- Modern typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Top App Header -->
+        <header class="header">
+            <div class="brand">
+                <div class="brand-icon">💧</div>
+                <div class="brand-title">
+                    <h1>Retenční Nádrž V2</h1>
+                    <p>Raspberry Pi 3 B+ Telemetrický Přijímač CC1101</p>
+                </div>
+            </div>
+            <div id="statusBadge" class="status-badge status-{{ state.status }}">
+                <span class="status-dot"></span>
+                <span id="statusText">{{ state.status }}</span>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <div class="grid-main">
+            <!-- Left: Animated Water Tank View -->
+            <div class="card tank-section">
+                <div class="card-title" style="width: 100%;">
+                    <span>Aktuální Hladina</span>
+                    <span id="txtLitersHeader" style="color: var(--cyan-primary); font-size: 15px;">{{ state.current_liters }} L</span>
+                </div>
+                <div class="tank-glass">
+                    <div id="waterLevel" class="tank-water" style="height: {{ state.water_level_percent }}%;">
+                        <div class="water-wave"></div>
+                    </div>
+                    <div class="tank-overlay">
+                        <div id="txtPercent" class="tank-percent">{{ state.water_level_percent }}%</div>
+                        <div id="txtLiters" class="tank-liters">{{ state.current_liters }} L</div>
+                        <div id="txtDepth" class="tank-depth">{{ state.water_level_cm }} cm</div>
+                    </div>
+                </div>
+                <div style="margin-top: 18px; font-size: 13px; color: var(--text-secondary); text-align: center;">
+                    Kapacita: <strong style="color: var(--text-primary);">{{ config.max_depth_cm }} cm</strong> | Plocha: <strong style="color: var(--text-primary);">{{ config.tank_area_m2 }} m²</strong>
+                </div>
+            </div>
+
+            <!-- Right: Live Metrics & History Chart -->
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+                <!-- Telemetry Metrics Cards -->
+                <div class="metrics-grid">
+                    <div class="stat-tile">
+                        <div class="stat-label">Teplota (SHT40)</div>
+                        <div id="txtTemp" class="stat-value">{{ state.temperature }} °C</div>
+                        <div class="stat-sub">Vzduch v šachtě</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="stat-label">Vlhkost (SHT40)</div>
+                        <div id="txtHum" class="stat-value">{{ state.humidity }} %</div>
+                        <div class="stat-sub">Relativní vlhkost</div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="stat-label">Napětí Baterie</div>
+                        <div id="txtBat" class="stat-value {% if state.battery_low %}stat-alert{% endif %}">
+                            {{ state.battery_voltage }} V
+                        </div>
+                        <div id="txtBatStatus" class="stat-sub">
+                            {% if state.battery_low %}Kritické (< 3.0V){% else %}Normální (3S Li-FeS2){% endif %}
+                        </div>
+                    </div>
+                    <div class="stat-tile">
+                        <div class="stat-label">Poslední Paket</div>
+                        <div id="txtLastSeen" class="stat-value" style="font-size: 20px;">
+                            {{ state.last_seen_seconds_ago }}s
+                        </div>
+                        <div id="txtTimestamp" class="stat-sub">Před chvílí</div>
+                    </div>
+                </div>
+
+                <!-- History Chart Card -->
+                <div class="card" style="flex: 1;">
+                    <div class="chart-header">
+                        <div class="card-title" style="margin-bottom: 0;">Vývoj Hladiny Vody</div>
+                        <div class="chart-controls">
+                            <button class="btn-filter active" onclick="loadHistory(24, this)">24h</button>
+                            <button class="btn-filter" onclick="loadHistory(168, this)">7 Dní</button>
+                            <button class="btn-filter" onclick="loadHistory(720, this)">30 Dní</button>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="waterChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <span>Home Assistant REST API: <code>/api/v1/water/state</code></span>
+            <span>Hardware: ATtiny1624 ULP Node + CC1101 433 MHz</span>
+        </footer>
+    </div>
+
+    <script>
+        let chartInstance = null;
+
+        function updateUI(data) {
+            if (!data) return;
+
+            document.getElementById('waterLevel').style.height = `${data.water_level_percent}%`;
+            document.getElementById('txtPercent').textContent = `${data.water_level_percent}%`;
+            document.getElementById('txtLiters').textContent = `${data.current_liters} L`;
+            document.getElementById('txtLitersHeader').textContent = `${data.current_liters} L`;
+            document.getElementById('txtDepth').textContent = `${data.water_level_cm} cm`;
+
+            document.getElementById('txtTemp').textContent = `${data.temperature} °C`;
+            document.getElementById('txtHum').textContent = `${data.humidity} %`;
+
+            const batElem = document.getElementById('txtBat');
+            batElem.textContent = `${data.battery_voltage} V`;
+            if (data.battery_low) {
+                batElem.classList.add('stat-alert');
+                document.getElementById('txtBatStatus').textContent = 'Kritické (< 3.0V)';
+            } else {
+                batElem.classList.remove('stat-alert');
+                document.getElementById('txtBatStatus').textContent = 'Normální (3S Li-FeS2)';
+            }
+
+            const secs = data.last_seen_seconds_ago;
+            if (secs < 60) {
+                document.getElementById('txtLastSeen').textContent = `${secs}s`;
+            } else if (secs < 3600) {
+                document.getElementById('txtLastSeen').textContent = `${Math.floor(secs / 60)} min`;
+            } else {
+                document.getElementById('txtLastSeen').textContent = `${Math.floor(secs / 3600)} h`;
+            }
+
+            const badge = document.getElementById('statusBadge');
+            badge.className = `status-badge status-${data.status}`;
+            document.getElementById('statusText').textContent = data.status;
+        }
+
+        async function fetchState() {
+            try {
+                const res = await fetch('/api/v1/water/state');
+                if (res.ok) {
+                    const data = await res.json();
+                    updateUI(data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch state:", err);
+            }
+        }
+
+        async function loadHistory(hours = 24, btnElement = null) {
+            if (btnElement) {
+                document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+                btnElement.classList.add('active');
+            }
+
+            try {
+                const res = await fetch(`/api/v1/water/history?hours=${hours}`);
+                if (!res.ok) return;
+                const rows = await res.json();
+
+                const labels = rows.map(r => {
+                    const d = new Date(r.timestamp);
+                    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                });
+                const levels = rows.map(r => r.water_level_cm);
+                const temps = rows.map(r => r.temperature);
+
+                renderChart(labels, levels, temps);
+            } catch (err) {
+                console.error("Failed to load history:", err);
+            }
+        }
+
+        function renderChart(labels, levels, temps) {
+            const ctx = document.getElementById('waterChart').getContext('2d');
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Hladina (cm)',
+                            data: levels,
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.15)',
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 2,
+                            pointRadius: labels.length > 50 ? 0 : 3,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Teplota (°C)',
+                            data: temps,
+                            borderColor: '#f59e0b',
+                            borderDash: [4, 4],
+                            fill: false,
+                            tension: 0.2,
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#94a3b8', font: { family: 'Outfit', size: 12 } }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#64748b', maxTicksLimit: 12 }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#06b6d4' },
+                            title: { display: true, text: 'Hladina (cm)', color: '#06b6d4' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#f59e0b' },
+                            title: { display: true, text: 'Teplota (°C)', color: '#f59e0b' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initial setup and polling every 10 seconds
+        document.addEventListener('DOMContentLoaded', () => {
+            loadHistory(24);
+            setInterval(fetchState, 10000);
+        });
+    </script>
+</body>
+</html>

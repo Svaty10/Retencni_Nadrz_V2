@@ -1,0 +1,36 @@
+[Unit]
+Description=Retention Tank Telemetry Webserver (Raspberry Pi 3 B+)
+After=network.target network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/Retencni_Nadrz_V2/webserver
+ExecStart=/home/pi/Retencni_Nadrz_V2/webserver/venv/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 8080 --workers 1 --no-access-log
+
+# Restart policies
+Restart=always
+RestartSec=5s
+
+# Strict Memory & Resource Governance for RPi 3 B+ (1GB RAM)
+MemoryAccounting=true
+MemoryHigh=40M
+MemoryMax=50M
+CPUWeight=100
+
+# Security Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/pi/Retencni_Nadrz_V2/webserver
+ProtectHome=read-only
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=retencka
+
+[Install]
+WantedBy=multi-user.target

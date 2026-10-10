@@ -1,0 +1,73 @@
+# ==============================================================================
+# Home Assistant REST Integration for Retention Tank Telemetry
+# Place this configuration into your configuration.yaml or sensor package.
+# ==============================================================================
+
+sensor:
+  - platform: rest
+    name: "Retenční Nádrž"
+    resource: "http://192.168.1.150:8080/api/v1/water/state"  # Replace with your Raspberry Pi IP
+    scan_interval: 30
+    timeout: 10
+    availability: >-
+      {{ value_json.status is defined and value_json.status != 'offline' }}
+    json_attributes:
+      - water_level_cm
+      - water_level_percent
+      - current_liters
+      - temperature
+      - humidity
+      - battery_voltage
+      - battery_low
+      - last_seen_seconds_ago
+      - status
+      - timestamp
+    value_template: "{{ value_json.water_level_cm }}"
+    unit_of_measurement: "cm"
+    device_class: distance
+    state_class: measurement
+    icon: mdi:cup-water
+
+template:
+  - sensor:
+      - name: "Retenčka Hladina Procenta"
+        unique_id: retencka_hladina_procenta
+        state: "{{ state_attr('sensor.retencni_nadrz', 'water_level_percent') }}"
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:gauge
+
+      - name: "Retenčka Objem Vody"
+        unique_id: retencka_objem_vody
+        state: "{{ state_attr('sensor.retencni_nadrz', 'current_liters') }}"
+        unit_of_measurement: "L"
+        device_class: volume_storage
+        state_class: measurement
+        icon: mdi:water-well
+
+      - name: "Retenčka Teplota Šachty"
+        unique_id: retencka_teplota_sachty
+        state: "{{ state_attr('sensor.retencni_nadrz', 'temperature') }}"
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+
+      - name: "Retenčka Vlhkost Šachty"
+        unique_id: retencka_vlhkost_sachty
+        state: "{{ state_attr('sensor.retencni_nadrz', 'humidity') }}"
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+
+      - name: "Retenčka Napětí Baterie"
+        unique_id: retencka_napeti_baterie
+        state: "{{ state_attr('sensor.retencni_nadrz', 'battery_voltage') }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+
+  - binary_sensor:
+      - name: "Retenčka Baterie Vybitá"
+        unique_id: retencka_baterie_vybita
+        state: "{{ state_attr('sensor.retencni_nadrz', 'battery_low') }}"
+        device_class: battery

@@ -1,4 +1,4 @@
-# Build artifacts
+# Build artifacts (AVR bare-metal)
 build/
 *.elf
 *.hex
@@ -7,6 +7,17 @@ build/
 *.map
 *.o
 *.d
+
+# Python & Webserver runtime
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+*.sqlite
+*.sqlite3
+venv/
+env/
+.venv/
 
 # Editor & IDE directories
 .vscode/

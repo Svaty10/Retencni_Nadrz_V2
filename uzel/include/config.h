@@ -83,38 +83,15 @@
 #define SLEEP_INTERVAL_SECONDS  900U
 
 /* ========================================================================== */
-/* Telemetry Packet Format (Fixed size for robust CC1101 transmission)        */
+/* Telemetry Packet Format (Compact 8 bytes Little-Endian for ULP RF)         */
+/* Hardware CRC-16, Sync Word and Whitening handled by CC1101 Transceiver     */
 /* ========================================================================== */
 
-#define TELEMETRY_MAGIC_BYTE    0xA5
-#define NODE_ID_DEFAULT         0x01
-
-typedef enum {
-    PACKET_TYPE_REGULAR   = 0x01,
-    PACKET_TYPE_BAT_LOW   = 0x02,
-    PACKET_TYPE_BOOT      = 0x03,
-    PACKET_TYPE_ERROR     = 0xEE
-} packet_type_t;
-
-/**
- * @brief Packed telemetry structure (16 bytes).
- */
 typedef struct __attribute__((packed)) {
-    uint8_t  magic;             /**< Fixed header 0xA5 */
-    uint8_t  node_id;           /**< Sensor Node ID */
-    uint8_t  packet_type;       /**< packet_type_t */
-    uint16_t seq_id;            /**< Incremental message counter */
-    uint16_t vbat_mv;           /**< Battery voltage in millivolts */
-    uint16_t water_level_raw;   /**< Oversampled ADC raw reading from probe */
-    int16_t  temperature_c_x10; /**< SHT40 temperature in 0.1 deg C */
-    uint16_t humidity_rh_x10;   /**< SHT40 relative humidity in 0.1 % RH */
-    uint8_t  status_flags;      /**< Bit 0: SHT40 OK, Bit 1: ADC OK, Bit 2: Probe 5V OK */
-    uint16_t crc16;             /**< Payload CRC16-CCITT */
+    uint16_t vbat_raw_mv;   /**< Battery voltage in millivolts (e.g. 4450 = 4.45 V) */
+    int16_t  temp_x100;     /**< Temperature in 0.01 deg C (e.g. 2150 = 21.50 C) */
+    uint16_t hum_x100;      /**< Relative humidity in 0.01 % RH (e.g. 6540 = 65.40 % RH) */
+    uint16_t level_mm;      /**< Water depth in millimeters (e.g. 1450 = 1450 mm) */
 } telemetry_packet_t;
-
-/* Status Flag Bits */
-#define STATUS_FLAG_SHT40_OK    (1 << 0)
-#define STATUS_FLAG_ADC_OK      (1 << 1)
-#define STATUS_FLAG_PROBE_OK    (1 << 2)
 
 #endif /* CONFIG_H_ */
