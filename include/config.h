@@ -1,7 +1,7 @@
 /**
  * @file config.h
  * @brief Global hardware configuration and system parameters for ATtiny1624 ULP Sensor Node.
- * @author Matej
+ * @author Matej Svatos
  * @date 2026-10-10
  */
 
