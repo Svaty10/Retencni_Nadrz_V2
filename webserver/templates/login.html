@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Přihlášení | Retenční Nádrž</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: radial-gradient(circle at 15% 15%, #131e38 0%, #0a0f1d 100%);
+            color: #f8fafc;
+        }
+
+        .login-card {
+            background: rgba(23, 34, 59, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px 36px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            width: 100%;
+            max-width: 380px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #06b6d4, #0284c7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 16px auto;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+            aspect-ratio: 1 / 1;
+        }
+
+        .login-title {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .login-title h2 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #f8fafc;
+            letter-spacing: -0.5px;
+        }
+
+        .login-title p {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .alert-error {
+            background: rgba(244, 63, 94, 0.15);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            color: #fb7185;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 14px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #06b6d4;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            background: linear-gradient(135deg, #06b6d4, #0284c7);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 14px rgba(6, 182, 212, 0.35);
+        }
+
+        .btn-submit:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-logo">💧</div>
+        <div class="login-title">
+            <h2>Retenční Nádrž</h2>
+            <p>Přihlášení do monitorovacího systému</p>
+        </div>
+
+        {% if error %}
+        <div class="alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form action="/login" method="post">
+            <div class="form-group">
+                <label for="username">Uživatelské jméno</label>
+                <input type="text" id="username" name="username" class="form-input" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="password">Heslo</label>
+                <input type="password" id="password" name="password" class="form-input" required>
+            </div>
+            <button type="submit" class="btn-submit">Přihlásit se</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -1,10 +1,10 @@
 # Retenční Nádrž V2 – Telemetrický Systém
 
-Kompletní deterministický systém pro bezdrátové monitorování retenční nádrže určený pro ultra-low-power běh na baterie, automatické dopouštění přes **Hunter Hydrawise API** a integraci do **Home Assistanta** přes **Raspberry Pi 3 B+**.
+Kompletní deterministický systém pro bezdrátové monitorování retenční nádrže určený pro ultra-low-power běh na baterie, automatické dopouštění přes **Hunter Hydrawise API**, zabezpečený webový přístup a integraci do **Home Assistanta** přes **Raspberry Pi 3 B+**.
 
 Projekt je rozdělen do tří logických částí:
 1. **`uzel/`**: Produkční bare-metal C (AVR-libc) firmware pro mikrokontrolér **ATtiny1624** (SOIC-14) napájený ze 3× Li-FeS2 článků (spotřeba v Power-Down < 1,2 µA).
-2. **`webserver/`**: Lehký backend v Pythonu (**FastAPI / Uvicorn**) s přímým SPI rozhraním pro **CC1101**, ovládáním dopouštění přes **Hydrawise REST API**, předpovědí srážek z **Open-Meteo**, velkokapacitní SQLite databází (až 500 000+ záznamů) a responzivním dashboardem se záložkami (spotřeba RAM < 35 MB).
+2. **`webserver/`**: Lehký backend v Pythonu (**FastAPI / Uvicorn**) s přímým SPI rozhraním pro **CC1101**, autentizací uživatelů (**Session, role admin/user, brute-force ochrana**), ovládáním dopouštění přes **Hydrawise REST API**, předpovědí srážek z **Open-Meteo**, velkokapacitní SQLite databází (až 500 000+ záznamů) a responzivním dashboardem se záložkami (spotřeba RAM < 35 MB).
 3. **`docs/`**: Hardwarové zapojení pro Raspberry Pi, Home Assistant REST konfigurace, specifikace API a návod k instalaci.
 
 ---
@@ -29,24 +29,39 @@ Retencni_Nadrz_V2/
 │   └── Makefile                 # Sestavení pro ATtiny1624 a SerialUPDI flash
 │
 ├── webserver/                   # Přijímač na Raspberry Pi 3 B+
-│   ├── app.py                   # FastAPI REST API, Hydrawise, Weather & Dashboard (< 35 MB RAM)
+│   ├── app.py                   # FastAPI REST API, Auth, Hydrawise, Weather & Dashboard (< 35 MB RAM)
 │   ├── cc1101_receiver.py       # SPI0 & GPIO CC1101 listener s auto-recovery
 │   ├── config.json              # Rozměry nádrže, Hydrawise klíče, kalibrace, limity
+│   ├── users.json               # Uživatelské účty a scrypt hashe hesel
+│   ├── secret_key.txt           # Stabilní šifrovací klíč pro session cookies
 │   ├── requirements.txt         # Minimalistické závislosti
 │   ├── retencka.service         # Systemd unit file (MemoryMax=50M)
 │   ├── static/css/style.css     # Moderní glassmorphism CSS se záložkami a steppery
-│   └── templates/index.html     # Responzivní webový panel (Dashboard, Nastavení, Logy)
+│   └── templates/
+│       ├── index.html           # Responzivní webový panel (Dashboard, Nastavení, Logy, Heslo)
+│       └── login.html           # Přihlašovací stránka s brute-force ochranou
 │
 └── docs/                        # Dokumentace a integrace
     ├── home_assistant.yaml      # Připravený senzor pro Home Assistant (rest)
     ├── wiring_rpi.md            # Kompletní schéma zapojení Raspberry Pi a CC1101
-    ├── api.md                   # Kompletní REST API specifikace (vč. Hydrawise)
+    ├── api.md                   # Kompletní REST API specifikace (vč. Hydrawise a Auth)
     └── installation.md          # Návod na instalaci a spuštění na Pi OS Lite
 ```
 
 ---
 
-## 2. Rádiový Přenos a Paketový Formát
+## 2. Zabezpečení & Přihlašování
+
+- **Webové rozhraní (`/`)**: Chráněno přihlášením. Nepřihlášený uživatel je automaticky přesměrován na `/login`.
+- **Uživatelské role**: Podpora rolí `admin` (plná práva, nastavení, dopouštění) a `user` (čtení dat a grafů).
+- **Bezpečné hashe hesel**: Hesla jsou ukládána v [users.json](file:///c:/Users/matej/OneDrive/Projekty/Retencni_Nadrz_V2/webserver/users.json) pomocí moderního algoritmu `scrypt`.
+- **Brute-Force ochrana**: Po 5 neúspěšných pokusech o přihlášení z jedné IP adresy je přístup na 5 minut uzamčen.
+- **Změna hesla**: Přihlášený uživatel si může změnit své heslo přímo v záložce *🔒 Moje heslo*.
+- **Home Assistant API**: Endpoint `/api/v1/water/state` zůstává přístupný bez nutnosti session cookies pro přímé a spolehlivé dotazování platformou `rest`.
+
+---
+
+## 3. Rádiový Přenos a Paketový Formát
 
 Modul **CC1101** komunikuje na frekvenci **433,92 MHz**, modulace **2-FSK**, rychlost **4.8 kBaud** s hardwarem počítaným **CRC-16** a datovým whiteningem.
 
@@ -61,9 +76,9 @@ Přenášený užitečný náklad (Payload) má fixní délku **8 bajtů (Little
 
 ---
 
-## 3. Webserver & Funkce
+## 4. Webserver & Funkce
 
-### 3.1. Záložky Uživatelského Rozhraní (Web UI)
+### 4.1. Záložky Uživatelského Rozhraní (Web UI)
 1. **📊 Dashboard**:
    - Vizuální skleněná nádrž s animovanou vodní hladinou, procenty, litry a výškou v cm.
    - Dlaždice s živými metrikami: Teplota, Vlhkost, Napětí baterie, Odhad výdrže ve dnech, Předpověď srážek na 2 dny.
@@ -77,13 +92,15 @@ Přenášený užitečný náklad (Payload) má fixní délku **8 bajtů (Little
 3. **📜 Historie & Data**:
    - Přehledná tabulka posledních měření telemetrie.
    - Tlačítko pro export kompletní databáze do formátu CSV (`/api/v1/water/export.csv`).
+4. **🔒 Moje heslo**:
+   - Formulář pro změnu vlastního hesla s ověřením stávajícího hesla.
 
-### 3.2. Úložiště s Vysokou Kapacitou (Flash Disk)
+### 4.2. Úložiště s Vysokou Kapacitou (Flash Disk)
 - Databáze `history.db` (SQLite) je škálována na **500 000+ záznamů** (při 15min intervalu odpovídá více než **14 letům** historie na flash disku při spotřebě pouhých ~40 MB).
 
 ---
 
-## 4. Rychlé Spuštění na Raspberry Pi 3 B+
+## 5. Rychlé Spuštění na Raspberry Pi 3 B+
 
 1. Povolit SPI: `sudo raspi-config` -> *Interface Options* -> *SPI* -> *Yes*.
 2. Vytvořit venv a nainstalovat závislosti:

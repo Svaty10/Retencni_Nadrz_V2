@@ -18,11 +18,33 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
 import requests
-from fastapi import FastAPI, Query, Request, BackgroundTasks, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, Query, Request, BackgroundTasks, HTTPException, Form, Depends
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
+
+try:
+    from werkzeug.security import generate_password_hash, check_password_hash
+except ImportError:
+    import hashlib
+    def check_password_hash(p_hash: str, pwd: str) -> bool:
+        if p_hash.startswith("scrypt:"):
+            parts = p_hash.split("$")
+            if len(parts) == 3:
+                params = parts[0].split(":")
+                n, r, p = int(params[1]), int(params[2]), int(params[3])
+                salt = parts[1].encode('utf-8')
+                expected = parts[2]
+                calc = hashlib.scrypt(pwd.encode('utf-8'), salt=salt, n=n, r=r, p=p).hex()
+                return calc == expected
+        return False
+    def generate_password_hash(pwd: str) -> str:
+        import secrets
+        salt = secrets.token_hex(8)
+        derived = hashlib.scrypt(pwd.encode('utf-8'), salt=salt.encode('utf-8'), n=32768, r=8, p=1).hex()
+        return f"scrypt:32768:8:1${salt}${derived}"
 
 from cc1101_receiver import CC1101Receiver
 
@@ -33,9 +55,44 @@ logger = logging.getLogger("retencka_server")
 # Base paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+USERS_PATH = os.path.join(BASE_DIR, "users.json")
+SECRET_KEY_PATH = os.path.join(BASE_DIR, "secret_key.txt")
 DB_PATH = os.path.join(BASE_DIR, "history.db")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+
+def get_or_create_secret_key() -> str:
+    if os.path.exists(SECRET_KEY_PATH):
+        try:
+            with open(SECRET_KEY_PATH, "r", encoding="utf-8") as f:
+                k = f.read().strip()
+                if k:
+                    return k
+        except Exception:
+            pass
+    import secrets
+    k = secrets.token_hex(32)
+    try:
+        with open(SECRET_KEY_PATH, "w", encoding="utf-8") as f:
+            f.write(k)
+    except Exception:
+        pass
+    return k
+
+SECRET_KEY = get_or_create_secret_key()
+
+def load_users() -> dict:
+    if os.path.exists(USERS_PATH):
+        try:
+            with open(USERS_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_users(users: dict):
+    with open(USERS_PATH, "w", encoding="utf-8") as f:
+        json.dump(users, f, indent=4)
 
 # ==============================================================================
 # Configuration Management
@@ -407,8 +464,44 @@ supervisor_thread = threading.Thread(target=background_supervisor, daemon=True, 
 
 # FastAPI App
 app = FastAPI(title="Retention Tank Telemetry & Hydrawise Controller", version="2.5.0")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=86400 * 7, same_site="lax", https_only=False)
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# Brute-force protection: IP tracking
+FAILED_LOGINS: Dict[str, dict] = {}
+
+def get_client_ip(request: Request) -> str:
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip
+    x_forwarded = request.headers.get("X-Forwarded-For")
+    if x_forwarded:
+        return x_forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+def check_ip_lockout(ip: str) -> Optional[int]:
+    now = time.time()
+    rec = FAILED_LOGINS.get(ip)
+    if rec and rec.get("lock_until"):
+        if now < rec["lock_until"]:
+            return int(rec["lock_until"] - now)
+        else:
+            rec["count"] = 0
+            rec["lock_until"] = None
+    return None
+
+def register_failed_login(ip: str):
+    now = time.time()
+    rec = FAILED_LOGINS.setdefault(ip, {"count": 0, "lock_until": None})
+    rec["count"] += 1
+    if rec["count"] >= 5:
+        rec["lock_until"] = now + 300  # 5 minutes lockout
+
+def reset_failed_login(ip: str):
+    if ip in FAILED_LOGINS:
+        FAILED_LOGINS[ip] = {"count": 0, "lock_until": None}
 
 @app.on_event("startup")
 def startup_event():
@@ -618,13 +711,87 @@ def simulate_packet(level_mm: int = 1450, vbat_mv: int = 4450, temp_x100: int = 
     sys_state.update_telemetry(sim_pkt, config)
     return {"status": "injected", "data": sim_pkt}
 
+# ------------------------------------------------------------------------------
+# Authentication & User Management Routes
+# ------------------------------------------------------------------------------
+
+@app.get("/login", response_class=HTMLResponse)
+def login_get(request: Request):
+    if request.session.get("username"):
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+
+@app.post("/login", response_class=HTMLResponse)
+def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
+    ip = get_client_ip(request)
+    lockout_sec = check_ip_lockout(ip)
+    if lockout_sec:
+        min_rem = max(1, lockout_sec // 60)
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": f"Příliš mnoho neúspěšných pokusů. Zkuste to za {min_rem} min."}
+        )
+
+    users = load_users()
+    user_data = users.get(username)
+
+    if user_data and check_password_hash(user_data.get("password", ""), password):
+        reset_failed_login(ip)
+        request.session["username"] = username
+        request.session["role"] = user_data.get("role", "user")
+        logger.info(f"User '{username}' logged in successfully from {ip}")
+        return RedirectResponse(url="/", status_code=303)
+
+    register_failed_login(ip)
+    logger.warning(f"Failed login attempt for username '{username}' from {ip}")
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": "Neplatné uživatelské jméno nebo heslo."}
+    )
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=303)
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+@app.post("/api/v1/user/password")
+def change_password(req: PasswordChangeRequest, request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Neautorizováno.")
+
+    users = load_users()
+    user_data = users.get(username)
+    if not user_data or not check_password_hash(user_data.get("password", ""), req.old_password):
+        raise HTTPException(status_code=400, detail="Původní heslo není správné.")
+
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Nové heslo musí mít alespoň 6 znaků.")
+
+    user_data["password"] = generate_password_hash(req.new_password)
+    users[username] = user_data
+    save_users(users)
+    logger.info(f"Password changed for user '{username}'")
+    return {"success": True, "message": "Heslo bylo úspěšně změněno."}
+
 @app.get("/", response_class=HTMLResponse)
 def index_page(request: Request):
+    username = request.session.get("username")
+    if not username:
+        return RedirectResponse(url="/login", status_code=303)
+
+    role = request.session.get("role", "user")
     state = sys_state.get_full_state(config)
     return templates.TemplateResponse("index.html", {
         "request": request,
         "state": state,
-        "config": config
+        "config": config,
+        "username": username,
+        "role": role
     })
 
 if __name__ == "__main__":

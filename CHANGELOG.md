@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-10
+
+### Added
+- Complete user authentication and session management system using Starlette `SessionMiddleware` and persistent `secret_key.txt`.
+- Responsive glassmorphism login portal (`webserver/templates/login.html`) with route protection redirecting unauthenticated users from `/` to `/login`.
+- User account database (`webserver/users.json`) with role-based access control (`admin`, `user`) and Werkzeug `scrypt` password hashing.
+- Brute-force protection tracking failed login attempts per client IP with a 5-minute lockout policy after 5 consecutive failures.
+- User session badge in dashboard header displaying current username, role, and logout action (`/logout`).
+- Dedicated "🔒 Moje heslo" tab allowing logged-in users to securely change their password (`POST /api/v1/user/password`).
+
 ## [2.1.0] - 2026-10-10
 
 ### Added

@@ -23,9 +23,13 @@
                     <p>Raspberry Pi 3 B+ • CC1101 433 MHz • Hydrawise Smart Refill</p>
                 </div>
             </div>
-            <div id="statusBadge" class="status-badge status-{{ state.status }}">
-                <span class="status-dot"></span>
-                <span id="statusText">{{ state.status }}</span>
+            <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                <div class="user-badge">{{ username }} <span style="opacity: 0.65; font-size: 11px;">({{ role }})</span></div>
+                <div id="statusBadge" class="status-badge status-{{ state.status }}">
+                    <span class="status-dot"></span>
+                    <span id="statusText">{{ state.status }}</span>
+                </div>
+                <a href="/logout" class="btn-logout" title="Odhlásit se z účtu">Odhlásit</a>
             </div>
         </header>
 
@@ -39,6 +43,9 @@
             </button>
             <button class="tab-btn" onclick="switchTab('tab-records', this)">
                 📜 Historie & Data
+            </button>
+            <button class="tab-btn" onclick="switchTab('tab-password', this)">
+                🔒 Moje heslo
             </button>
         </nav>
 
@@ -260,6 +267,30 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        <!-- ================================================================== -->
+        <!-- TAB 4: PASSWORD CHANGE                                             -->
+        <!-- ================================================================== -->
+        <div id="tab-password" class="tab-content">
+            <div class="card" style="max-width: 500px; margin: 0 auto; width: 100%;">
+                <div class="card-title">Změna Hesla Účtu ({{ username }})</div>
+                <form id="passwordForm" onsubmit="changePassword(event)">
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label>Současné heslo</label>
+                        <input type="password" id="oldPasswordInput" class="form-input" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label>Nové heslo (min. 6 znaků)</label>
+                        <input type="password" id="newPasswordInput" class="form-input" minlength="6" required>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 24px;">
+                        <label>Potvrzení nového hesla</label>
+                        <input type="password" id="confirmPasswordInput" class="form-input" minlength="6" required>
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%; padding: 12px;">
+                        🔑 Změnit Heslo
+                    </button>
+                </form>
             </div>
         </div>
 
@@ -551,6 +582,35 @@
                     }
                 }
             });
+        }
+
+        async function changePassword(e) {
+            e.preventDefault();
+            const oldP = document.getElementById('oldPasswordInput').value;
+            const newP = document.getElementById('newPasswordInput').value;
+            const confP = document.getElementById('confirmPasswordInput').value;
+
+            if (newP !== confP) {
+                showToast("Nové heslo a potvrzení se neshodují!");
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/v1/user/password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ old_password: oldP, new_password: newP })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message || "Heslo bylo úspěšně změněno");
+                    document.getElementById('passwordForm').reset();
+                } else {
+                    showToast(data.detail || "Chyba při změně hesla");
+                }
+            } catch (err) {
+                showToast("Chyba spojení");
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
