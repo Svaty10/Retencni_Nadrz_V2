@@ -1,0 +1,21 @@
+# Build artifacts
+build/
+*.elf
+*.hex
+*.bin
+*.lss
+*.map
+*.o
+*.d
+
+# Editor & IDE directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System specific
+Thumbs.db
+Desktop.ini
+.DS_Store
