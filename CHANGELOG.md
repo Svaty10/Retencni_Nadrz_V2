@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-10
+
+### Added
+- Hunter Hydrawise REST API integration (`/api/v1/water/refill/start`, `/api/v1/water/refill/stop`) allowing automated and manual tank refilling.
+- Dynamic refill duration calculations based on tank dimensions, missing volume, and measured municipal water flow rate.
+- Open-Meteo precipitation forecast integration with smart rain deferral logic protecting against unnecessary municipal water consumption.
+- Three-tab web dashboard interface:
+  - **Dashboard**: Live tank animation, telemetry cards, tactile `[−]` and `[+]` refill stepping buttons, and Chart.js history.
+  - **Nastavení & Hydrawise**: Live configuration form persisting to `config.json` without server restart.
+  - **Historie & Data**: Real-time tabular logs with streaming CSV export (`/api/v1/water/export.csv`).
+- High-capacity SQLite storage scaled for 8 GB+ USB flash drives (up to 500 000 records / 14+ years retention).
+- Battery runtime estimation algorithm based on Li-FeS2 3S multi-day discharge trend.
+- Updated documentation in `docs/api.md`, `docs/home_assistant.yaml`, and `README.md`.
+
 ## [2.0.0] - 2026-10-10
 
 ### Added
@@ -12,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lightweight FastAPI / Uvicorn telemetry webserver for Raspberry Pi 3 B+ (`webserver/app.py`) with memory footprint < 35 MB RAM.
 - Hardware SPI CC1101 transceiver driver (`webserver/cc1101_receiver.py`) on SPI0 (5 MHz) and BCM GPIO 25 with automatic state-machine watchdog and soft-reset recovery.
 - Compact 8-byte Little-Endian binary telemetry packet (`vbat_raw_mv`, `temp_x100`, `hum_x100`, `level_mm`) across both microcontroller firmware and Python backend.
-- Thread-safe in-memory cache and lightweight rotating SQLite database (`history.db`) bounded to 10 000 records.
+- Thread-safe in-memory cache and lightweight rotating SQLite database (`history.db`).
 - Home Assistant REST endpoints: `GET /api/v1/water/state` with online/stale/offline state tracking, `GET /api/v1/water/history`, and `GET /health`.
 - Responsive single-page web dashboard (`webserver/templates/index.html`) featuring an animated water tank graphic, live telemetry cards, and interactive historical Chart.js graphs.
 - Production systemd unit file (`webserver/retencka.service`) enforcing strict memory caps (`MemoryMax=50M`) and automatic crash recovery.

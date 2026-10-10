@@ -19,6 +19,10 @@ sensor:
       - humidity
       - battery_voltage
       - battery_low
+      - battery_est_days
+      - is_refilling
+      - refill_status
+      - expected_rain_mm
       - last_seen_seconds_ago
       - status
       - timestamp

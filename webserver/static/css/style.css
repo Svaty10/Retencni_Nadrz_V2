@@ -1,18 +1,18 @@
 /* ==============================================================================
-   Retenční Nádrž V2 - Modern Glassmorphism Dashboard Styling
+   Retenční Nádrž V2 - Modern Glassmorphism Dashboard with Tabs & Refill
    ============================================================================== */
 
 :root {
     --bg-primary: #0a0f1d;
     --bg-secondary: #131c31;
-    --bg-card: rgba(23, 34, 59, 0.7);
+    --bg-card: rgba(23, 34, 59, 0.75);
     --border-card: rgba(255, 255, 255, 0.08);
-    --border-accent: rgba(56, 189, 248, 0.25);
+    --border-accent: rgba(56, 189, 248, 0.35);
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
     --cyan-primary: #06b6d4;
-    --cyan-glow: rgba(6, 182, 212, 0.35);
+    --cyan-glow: rgba(6, 182, 212, 0.4);
     --blue-water: #0284c7;
     --blue-deep: #0369a1;
     --emerald-ok: #10b981;
@@ -46,7 +46,7 @@ body {
     max-width: 1200px;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
 }
 
 /* Header */
@@ -58,8 +58,10 @@ body {
     backdrop-filter: blur(16px);
     border: 1px solid var(--border-card);
     border-radius: var(--radius-lg);
-    padding: 18px 26px;
+    padding: 16px 24px;
     box-shadow: var(--shadow-card);
+    flex-wrap: wrap;
+    gap: 16px;
 }
 
 .brand {
@@ -80,6 +82,7 @@ body {
     box-shadow: 0 0 16px var(--cyan-glow);
     aspect-ratio: 1 / 1;
     flex-shrink: 0;
+    padding: 0;
 }
 
 .brand-title h1 {
@@ -110,6 +113,8 @@ body {
     height: 8px;
     border-radius: 50%;
     aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+    padding: 0;
 }
 
 .status-online {
@@ -142,6 +147,56 @@ body {
     box-shadow: 0 0 8px var(--rose-danger);
 }
 
+/* Tab Navigation */
+.tab-navigation {
+    display: flex;
+    gap: 10px;
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+    padding: 6px;
+    box-shadow: var(--shadow-card);
+}
+
+.tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+    background: var(--cyan-primary);
+    color: #fff;
+    box-shadow: 0 0 14px var(--cyan-glow);
+}
+
+.tab-content {
+    display: none;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.tab-content.active {
+    display: flex;
+}
+
 /* Grid Layout */
 .grid-main {
     display: grid;
@@ -155,7 +210,7 @@ body {
     }
 }
 
-/* Card */
+/* Cards */
 .card {
     background: var(--bg-card);
     backdrop-filter: blur(16px);
@@ -251,12 +306,110 @@ body {
     margin-top: 4px;
 }
 
-/* Stats Metrics Grid */
+/* Hydrawise Refill Controls */
+.refill-control-card {
+    margin-top: 20px;
+    width: 100%;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.stepper-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.stepper-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-card);
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.stepper-btn:hover {
+    background: var(--cyan-primary);
+    color: #fff;
+    box-shadow: 0 0 10px var(--cyan-glow);
+}
+
+.stepper-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    padding: 8px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary {
+    flex: 1;
+    background: linear-gradient(135deg, var(--cyan-primary), var(--blue-water));
+    border: none;
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-danger {
+    background: rgba(244, 63, 94, 0.2);
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    color: var(--rose-danger);
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+    background: var(--rose-danger);
+    color: #fff;
+}
+
+/* Metrics Grid */
 .metrics-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
-    margin-bottom: 24px;
 }
 
 .stat-tile {
@@ -299,7 +452,7 @@ body {
     color: var(--rose-danger) !important;
 }
 
-/* Chart Card */
+/* Charts */
 .chart-header {
     display: flex;
     justify-content: space-between;
@@ -339,6 +492,115 @@ body {
     height: 320px;
 }
 
+/* Settings Form */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.form-input {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--cyan-primary);
+    box-shadow: 0 0 8px var(--cyan-glow);
+}
+
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.checkbox-row input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--cyan-primary);
+    cursor: pointer;
+}
+
+/* Data Table */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: left;
+}
+
+.data-table th {
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.6);
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-card);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+.data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+}
+
+.data-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-primary);
+}
+
+/* Notification Toast */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 22px;
+    border-radius: var(--radius-md);
+    background: rgba(23, 34, 59, 0.95);
+    border: 1px solid var(--border-accent);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-card);
+    font-size: 14px;
+    font-weight: 600;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 1000;
+}
+
+.toast.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
 /* Footer */
 .footer {
     display: flex;
@@ -347,4 +609,6 @@ body {
     padding: 12px 20px;
     font-size: 12px;
     color: var(--text-muted);
+    flex-wrap: wrap;
+    gap: 10px;
 }

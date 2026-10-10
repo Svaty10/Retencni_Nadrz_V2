@@ -1,11 +1,11 @@
 # Retenční Nádrž V2 – Telemetrický Systém
 
-Kompletní deterministický systém pro bezdrátové monitorování retenční nádrže určený pro ultra-low-power běh na baterie a integraci do **Home Assistanta** přes **Raspberry Pi 3 B+**.
+Kompletní deterministický systém pro bezdrátové monitorování retenční nádrže určený pro ultra-low-power běh na baterie, automatické dopouštění přes **Hunter Hydrawise API** a integraci do **Home Assistanta** přes **Raspberry Pi 3 B+**.
 
 Projekt je rozdělen do tří logických částí:
 1. **`uzel/`**: Produkční bare-metal C (AVR-libc) firmware pro mikrokontrolér **ATtiny1624** (SOIC-14) napájený ze 3× Li-FeS2 článků (spotřeba v Power-Down < 1,2 µA).
-2. **`webserver/`**: Lehký deterministický backend v Pythonu (**FastAPI / Uvicorn**) s přímým SPI rozhraním pro **CC1101**, rotující SQLite databází a responzivním webovým dashboardem (spotřeba RAM < 35 MB).
-3. **`docs/`**: Hardwarové zapojení pro Raspberry Pi, Home Assistant REST konfigurace a specifikace API.
+2. **`webserver/`**: Lehký backend v Pythonu (**FastAPI / Uvicorn**) s přímým SPI rozhraním pro **CC1101**, ovládáním dopouštění přes **Hydrawise REST API**, předpovědí srážek z **Open-Meteo**, velkokapacitní SQLite databází (až 500 000+ záznamů) a responzivním dashboardem se záložkami (spotřeba RAM < 35 MB).
+3. **`docs/`**: Hardwarové zapojení pro Raspberry Pi, Home Assistant REST konfigurace, specifikace API a návod k instalaci.
 
 ---
 
@@ -29,18 +29,18 @@ Retencni_Nadrz_V2/
 │   └── Makefile                 # Sestavení pro ATtiny1624 a SerialUPDI flash
 │
 ├── webserver/                   # Přijímač na Raspberry Pi 3 B+
-│   ├── app.py                   # FastAPI REST API & dashboard (< 35 MB RAM)
+│   ├── app.py                   # FastAPI REST API, Hydrawise, Weather & Dashboard (< 35 MB RAM)
 │   ├── cc1101_receiver.py       # SPI0 & GPIO CC1101 listener s auto-recovery
-│   ├── config.json              # Rozměry nádrže, kalibrace, limity
+│   ├── config.json              # Rozměry nádrže, Hydrawise klíče, kalibrace, limity
 │   ├── requirements.txt         # Minimalistické závislosti
 │   ├── retencka.service         # Systemd unit file (MemoryMax=50M)
-│   ├── static/css/style.css     # Moderní glassmorphism CSS
-│   └── templates/index.html     # Responzivní webový panel s animovanou nádrží
+│   ├── static/css/style.css     # Moderní glassmorphism CSS se záložkami a steppery
+│   └── templates/index.html     # Responzivní webový panel (Dashboard, Nastavení, Logy)
 │
 └── docs/                        # Dokumentace a integrace
     ├── home_assistant.yaml      # Připravený senzor pro Home Assistant (rest)
     ├── wiring_rpi.md            # Kompletní schéma zapojení Raspberry Pi a CC1101
-    ├── api.md                   # REST API specifikace
+    ├── api.md                   # Kompletní REST API specifikace (vč. Hydrawise)
     └── installation.md          # Návod na instalaci a spuštění na Pi OS Lite
 ```
 
@@ -61,32 +61,25 @@ Přenášený užitečný náklad (Payload) má fixní délku **8 bajtů (Little
 
 ---
 
-## 3. Webserver & Home Assistant REST API
+## 3. Webserver & Funkce
 
-Webserver běží na portu `8080` a poskytuje následující JSON endpointy:
+### 3.1. Záložky Uživatelského Rozhraní (Web UI)
+1. **📊 Dashboard**:
+   - Vizuální skleněná nádrž s animovanou vodní hladinou, procenty, litry a výškou v cm.
+   - Dlaždice s živými metrikami: Teplota, Vlhkost, Napětí baterie, Odhad výdrže ve dnech, Předpověď srážek na 2 dny.
+   - **Ovládání dopouštění Hydrawise**: Přímé nastavení cílové hladiny (%) pomocí tactile `[−]` a `[+]` tlačítek, spuštění a okamžité zastavení.
+   - Interaktivní časový graf hladiny a teploty přes **Chart.js** (24h / 7 dní / 30 dní).
+2. **⚙️ Nastavení & Hydrawise**:
+   - Úprava rozměrů nádrže (plocha m², maximální hloubka cm).
+   - Konfigurace Hunter Hydrawise (API Key, Relay ID ventilu, průtok řadu L/min, prahy dopouštění).
+   - Chytré odkládání srážek podle Open-Meteo (souřadnice, práh srážek).
+   - Okamžité uložení konfigurace bez nutnosti restartovat proces.
+3. **📜 Historie & Data**:
+   - Přehledná tabulka posledních měření telemetrie.
+   - Tlačítko pro export kompletní databáze do formátu CSV (`/api/v1/water/export.csv`).
 
-### `GET /api/v1/water/state`
-Primární endpoint pro Home Assistant REST senzor. Pokud uzel nevysílá déle než 30 minut, pole `status` se změní na `"stale"`.
-```json
-{
-  "water_level_cm": 145.0,
-  "water_level_percent": 72.5,
-  "temperature": 21.5,
-  "humidity": 65.4,
-  "battery_voltage": 4.45,
-  "battery_low": false,
-  "current_liters": 14500,
-  "last_seen_seconds_ago": 12,
-  "status": "online",
-  "timestamp": "2026-10-10T09:58:30.123456+00:00"
-}
-```
-
-### `GET /api/v1/water/history?hours=24`
-Vrací pole časových řad pro vykreslení historie hladiny a teploty v Chart.js na webu.
-
-### `GET /health`
-Liveness probe pro systemd watchdog a kontrolu stavu SPI přijímače.
+### 3.2. Úložiště s Vysokou Kapacitou (Flash Disk)
+- Databáze `history.db` (SQLite) je škálována na **500 000+ záznamů** (při 15min intervalu odpovídá více než **14 letům** historie na flash disku při spotřebě pouhých ~40 MB).
 
 ---
 
