@@ -260,23 +260,12 @@
         charts[key] = new Chart($(canvasId).getContext('2d'), config);
     }
 
-    // Úseky dopouštění (zeleně) a přítoku z deště (modře): podbarvení + šrafování + svislé hrany
+    // Úseky dopouštění (jantarově) a přítoku z deště (modře): jemné podbarvení + přerušované hrany,
+    // kreslí se pod křivku hladiny
     const BAND_STYLE = {
-        refill: { fill: 'rgba(16, 185, 129, 0.10)', hatch: 'rgba(16, 185, 129, 0.35)', edge: 'rgba(16, 185, 129, 0.85)' },
-        rain: { fill: 'rgba(56, 189, 248, 0.08)', hatch: 'rgba(56, 189, 248, 0.30)', edge: 'rgba(56, 189, 248, 0.75)' }
+        refill: { fill: 'rgba(251, 191, 36, 0.10)', edge: 'rgba(251, 191, 36, 0.7)' },
+        rain: { fill: 'rgba(56, 189, 248, 0.09)', edge: 'rgba(56, 189, 248, 0.6)' }
     };
-    const hatchCache = {};
-    function hatch(ctx, color) {
-        if (!hatchCache[color]) {
-            const c = document.createElement('canvas');
-            c.width = c.height = 8;
-            const g = c.getContext('2d');
-            g.strokeStyle = color; g.lineWidth = 1.2;
-            g.beginPath(); g.moveTo(-2, 10); g.lineTo(10, -2); g.moveTo(6, 10); g.lineTo(10, 6); g.moveTo(-2, 2); g.lineTo(2, -2); g.stroke();
-            hatchCache[color] = c;
-        }
-        return ctx.createPattern(hatchCache[color], 'repeat');
-    }
     const bandsPlugin = {
         id: 'bands',
         beforeDatasetsDraw(chart, args, opts) {
@@ -285,6 +274,8 @@
             const x = chart.scales.x, { top, bottom, left, right } = chart.chartArea;
             const ctx = chart.ctx;
             ctx.save();
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
             bands.forEach((b) => {
                 const st = BAND_STYLE[b.kind] || BAND_STYLE.rain;
                 let l = x.getPixelForValue(b.start), r = x.getPixelForValue(b.end);
@@ -293,10 +284,7 @@
                 const cl = Math.max(l, left), cr = Math.min(r, right);
                 ctx.fillStyle = st.fill;
                 ctx.fillRect(cl, top, cr - cl, bottom - top);
-                ctx.fillStyle = hatch(ctx, st.hatch);
-                ctx.fillRect(cl, top, cr - cl, bottom - top);
                 ctx.strokeStyle = st.edge;
-                ctx.lineWidth = 1.5;
                 [l, r].forEach((px) => {
                     if (px < left || px > right) return;
                     ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
@@ -480,7 +468,7 @@
         const rows = await getFlows(rangeOf('refill'));
         upsert('refill', 'refillChart', {
             type: 'bar',
-            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: '#10b981' }] },
+            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: '#fbbf24' }] },
             options: { responsive: true, maintainAspectRatio: false }
         });
     }

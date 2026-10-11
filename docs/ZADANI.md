@@ -232,8 +232,8 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   záložky Dashboard / Nastavení / Logování / Uživatelé / Můj účet).
 - Lišta čidel: **Všechny nádrže** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
   čidlo + společný graf hladin) nebo konkrétní nádrž. Tečka = stav (zelená online, žlutá zpožděná, červená offline).
-- Grafy: hladina se **šrafovanými úseky** (podbarvení + šrafování + svislé hrany na začátku a konci):
-  **dopouštění** zeleně (přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo
+- Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):
+  **dopouštění** jantarově (přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo
   dopouštění nad mrtvé pásmo, začátek = poslední vzorek před stoupáním, konec = poslední stoupající vzorek,
   úseky do 45 min se slučují; čidlo při změně měří po minutě, takže hrany jsou přesné na ~1 min). V tooltipu
   čas od–do a litry. Spotřeba/den, dopouštění/den, klima, počasí 7 dní, **baterie a signál (RSSI), výchozí
@@ -249,6 +249,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Párování s průvodcem (1 vložit baterii → 2 potvrdit ID → 3 první data → 4 hotovo).
 - U grafů s historií (hladina, spotřeba, dopouštění, klima, baterie) volba 24 h / 7 d / 30 d / 1 rok
   **+ vlastní rozsah od–do** (date pickery). Předpověď počasí má pevný výhled 7 dní.
+- Dopouštění má v grafech jednotnou jantarovou barvu (úseky v grafu hladiny i denní sloupce).
 - Odstranit ESP32 relikty (OTA mód, intervaly den/noc, sync na celé hodiny) → nahradit stavem rádia
   (RSSI, ztráta paketů, ID uzlu, flagy chyb).
 
