@@ -816,7 +816,7 @@ class Core:
                 for k in out:                      # gap -> null point breaks the line
                     if k == "t":
                         out[k].append((prev_t + bucket) * 1000)
-                    elif k not in ("bucket_s", "events"):
+                    elif k != "bucket_s":
                         out[k].append(None)
             prev_t = r["t"]
             out["t"].append(r["t"] * 1000)
@@ -828,31 +828,39 @@ class Core:
             out["vbat"].append(r1(r["vb"], 0.001 * trim, 3))
             out["rssi"].append(r1(r["rs"], scale_r, 1))
             out["refill"].append(int(r["rf"] or 0))
-        out["events"] = self.events(nid, t_from, t_to)
+        out["bands"] = self.bands(nid, t_from, t_to)
+        out["boots"] = self.boots(nid, t_from, t_to)
         return out
 
-    def events(self, nid: int, t_from: int, t_to: int, limit: int = 60) -> list[dict]:
-        """Things that explain jumps in the charts: refills, sensor restarts (battery
-        change), calibration changes."""
-        ev = []
-        for r in self.db.query("SELECT start_ts, mode, target_pct FROM refills WHERE node_id=? "
-                               "AND start_ts >= ? AND start_ts < ? ORDER BY start_ts", (nid, t_from, t_to)):
-            ev.append({"t": r["start_ts"] * 1000, "kind": "refill",
-                       "label": f"Dopouštění ({'auto' if r['mode'] == 'auto' else 'ručně'}, cíl {r['target_pct']:.0f} %)"})
-        for r in self.db.query("SELECT ts, flags FROM measurements WHERE node_id=? AND ts >= ? AND ts < ? "
-                               "AND (flags & ?) != 0 ORDER BY ts", (nid, t_from, t_to, model.FLAG_BOOT)):
-            wdt = r["flags"] & model.FLAG_WDT_RESET
-            ev.append({"t": r["ts"] * 1000, "kind": "boot",
-                       "label": "Restart čidla (watchdog)" if wdt else "Zapnutí čidla / výměna baterie"})
-        tag = f"Čidlo {nid:04X}:%"
-        for r in self.db.query("SELECT ts, action, detail FROM audit WHERE ts >= ? AND ts < ? AND detail LIKE ? "
-                               "AND (action = 'CALIBRATION' OR (action = 'SETTINGS_CHANGED' AND "
-                               "(detail LIKE '%kalibrační body%' OR detail LIKE '%výška sondy%' "
-                               "OR detail LIKE '%hloubka nádrže%' OR detail LIKE '%cal_points%'))) ORDER BY ts",
-                               (t_from, t_to, tag)):
-            ev.append({"t": r["ts"] * 1000, "kind": "cal", "label": "Kalibrace / změna rozměrů"})
-        ev.sort(key=lambda e: e["t"])
-        return ev[-limit:]
+    def bands(self, nid: int, t_from: int, t_to: int) -> list[dict]:
+        """Intervals shaded in the level chart: refills (exact, from the refill log) and
+        inflow from rain (detected from the level rising outside refilling)."""
+        node = self.nodes.get(nid)
+        out = []
+        for r in self.db.query("SELECT start_ts, end_ts, start_l, end_l, planned_s FROM refills WHERE node_id=? "
+                               "AND start_ts < ? AND IFNULL(end_ts, start_ts + IFNULL(planned_s, 0)) >= ? "
+                               "ORDER BY start_ts", (nid, t_to, t_from)):
+            end = r["end_ts"] or min(int(time.time()), r["start_ts"] + (r["planned_s"] or 0))
+            litres = (r["end_l"] - r["start_l"]) if r["end_l"] is not None and r["start_l"] is not None else None
+            out.append({"kind": "refill", "start": r["start_ts"] * 1000, "end": end * 1000, "litres": litres})
+        deadband = max(5.0, 0.5 * model.deadband_l(node))
+        if t_to - t_from > 62 * 86400:
+            rows = self.db.query("SELECT hour AS ts, volume_l AS v, refilling AS r FROM hourly "
+                                 "WHERE node_id=? AND hour >= ? AND hour < ? ORDER BY hour", (nid, t_from, t_to))
+        else:
+            rows = self.db.query("SELECT ts, volume_l AS v, refilling AS r FROM measurements WHERE node_id=? "
+                                 "AND ts >= ? AND ts < ? AND volume_l IS NOT NULL ORDER BY ts", (nid, t_from, t_to))
+        for a, b, litres in model.inflow_intervals([(r["ts"], r["v"], r["r"]) for r in rows], deadband):
+            out.append({"kind": "rain", "start": a * 1000, "end": b * 1000, "litres": litres})
+        out.sort(key=lambda x: x["start"])
+        return out[-200:]
+
+    def boots(self, nid: int, t_from: int, t_to: int) -> list[dict]:
+        """Sensor power-ups (battery change) and watchdog restarts – battery chart."""
+        return [{"t": r["ts"] * 1000, "wdt": bool(r["flags"] & model.FLAG_WDT_RESET)}
+                for r in self.db.query("SELECT ts, flags FROM measurements WHERE node_id=? AND ts >= ? AND ts < ? "
+                                       "AND (flags & ?) != 0 ORDER BY ts LIMIT 100",
+                                       (nid, t_from, t_to, model.FLAG_BOOT))]
 
     def _daily_flows(self, nid: int, t_from: int, t_to: int) -> list[dict]:
         node = self.nodes.get(nid)

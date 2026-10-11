@@ -911,9 +911,15 @@ pre.yaml {
 
 /* --- legenda grafu hladiny --- */
 .chart-legend-extra { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12px; color: var(--text-muted); }
-.chart-legend-extra .lg { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-.lg-rain { background: rgba(99, 102, 241, 0.55); }
-.lg-refill { background: rgba(16, 185, 129, 0.35); border: 1px dashed rgba(16, 185, 129, 0.8); }
+.chart-legend-extra .lg { display: inline-block; width: 18px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.lg-refill {
+    background: repeating-linear-gradient(-45deg, rgba(16, 185, 129, 0.45) 0 1.5px, rgba(16, 185, 129, 0.12) 1.5px 5px);
+    border-left: 2px solid rgba(16, 185, 129, 0.9); border-right: 2px solid rgba(16, 185, 129, 0.9);
+}
+.lg-rain {
+    background: repeating-linear-gradient(-45deg, rgba(56, 189, 248, 0.45) 0 1.5px, rgba(56, 189, 248, 0.10) 1.5px 5px);
+    border-left: 2px solid rgba(56, 189, 248, 0.85); border-right: 2px solid rgba(56, 189, 248, 0.85);
+}
 
 /* --- přepínač základní / pokročilé nastavení --- */
 .settings-mode {

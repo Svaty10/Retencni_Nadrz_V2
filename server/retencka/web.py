@@ -472,9 +472,6 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         nid = node_of(request)
         t_from, t_to = time_range(request)
         out = await asyncio.to_thread(core.history, nid, t_from, t_to)
-        s = settings.all()
-        core.weather.cached(s["latitude"], s["longitude"])          # refresh in background
-        out["rain"] = core.weather.rain_series(t_from, t_to, 3600 if t_to - t_from <= 3 * 86400 else 86400)
         return jresp(out)
 
     @need()

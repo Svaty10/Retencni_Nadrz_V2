@@ -261,10 +261,9 @@ class ServerTest(unittest.TestCase):
 
         # history carries events, signal and rain series
         st, js, _ = self.req("GET", "/api/history?node=1234&range=24h", headers=h)
-        self.assertIn("events", js)
-        self.assertTrue(all(e["kind"] in ("refill", "boot", "cal") for e in js["events"]))
+        self.assertTrue(all(b["kind"] in ("refill", "rain") for b in js["bands"]))
+        self.assertIsInstance(js["boots"], list)
         self.assertIn("rssi", js)
-        self.assertIn("rain", js)
 
         # backup download = valid gzip'd SQLite database
         c = http.client.HTTPConnection("127.0.0.1", self.web_port, timeout=15)

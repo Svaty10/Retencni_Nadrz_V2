@@ -30,7 +30,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/me` | user | jméno, role, CSRF token, verze |
 | POST | `/api/me/password` | user | `old_password`, `new_password` |
 | GET | `/api/state` | user | kompletní živý stav pro dashboard |
-| GET | `/api/history?range=24h\|7d\|30d\|365d` nebo `?from=&to=` (epoch s) | user | zprůměrovaná řada (max ~600 bodů): hladina, objem, klima, baterie, `rssi`, `refill`, `events` (dopouštění / zapnutí čidla / kalibrace), `rain` (srážky po hodinách nebo dnech) |
+| GET | `/api/history?range=24h\|7d\|30d\|365d` nebo `?from=&to=` (epoch s) | user | zprůměrovaná řada (max ~600 bodů): hladina, objem, klima, baterie, `rssi`, `refill`, `bands` (úseky dopouštění a přítoku z deště: `kind`, `start`, `end`, `litres`), `boots` (vložení baterie / restart čidla) |
 | GET | `/api/flows?…` | user | denní spotřeba / přítok ze srážek / dopouštění |
 | GET | `/api/weather` | user | předpověď 7 dní (Open-Meteo, cache 1 h) |
 | GET | `/api/export.csv?…` | admin | CSV (středník, desetinná čárka) |

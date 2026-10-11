@@ -260,93 +260,84 @@
         charts[key] = new Chart($(canvasId).getContext('2d'), config);
     }
 
-    // Zvýraznění úseků dopouštění v grafu hladiny (zelené pásy)
-    const refillBands = {
-        id: 'refillBands',
-        beforeDatasetsDraw(chart, args, opts) {
-            const flags = opts.flags || [], t = opts.t || [];
-            if (!flags.length) return;
-            const x = chart.scales.x, { top, bottom } = chart.chartArea;
-            const ctx = chart.ctx;
-            ctx.save();
-            let start = -1;
-            const draw = (a, b) => {
-                let l = x.getPixelForValue(t[a]), r = x.getPixelForValue(t[b]);
-                if (a === b) { l -= 6; r += 6; }
-                ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
-                ctx.fillRect(l, top, r - l, bottom - top);
-                ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([5, 5]);
-                [l, r].forEach((px) => { ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke(); });
-            };
-            for (let i = 0; i < flags.length; i++) {
-                if (flags[i] && start < 0) start = i;
-                if (!flags[i] && start >= 0) { draw(start, i - 1); start = -1; }
-            }
-            if (start >= 0) draw(start, flags.length - 1);
-            ctx.restore();
-        }
+    // Úseky dopouštění (zeleně) a přítoku z deště (modře): podbarvení + šrafování + svislé hrany
+    const BAND_STYLE = {
+        refill: { fill: 'rgba(16, 185, 129, 0.10)', hatch: 'rgba(16, 185, 129, 0.35)', edge: 'rgba(16, 185, 129, 0.85)' },
+        rain: { fill: 'rgba(56, 189, 248, 0.08)', hatch: 'rgba(56, 189, 248, 0.30)', edge: 'rgba(56, 189, 248, 0.75)' }
     };
-
-    // Srážky jako sloupce u spodního okraje grafu hladiny (vlastní měřítko, max = 35 % výšky)
-    const rainBars = {
-        id: 'rainBars',
+    const hatchCache = {};
+    function hatch(ctx, color) {
+        if (!hatchCache[color]) {
+            const c = document.createElement('canvas');
+            c.width = c.height = 8;
+            const g = c.getContext('2d');
+            g.strokeStyle = color; g.lineWidth = 1.2;
+            g.beginPath(); g.moveTo(-2, 10); g.lineTo(10, -2); g.moveTo(6, 10); g.lineTo(10, 6); g.moveTo(-2, 2); g.lineTo(2, -2); g.stroke();
+            hatchCache[color] = c;
+        }
+        return ctx.createPattern(hatchCache[color], 'repeat');
+    }
+    const bandsPlugin = {
+        id: 'bands',
         beforeDatasetsDraw(chart, args, opts) {
-            const rain = opts.rain;
-            if (!rain || !rain.t || !rain.t.length) return;
+            const bands = opts.bands || [];
+            if (!bands.length) return;
             const x = chart.scales.x, { top, bottom, left, right } = chart.chartArea;
-            const maxMm = Math.max(5, ...rain.mm);
-            const h = (bottom - top) * 0.35;
-            const w = rain.bucket_s * 1000;
             const ctx = chart.ctx;
             ctx.save();
-            ctx.fillStyle = 'rgba(99, 102, 241, 0.45)';
-            for (let i = 0; i < rain.t.length; i++) {
-                let l = x.getPixelForValue(rain.t[i]), r = x.getPixelForValue(rain.t[i] + w);
-                if (r < left || l > right) continue;
-                l = Math.max(l, left); r = Math.min(r, right);
-                const bh = rain.mm[i] / maxMm * h;
-                ctx.fillRect(l + 1, bottom - bh, Math.max(2, r - l - 2), bh);
-            }
+            bands.forEach((b) => {
+                const st = BAND_STYLE[b.kind] || BAND_STYLE.rain;
+                let l = x.getPixelForValue(b.start), r = x.getPixelForValue(b.end);
+                if (r < left || l > right) return;
+                if (r - l < 4) { l -= 2; r += 2; }
+                const cl = Math.max(l, left), cr = Math.min(r, right);
+                ctx.fillStyle = st.fill;
+                ctx.fillRect(cl, top, cr - cl, bottom - top);
+                ctx.fillStyle = hatch(ctx, st.hatch);
+                ctx.fillRect(cl, top, cr - cl, bottom - top);
+                ctx.strokeStyle = st.edge;
+                ctx.lineWidth = 1.5;
+                [l, r].forEach((px) => {
+                    if (px < left || px > right) return;
+                    ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
+                });
+            });
             ctx.restore();
         }
     };
+    function bandsAt(bands, xVal) {
+        const out = [];
+        (bands || []).forEach((b) => {
+            if (xVal < b.start - 150e3 || xVal > b.end + 150e3) return;
+            const t = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+            const what = b.kind === 'refill' ? '💧 Dopouštění' : '🌧️ Přítok z deště';
+            out.push(`${what} ${t(b.start)}–${t(b.end)}${b.litres != null ? ` · +${num(b.litres, 0, ' L')}` : ''}`);
+        });
+        return out;
+    }
 
-    // Události (dopouštění, zapnutí čidla, kalibrace) jako svislé značky
-    const EVENT_ICON = { refill: '💧', boot: '🔋', cal: '📐' };
-    const eventMarks = {
-        id: 'eventMarks',
+    // Zapnutí čidla / výměna baterie – značky v grafu baterie
+    const bootMarks = {
+        id: 'bootMarks',
         afterDatasetsDraw(chart, args, opts) {
-            const ev = (opts.events || []).filter((e) => e.kind !== 'refill');   // dopouštění už ukazují pásy
+            const ev = opts.boots || [];
             if (!ev.length) return;
             const x = chart.scales.x, { top, bottom, left, right } = chart.chartArea;
             const ctx = chart.ctx;
             ctx.save();
             ctx.font = '13px sans-serif';
             ctx.textAlign = 'center';
-            ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
             ctx.setLineDash([3, 4]);
             ev.forEach((e) => {
                 const px = x.getPixelForValue(e.t);
                 if (px < left || px > right) return;
                 ctx.beginPath(); ctx.moveTo(px, top + 16); ctx.lineTo(px, bottom); ctx.stroke();
-                ctx.fillText(EVENT_ICON[e.kind] || '•', px, top + 12);
+                ctx.fillText(e.wdt ? '⟳' : '🔋', px, top + 12);
             });
             ctx.restore();
         }
     };
-
-    function nearEvents(d, xVal) {
-        const half = Math.max(d.bucket_s || 300, 900) * 1000;
-        const out = [];
-        (d.events || []).forEach((e) => { if (Math.abs(e.t - xVal) <= half) out.push(`${EVENT_ICON[e.kind] || '•'} ${e.label}`); });
-        const rain = d.rain || {};
-        (rain.t || []).forEach((t, i) => {
-            if (xVal >= t && xVal < t + rain.bucket_s * 1000) out.push(`🌧 srážky ${num(rain.mm[i], 1, ' mm')}${rain.bucket_s >= 86400 ? ' za den' : ' za hodinu'}`);
-        });
-        return out;
-    }
 
     async function loadLevelChart() {
         const r = rangeOf('level');
@@ -354,14 +345,12 @@
         upsert('level', 'historyChart', {
             type: 'line',
             data: { datasets: [{ label: 'Hladina (%)', data: series(d.t, d.level_pct), borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', fill: true, tension: 0.3, pointRadius: 0, spanGaps: false }] },
-            plugins: [rainBars, refillBands, eventMarks],
+            plugins: [bandsPlugin],
             options: {
                 responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
                 plugins: {
                     legend: { display: false },
-                    refillBands: { flags: d.refill, t: d.t },
-                    rainBars: { rain: d.rain },
-                    eventMarks: { events: d.events },
+                    bands: { bands: d.bands },
                     tooltip: {
                         callbacks: {
                             title: timeTooltip.callbacks.title,
@@ -369,7 +358,7 @@
                                 const i = ctx.dataIndex;
                                 return ` ${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}`;
                             },
-                            footer: (items) => items.length ? nearEvents(d, items[0].parsed.x) : []
+                            footer: (items) => items.length ? bandsAt(d.bands, items[0].parsed.x) : []
                         }
                     }
                 },
@@ -425,6 +414,7 @@
         const d = await getHistory(r);
         upsert('battery', 'batteryChart', {
             type: 'line',
+            plugins: [bootMarks],
             data: {
                 datasets: [
                     { label: 'Napětí baterie (V)', data: series(d.t, d.vbat), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.3, pointRadius: 0, spanGaps: true, yAxisID: 'y' },
@@ -433,7 +423,20 @@
             },
             options: {
                 responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
-                plugins: { tooltip: timeTooltip },
+                plugins: {
+                    bootMarks: { boots: d.boots },
+                    tooltip: {
+                        callbacks: {
+                            title: timeTooltip.callbacks.title,
+                            footer: (items) => {
+                                if (!items.length) return [];
+                                const xv = items[0].parsed.x, half = Math.max(d.bucket_s || 300, 900) * 1000;
+                                return (d.boots || []).filter((b) => Math.abs(b.t - xv) <= half)
+                                    .map((b) => b.wdt ? '⟳ Restart čidla' : '🔋 Vložení baterie');
+                            }
+                        }
+                    }
+                },
                 scales: {
                     x: timeScale(r),
                     y: { suggestedMin: 3.0, suggestedMax: 5.5, ticks: { callback: (v) => v.toFixed(1) + ' V' } },

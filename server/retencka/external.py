@@ -96,19 +96,6 @@ class Weather:
             asyncio.ensure_future(self.forecast(lat, lon))
         return self._data if self._key == key else None
 
-    def rain_series(self, t_from: int, t_to: int, bucket: int) -> dict:
-        """Cached hourly rain summed into buckets (hourly or daily) for a chart."""
-        sums: dict[int, float] = {}
-        for ts, mm in self._rain:
-            if t_from <= ts < t_to and mm > 0:
-                if bucket >= 86400:
-                    k = int(datetime.fromtimestamp(ts).replace(hour=0, minute=0, second=0).timestamp())
-                else:
-                    k = ts - ts % bucket
-                sums[k] = sums.get(k, 0.0) + mm
-        keys = sorted(sums)
-        return {"bucket_s": bucket, "t": [k * 1000 for k in keys], "mm": [round(sums[k], 1) for k in keys]}
-
     def rain_ahead(self, hours: float) -> Optional[tuple[float, Optional[int]]]:
         """Forecast rain in the next `hours` (mm) and the epoch of the last rainy hour
         in that window. None without forecast data."""

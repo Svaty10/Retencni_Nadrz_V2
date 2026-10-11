@@ -201,3 +201,35 @@ def flows(series: Sequence[tuple[int, float, int]], deadband_l: float):
         elif vol > ref + deadband_l:
             yield ts, ("refill" if refilling else "rain"), vol - ref
             ref = vol
+
+
+def inflow_intervals(series: Sequence[tuple[int, float, int]], deadband_l: float,
+                     merge_gap_s: int = 2700) -> list[tuple[int, int, float]]:
+    """Periods when the tank filled by itself (rain), from a (ts, volume_l, refilling)
+    series: rises above the dead band outside refilling. Start = last sample before
+    the level started to rise, end = last rising sample; rises closer than
+    merge_gap_s are one interval. Returns [(start_ts, end_ts, litres)]."""
+    out: list[list] = []
+    ref: Optional[float] = None
+    rise_start: Optional[int] = None
+    for ts, vol, refilling in series:
+        if vol is None:
+            continue
+        if ref is None or refilling:
+            ref, rise_start = vol, ts
+            continue
+        if vol <= ref + deadband_l / 3.0:
+            rise_start = ts
+            if vol < ref - deadband_l:
+                ref = vol                      # consumption moves the reference down
+            continue
+        if vol > ref + deadband_l:
+            gained = vol - ref
+            start = rise_start if rise_start is not None else ts
+            if out and start - out[-1][1] <= merge_gap_s:
+                out[-1][1] = ts
+                out[-1][2] += gained
+            else:
+                out.append([start, ts, gained])
+            ref, rise_start = vol, ts
+    return [(a, b, round(c)) for a, b, c in out]

@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž V3 – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-3.5.0-38bdf8)
+![verze](https://img.shields.io/badge/verze-3.6.0-38bdf8)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -33,8 +33,9 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 
 **Hub a web**
 - Více nádrží na jeden hub (až 16), přehled **Všechny nádrže** i detail každé nádrže.
-- Grafy kreslí prohlížeč: hladina se **srážkami**, dopouštěním a značkami událostí (výměna baterie,
-  kalibrace), spotřeba, dopouštění, klima, počasí, baterie a signál; vlastní rozsah od–do.
+- Grafy kreslí prohlížeč: hladina s vyznačeným **dopouštěním** a **přítokem z deště** (šrafované úseky
+  od–do, v tooltipu litry), spotřeba, dopouštění, klima, počasí, baterie a signál (s vyznačenou výměnou
+  baterie); vlastní rozsah od–do.
 - **Výhled:** na kolik dní voda vystačí a kolik přiteče z předpovídaného deště.
 - **Chytré dopouštění:** když má brzy pršet a déšť nádrž doplní, hub nedopouští a čeká; když déšť nepřijde
   nebo hladina klesne příliš, dopustí – a jen tolik, kolik déšť nedodá.
@@ -103,7 +104,8 @@ Fuse `EESAVE` zachová klíč i při přehrání firmwaru. Ladicí konstanty jso
 | SHT40, CPU, baterie (1×/h) | – | – | ~0,1 mAs |
 
 Při 5min intervalu ≈ 3,3 mAs/cyklus → ~12 µA průměrně → výdrž 3× AA Li-FeS2 (3000 mAh) omezuje hlavně
-samovybíjení (10+ let). Skutečnou spotřebu sondy ověřte měřením.
+samovybíjení (10+ let). Kdyby čidlo měřilo trvale 1× za minutu: ~57 µA → teoreticky ~6 let, reálně ~5 let.
+Proto měří po minutě jen při změně hladiny (dopouštění, déšť). Skutečnou spotřebu sondy ověřte měřením.
 
 ## Vývoj a testy
 ```bash

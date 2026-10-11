@@ -232,9 +232,12 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   záložky Dashboard / Nastavení / Logování / Uživatelé / Můj účet).
 - Lišta čidel: **Všechny nádrže** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
   čidlo + společný graf hladin) nebo konkrétní nádrž. Tečka = stav (zelená online, žlutá zpožděná, červená offline).
-- Grafy: hladina (se zvýrazněním dopouštění, **sloupce srážek** z Open-Meteo – až 92 dní zpět, hodinové/denní
-  podle rozsahu – a **značky událostí**: 🔋 zapnutí čidla/výměna baterie, 📐 kalibrace; detail v tooltipu),
-  spotřeba/den, dopouštění/den, klima, počasí 7 dní, **baterie a signál (RSSI), výchozí 30 dní**.
+- Grafy: hladina se **šrafovanými úseky** (podbarvení + šrafování + svislé hrany na začátku a konci):
+  **dopouštění** zeleně (přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo
+  dopouštění nad mrtvé pásmo, začátek = poslední vzorek před stoupáním, konec = poslední stoupající vzorek,
+  úseky do 45 min se slučují; čidlo při změně měří po minutě, takže hrany jsou přesné na ~1 min). V tooltipu
+  čas od–do a litry. Spotřeba/den, dopouštění/den, klima, počasí 7 dní, **baterie a signál (RSSI), výchozí
+  30 dní** se značkami 🔋 vložení baterie / ⟳ restart čidla.
 - Texty v aplikaci jsou pro koncového uživatele: krátké, bez technických poznámek.
 - **Mobil:** vše funguje na šířce 360–400 px (jeden sloupec, posuvné záložky a tabulky, bez vodorovného posunu stránky).
 - **Záznamy (log):** kategorie (dopouštění, čidla, nastavení, přihlášení, uživatelé, systém, problémy), filtr

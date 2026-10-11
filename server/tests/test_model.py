@@ -71,5 +71,21 @@ class BatteryTest(unittest.TestCase):
         self.assertEqual(model.battery_percent(2.9), 0)
 
 
+class InflowTest(unittest.TestCase):
+    def test_rain_interval(self):
+        # flat 1000 L, rain from t=600 to t=1500 (+300 L), consumption, refill is ignored
+        ser = [(0, 1000, 0), (300, 1000, 0), (600, 1001, 0), (900, 1100, 0), (1200, 1250, 0), (1500, 1300, 0),
+               (1800, 1300, 0), (3600, 1290, 0), (7200, 1290, 1), (7500, 1600, 1), (7800, 1600, 0)]
+        iv = model.inflow_intervals(ser, 20.0)
+        self.assertEqual(len(iv), 1)
+        a, b, litres = iv[0]
+        self.assertEqual((a, b), (600, 1500))
+        self.assertAlmostEqual(litres, 300, delta=2)
+
+    def test_noise_is_not_rain(self):
+        ser = [(i * 300, 1000 + (5 if i % 2 else -5), 0) for i in range(50)]
+        self.assertEqual(model.inflow_intervals(ser, 20.0), [])
+
+
 if __name__ == "__main__":
     unittest.main()

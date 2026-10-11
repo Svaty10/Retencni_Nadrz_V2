@@ -2,6 +2,13 @@
 
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 
+## [3.6.0] - 2026-10-11
+
+### Změněno
+- Graf hladiny: dopouštění i **přítok z deště** jako šrafované úseky od–do (zeleně / modře, svislé hrany na začátku a konci, v tooltipu čas a litry). Přítok z deště se určuje z naměřené hladiny, ne z předpovědi.
+- Z grafu hladiny odstraněny sloupce srážek a značky kalibrace / baterie; výměna baterie se značí jen v grafu baterie.
+- README: výdrž baterie při trvalém měření 1× za minutu (~5 let).
+
 ## [3.5.0] - 2026-10-11
 
 ### Přidáno
