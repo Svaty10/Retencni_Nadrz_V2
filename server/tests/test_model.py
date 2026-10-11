@@ -42,6 +42,21 @@ class FilterTest(unittest.TestCase):
             f.update(500, 10)
         self.assertLess(abs(f.update(900, 10) - 500), 1)
 
+    def test_refill_follows_raw_without_lag(self):
+        # 19 mm per 5 min is below 2x dead band: smoothing alone would lag ~40 mm
+        f = model.LevelFilter()
+        for _ in range(5):
+            f.update(184, 10)
+        level, series = 184.0, []
+        for i in range(12):
+            level += 19
+            series.append((i * 300, f.update(level, 10, follow=True) * 10.9, 1))
+            self.assertEqual(series[-1][1], level * 10.9)    # control sees the real level
+        for i in range(12, 24):                              # valve closed, level flat
+            series.append((i * 300, f.update(level, 10) * 10.9, 0))
+        rain = [x for x in model.flows(series, 54) if x[1] == "rain"]
+        self.assertEqual(rain, [])                           # no fake inflow after the refill
+
 
 class FlowTest(unittest.TestCase):
     def test_slow_consumption_counted(self):

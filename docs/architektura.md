@@ -111,12 +111,16 @@ sequenceDiagram
 | objem | `V = plocha_m² · h_cm / 100 · 1000 = plocha · h · 10` | L |
 | zaplnění | `h / max_depth · 100` | % |
 | mrtvé pásmo | `přesnost_% / 100 · rozsah_cm · 10` (min. 1 mm); v litrech `· plocha · 10 / 10` | mm, L |
-| filtr | medián posledních 3 → změna < 2× mrtvé pásmo: EMA α = 0,3, jinak skok | mm |
+| filtr | medián posledních 3 → změna < 2× mrtvé pásmo: EMA α = 0,3, jinak skok; **během dopouštění bez vyhlazení** (surová hodnota) | mm |
 | spotřeba / přítok | hystereze na vyhlazeném objemu s ½ mrtvého pásma (min. 5 L); stoupání při dopouštění = „refill“, jinak „rain“ | L |
 | přítok z deště | `srážky_mm · plocha_střechy_m² · odtokový_součinitel` (1 mm na 1 m² = 1 L) | L |
 | baterie % | křivka Li-FeS2 na článek (3 články), 1,0 V = 0 % | % |
 | výdrž baterie | `kapacita · % / (cykly/den · mAs/cyklus + µA_spánek · 86,4 + 2 %/rok samovybíjení)` | dny |
 | výhled | `objem / průměrná denní spotřeba (posledních ≤ 7 celých dní)` | dny |
+
+Časy předpovědi Open-Meteo chodí jako epoch (`timeformat=unixtime`), dny podle kalendáře místa
+(`timezone=auto`); hodinová hodnota v čase T = srážky hodiny končící v T. Denní součty spotřeby
+se počítají v místním čase Pi – zónu nastavuje `install.sh` (výchozí Europe/Prague).
 
 Do DB se ukládá surové `probe_100uv`, nefiltrovaná výška `level_raw_mm`, filtrovaná `level_mm`
 a `volume_l`. Tlačítko *Přepočítat* projde historii čidla znovu (`Core.recompute_levels`).
@@ -141,7 +145,10 @@ stateDiagram-v2
 
 - Doba běhu: `potřeba_L / průtok_L·min⁻¹ · 60 · 1,10`, max. `max_refill_minutes`. Stejný čas
   dostane i časovač ventilu v Hydrawise – ventil se zavře i když hub mezitím spadne.
-- Uzavřená smyčka: každé měření porovná hladinu s cílem a při dosažení ventil zastaví.
+- Uzavřená smyčka: každé měření porovná hladinu s cílem a při dosažení ventil zastaví. Během dopouštění
+  filtr nevyhlazuje (sleduje surovou hodnotu) – jinak by se ventil zavíral pozdě a doběh filtru po
+  skončení by se v grafech a součtech objevil jako „přítok z deště“.
+- Start i stop ventilu jsou serializované (`Core._refill_lock`), ruční a automatický start se nepotkají.
 - Průtok se kalibruje během dopouštění (po ≥ 120 s a ≥ 50 L): `real_flow = 0,7 · staré + 0,3 · naměřené`.
 - Při předpovězeném dešti se dopouští jen část: `cíl' = max(min(cíl, práh + 2), cíl − přírůstek_z_deště)`.
 - `refill_tick` (každých 30 s): pojistky časovače a výpadku dat.

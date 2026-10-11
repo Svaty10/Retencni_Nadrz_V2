@@ -120,6 +120,11 @@ class LevelFilter:
     1. median of the last 3 raw readings  -> single spikes disappear
     2. change smaller than 2x dead band   -> exponential smoothing (no "teeth" in charts)
        change larger                      -> follow immediately (refill, heavy rain)
+
+    While refilling (follow=True) the value is the raw reading: the rise is real,
+    and both smoothing and the median would lag behind it – the valve would close
+    late (hundreds of litres over the target) and the lag would show up as
+    "rain" after the refill ended.
     """
 
     ALPHA = 0.3
@@ -128,8 +133,11 @@ class LevelFilter:
         self.raw: list[float] = []
         self.value: Optional[float] = None
 
-    def update(self, raw_mm: float, deadband: float) -> float:
+    def update(self, raw_mm: float, deadband: float, follow: bool = False) -> float:
         self.raw = (self.raw + [raw_mm])[-3:]
+        if follow:
+            self.value = raw_mm
+            return self.value
         med = sorted(self.raw)[len(self.raw) // 2]
         if self.value is None or abs(med - self.value) > 2 * deadband:
             self.value = med

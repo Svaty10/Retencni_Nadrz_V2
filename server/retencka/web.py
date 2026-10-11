@@ -654,7 +654,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         node = core.nodes.get(nid)
         data = await read_json(request)
         last = core.last.get(nid)
-        if not last or last.get("probe_100uv") is None or (core.age_s(nid) or 1e9) > 1800:
+        if not last or last.get("probe_100uv") is None or core.data_age(nid) > 1800:
             return jerr("Není k dispozici čerstvé měření sondy tohoto čidla.")
         try:
             actual_cm = float(str(data.get("actual_cm")).replace(",", "."))

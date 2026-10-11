@@ -2,6 +2,20 @@
 
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 
+## [3.6.2] - 2026-10-11
+
+### Opraveno
+- **Automatické dopouštění se nespouštělo:** hned po příchodu měření měla data stáří 0 s a kontrola je brala jako chybějící („Chybí čerstvá data“). Totéž mohlo omylem zastavit běžící dopouštění.
+- Rádio: čtení FIFO uprostřed příjmu paketu ho smazalo (ztráta ~3–4 % paketů s GDO0, ~17 % při pollingu). FIFO se teď čte jen po dokončení paketu (stav IDLE).
+- Dopouštění: během dopouštění hladina sleduje surovou hodnotu bez vyhlazení – ventil se zavře včas (dřív až stovky litrů nad cíl) a doběh filtru se po skončení nepočítá jako přítok z deště. Mimo dopouštění zůstává vyhlazení pro grafy a spotřebu beze změny.
+- Ruční a automatický start dopouštění se už nemohou potkat (dvojí spuštění ventilu).
+- Předpověď deště nezávisí na časové zóně Pi (časy z Open-Meteo jako epoch); hodina srážek se počítá správně (hodnota = hodina končící v daném čase).
+- Hlídání místa na kartě maže jen podrobná data starší než půl roku.
+
+### Změněno
+- `install.sh` nastaví časovou zónu (výchozí Europe/Prague, volba `--timezone`), pokud je v systému výchozí UTC / Europe/London.
+- Nový dokument `docs/architektura.md`.
+
 ## [3.6.1] - 2026-10-11
 
 ### Změněno

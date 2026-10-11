@@ -76,6 +76,9 @@ class Core:
         self.refill_notes: dict[int, str] = {}
         self._auto_block_until: dict[int, float] = {}
         self._rain_wait: dict[int, dict] = {}       # node_id -> {start_pct, since, deadline}
+        # start/stop of any valve one at a time: the "already running" checks and the
+        # bookkeeping must not interleave with a pending Hydrawise call (double start)
+        self._refill_lock = asyncio.Lock()
 
         # clock correction after a late NTP sync (no RTC on the Pi)
         self._time_anchor: Optional[tuple[float, float, int]] = None   # (wall, monotonic, first id)
@@ -341,7 +344,7 @@ class Core:
             lv = model.compute_level(pkt.probe_100uv, node)
             level_raw = lv.level_cm * 10.0
             filt = self.filters.setdefault(nid, model.LevelFilter())
-            fmm = filt.update(level_raw, model.deadband_mm(node))
+            fmm = filt.update(level_raw, model.deadband_mm(node), follow=nid in self.refills)
             flv = model.level_from_mm(fmm, node)
             level_mm, volume_l = int(round(flv.level_cm * 10)), int(round(flv.volume_l))
             level_raw = int(round(level_raw))
@@ -388,6 +391,12 @@ class Core:
     def age_s(self, nid: Optional[int]) -> Optional[int]:
         last = self.last.get(nid)
         return None if not last else max(0, int(time.time()) - last["ts"])
+
+    def data_age(self, nid: Optional[int]) -> float:
+        """Age of the last measurement in seconds; infinity without data (an age of
+        0 – data arrived this second – must not read as "no data")."""
+        age = self.age_s(nid)
+        return math.inf if age is None else age
 
     def status(self, nid: Optional[int]) -> str:
         age = self.age_s(nid)
@@ -587,6 +596,10 @@ class Core:
         return info
 
     async def refill_start(self, nid: int, target_pct: float, mode: str, user: str, ip: str = "") -> tuple[bool, str]:
+        async with self._refill_lock:
+            return await self._refill_start(nid, target_pct, mode, user, ip)
+
+    async def _refill_start(self, nid: int, target_pct: float, mode: str, user: str, ip: str) -> tuple[bool, str]:
         node = self.nodes.get(nid)
         if node is None:
             return False, "Čidlo neexistuje."
@@ -604,7 +617,7 @@ class Core:
         if busy:
             return False, "Tento ventil už dopouští pro jinou nádrž."
         lv = self.level_now(nid)
-        if lv is None or (self.age_s(nid) or 1e9) > FRESH_S:
+        if lv is None or self.data_age(nid) > FRESH_S:
             return False, "Chybí čerstvá data o hladině – dopouštění nelze bezpečně spustit."
         target_pct = min(float(target_pct), float(node["max_refill_pct"]))
         need_l = target_pct / 100.0 * lv.max_volume_l - lv.volume_l
@@ -632,6 +645,10 @@ class Core:
 
     async def refill_stop(self, nid: int, reason: str, user: str = "system", ip: str = "",
                           call_api: bool = True) -> tuple[bool, str]:
+        async with self._refill_lock:
+            return await self._refill_stop(nid, reason, user, ip, call_api)
+
+    async def _refill_stop(self, nid: int, reason: str, user: str, ip: str, call_api: bool) -> tuple[bool, str]:
         node = self.nodes.get(nid)
         ok, msg = True, "OK"
         prov = self._provider(node, for_stop=True) if node else None
@@ -757,7 +774,7 @@ class Core:
         for nid, r in list(self.refills.items()):
             if time.time() > r["start_ts"] + (r["planned_s"] or 0) + 60:
                 await self.refill_stop(nid, "Časovač vypršel (cíl nepotvrzen měřením)", call_api=False)
-            elif (self.age_s(nid) or 1e9) > FRESH_S:
+            elif self.data_age(nid) > FRESH_S:
                 await self.refill_stop(nid, "Bezpečnostní zastavení – výpadek dat z čidla")
 
     # ======================================================== clock repair
@@ -931,9 +948,12 @@ class Core:
         if self._free_mb() >= LOW_DISK_MB:
             return
         oldest = self.db.scalar("SELECT MIN(ts) FROM measurements", (), None)
-        if oldest is None or oldest > time.time() - 180 * 86400:
+        half_year_ago = int(time.time()) - 180 * 86400
+        if oldest is None or oldest > half_year_ago:
             return
-        n = self.db.execute("DELETE FROM measurements WHERE ts < ?", (oldest + 30 * 86400,)).rowcount
+        # the oldest month, but never anything from the last half year
+        cutoff = min(oldest + 30 * 86400, half_year_ago)
+        n = self.db.execute("DELETE FROM measurements WHERE ts < ?", (cutoff,)).rowcount
         self.audit("DISK_LOW", f"Málo místa na kartě – smazáno {n} nejstarších podrobných měření "
                                f"(hodinové průměry zůstávají)")
 
@@ -1121,8 +1141,8 @@ class Core:
         filt = model.LevelFilter()
         n, last_id = 0, 0
         while True:
-            rows = self.db.query("SELECT id, probe_100uv, flags FROM measurements WHERE node_id=? AND id > ? "
-                                 "ORDER BY id LIMIT 2000", (nid, last_id))
+            rows = self.db.query("SELECT id, probe_100uv, flags, refilling FROM measurements WHERE node_id=? "
+                                 "AND id > ? ORDER BY id LIMIT 2000", (nid, last_id))
             if not rows:
                 break
             upd = []
@@ -1131,7 +1151,7 @@ class Core:
                 if r["probe_100uv"] is None or r["flags"] & model.FLAG_PROBE_CLIP:
                     continue
                 raw = model.compute_level(r["probe_100uv"], node).level_cm * 10.0
-                flv = model.level_from_mm(filt.update(raw, db_mm), node)
+                flv = model.level_from_mm(filt.update(raw, db_mm, follow=bool(r["refilling"])), node)
                 upd.append((int(round(flv.level_cm * 10)), int(round(raw)), int(round(flv.volume_l)), r["id"]))
             with self.db.transaction() as c:
                 c.executemany("UPDATE measurements SET level_mm=?, level_raw_mm=?, volume_l=? WHERE id=?", upd)

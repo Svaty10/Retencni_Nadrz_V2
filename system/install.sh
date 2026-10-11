@@ -10,6 +10,8 @@
 #                             jen pokud je /var/lib/retencka samostatný oddíl
 #   --cloudflare-token TOKEN  nainstalovat cloudflared a připojit tunel
 #   --no-hotspot              nespouštět hlídání Wi-Fi / záložní hotspot
+#   --timezone ZÓNA           časová zóna (výchozí Europe/Prague; bez volby se
+#                             mění jen výchozí zóna Pi OS – UTC / Europe/London)
 #
 # Skript je idempotentní – lze jej spustit znovu (např. po ruční aktualizaci).
 # =============================================================================
@@ -18,12 +20,14 @@ set -euo pipefail
 OVERLAY=0
 CF_TOKEN=""
 HOTSPOT=1
+TZONE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --overlay) OVERLAY=1 ;;
         --cloudflare-token) CF_TOKEN="${2:-}"; shift ;;
         --no-hotspot) HOTSPOT=0 ;;
-        -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+        --timezone) TZONE="${2:-}"; shift ;;
+        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
         *) echo "Neznámá volba: $1"; exit 1 ;;
     esac
     shift
@@ -89,6 +93,12 @@ mv -T "$APP/current.new" "$APP/current"
 
 # ---------------------------------------------------------------- konfigurace
 step "Konfigurace"
+# Denní součty (spotřeba, dopouštění) a „dnes“ se počítají v místním čase Pi.
+CUR_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "")
+if [ -n "$TZONE" ] || [ -z "$CUR_TZ" ] || [ "$CUR_TZ" = "Etc/UTC" ] || [ "$CUR_TZ" = "UTC" ]         || [ "$CUR_TZ" = "Europe/London" ]; then
+    timedatectl set-timezone "${TZONE:-Europe/Prague}"
+fi
+echo "Časová zóna: $(timedatectl show -p Timezone --value 2>/dev/null || echo '?')"
 [ -f /etc/default/retencka ] || install -m 644 "$SRC/system/config/default-retencka" /etc/default/retencka
 install -d -m 755 /etc/retencka
 if [ -f "$SRC/system/keys/release.pub" ]; then

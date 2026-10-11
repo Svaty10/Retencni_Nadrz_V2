@@ -234,6 +234,16 @@ class Receiver:
             self.mode = "polling"
 
     def _poll_fifo(self) -> None:
+        # MCSM1.RXOFF_MODE = IDLE: a finished packet leaves the chip in IDLE. In RX
+        # (or a transient state) a packet may be arriving right now – reading or
+        # flushing the FIFO then would destroy it, so wait for the end of packet.
+        state = self._r(MARCSTATE) & 0x1F
+        if state == MARC_RXOVF:
+            log.warning("RX FIFO overflow – flushing")
+            self._enter_rx()
+            return
+        if state != MARC_IDLE:
+            return
         n = self._r(RXBYTES)
         overflow = bool(n & 0x80)
         n &= 0x7F
@@ -242,6 +252,7 @@ class Receiver:
             self._enter_rx()
             return
         if n < 3:
+            self._enter_rx()                      # IDLE without a packet: back to listening
             return
         length = self._read_fifo(1)[0]
         if length == 0 or length > 61 or n < length + 3:

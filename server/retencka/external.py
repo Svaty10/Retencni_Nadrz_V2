@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 RAIN_PAST_DAYS = 92              # Open-Meteo maximum for the forecast endpoint
@@ -60,16 +60,20 @@ class Weather:
         async with self._lock:
             if time.time() - self._fetched >= 3600 or self._key != key:
                 try:
-                    params = {"latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 7,
-                              "past_days": RAIN_PAST_DAYS, "hourly": "precipitation",
+                    # days follow the location's calendar (timezone=auto); all times come
+                    # as epoch seconds, so nothing depends on the time zone of the Pi
+                    params = {"latitude": lat, "longitude": lon, "timezone": "auto", "timeformat": "unixtime",
+                              "forecast_days": 7, "past_days": RAIN_PAST_DAYS, "hourly": "precipitation",
                               "daily": "precipitation_sum,temperature_2m_max,temperature_2m_min"}
                     status, body = await self.http.get(self.URL, params)
                     if status != 200:
                         raise RuntimeError(f"HTTP {status}")
                     js = json.loads(body)
+                    offset = int(js.get("utc_offset_seconds") or 0)
                     d = js.get("daily", {})
-                    today = datetime.now().date().isoformat()
-                    days = d.get("time", [])
+                    today = _local_date(time.time(), offset)
+                    # daily time = local midnight; noon is safe across a DST change
+                    days = [_local_date(t + 43200, offset) for t in d.get("time", [])]
                     i0 = days.index(today) if today in days else max(0, len(days) - 7)
                     self._data = {
                         "time": days[i0:i0 + 7],
@@ -78,8 +82,9 @@ class Weather:
                         "temperature_2m_min": d.get("temperature_2m_min", [])[i0:i0 + 7],
                     }
                     h = js.get("hourly", {})
-                    # hourly rain (past ~3 months + forecast) as (epoch s, mm) – chart overlay
-                    self._rain = [(int(datetime.fromisoformat(t).timestamp()), float(mm))
+                    # hourly rain (past ~3 months + forecast) as (epoch s, mm); the value at
+                    # time T is the rain of the hour ENDING at T
+                    self._rain = [(int(t), float(mm))
                                   for t, mm in zip(h.get("time", []), h.get("precipitation", []))
                                   if mm is not None]
                     self._key = key
@@ -97,16 +102,16 @@ class Weather:
         return self._data if self._key == key else None
 
     def rain_ahead(self, hours: float) -> Optional[tuple[float, Optional[int]]]:
-        """Forecast rain in the next `hours` (mm) and the epoch of the last rainy hour
-        in that window. None without forecast data."""
+        """Forecast rain in the next `hours` (mm) and the epoch when the last rainy
+        hour in that window ends. None without forecast data."""
         if not self._rain:
             return None
         now = time.time()
         total, last = 0.0, None
-        for ts, mm in self._rain:
-            if now - 3600 < ts < now + hours * 3600 and mm > 0:
+        for ts, mm in self._rain:              # ts = end of the hour
+            if now < ts <= now + hours * 3600 and mm > 0:
                 total += mm
-                last = ts + 3600
+                last = ts
         return round(total, 1), last
 
     def rain_next_days(self, days: int) -> Optional[float]:
@@ -120,6 +125,10 @@ class Weather:
         if not d or not d["precipitation_sum"]:
             return None
         return round(sum(d["precipitation_sum"][:2]), 1)
+
+
+def _local_date(epoch: float, utc_offset_s: int) -> str:
+    return datetime.fromtimestamp(epoch + utc_offset_s, timezone.utc).date().isoformat()
 
 
 class Hydrawise:
