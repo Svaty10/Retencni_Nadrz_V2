@@ -133,6 +133,10 @@ MIGRATIONS: list[str] = [
     ALTER TABLE nodes ADD COLUMN secret TEXT;
     ALTER TABLE nodes ADD COLUMN paired_at INTEGER;
     """,
+    # --- v4: two-step unpairing (hub request + confirmation from the sensor) --
+    """
+    ALTER TABLE nodes ADD COLUMN unpair_at INTEGER;
+    """,
 ]
 
 

@@ -346,7 +346,7 @@ class Receiver:
         while not self._stop.is_set():
             self.heartbeat = time.monotonic()
             self.last_rx = time.monotonic()
-            req = bytes([crypto.PKT_PAIR_REQ]) + (0xBEEF).to_bytes(2, "little") + pub
+            req = crypto.build_pair_req(0xBEEF, pub, False)
             if keys is None:
                 reply = self.responder(req) if self.responder else None
                 self.on_frame(req, -70.0, 20)

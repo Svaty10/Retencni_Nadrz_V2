@@ -21,22 +21,35 @@ from retencka.web import build_ha_app, build_web_app  # noqa: E402
 
 
 class FakeNode:
-    """Behaves like the firmware: pairs through the hub's responder, then sends encrypted frames."""
+    """Behaves like the firmware: a paired node accepts only an UNPAIR signed with its
+    key, an unpaired node accepts a PAIR_ACK; then it sends encrypted frames."""
 
     def __init__(self, core, node_id):
         self.core, self.id = core, node_id
-        self.priv = os.urandom(32)
-        self.pub = crypto.x25519_base(self.priv)
         self.keys = None
         self.ctr = 0
+        self.reboot()
+
+    def reboot(self):
+        self.priv = os.urandom(32)              # fresh key pair after every power-up
+        self.pub = crypto.x25519_base(self.priv)
 
     def try_pair(self):
-        req = bytes([crypto.PKT_PAIR_REQ]) + self.id.to_bytes(2, "little") + self.pub
-        ack = self.core.responder(req)
+        """One PAIR_REQ. Returns 'paired', 'unpaired' or None."""
+        req = crypto.build_pair_req(self.id, self.pub, self.keys is not None)
+        reply = self.core.responder(req)
         self.core.on_frame(req, -80.0, 20)
-        if ack:
-            self.keys = crypto.derive_keys(crypto.x25519(self.priv, ack[3:35]))
-        return bool(ack)
+        if not reply:
+            return None
+        if self.keys is not None:
+            if crypto.check_unpair(self.keys[1], self.id, self.pub, reply):
+                self.keys = None
+                return "unpaired"
+            return None
+        if len(reply) == crypto.PAIR_LEN and reply[0] == crypto.PKT_PAIR_ACK:
+            self.keys = crypto.derive_keys(crypto.x25519(self.priv, reply[3:35]))
+            return "paired"
+        return None
 
     def send(self, probe_100uv, flags=0, ctr=None, keys=None):
         k = keys or self.keys
@@ -141,7 +154,7 @@ class ServerTest(unittest.TestCase):
         h = self.login()
         # first node pairs automatically (no node registered yet)
         n1 = FakeNode(self.core, 0x1234)
-        self.assertTrue(n1.try_pair())
+        self.assertEqual(n1.try_pair(), "paired")
         n1.send(7000)
         time.sleep(0.3)
         st, js, _ = self.req("GET", "/api/state", headers=h)
@@ -152,7 +165,7 @@ class ServerTest(unittest.TestCase):
 
         # a second node is NOT auto-paired any more, forged / replayed frames are dropped
         n2 = FakeNode(self.core, 0x9999)
-        self.assertFalse(n2.try_pair())
+        self.assertIsNone(n2.try_pair())
         frame = n1.send(7100)
         self.core.on_frame(frame, -80.0, 20)                     # replay
         n1.send(1000, keys=(os.urandom(16), os.urandom(16)))     # forged
@@ -177,7 +190,7 @@ class ServerTest(unittest.TestCase):
         # second sensor: user confirms pairing of the ID from the label
         st, js, _ = self.req("POST", "/api/pairing/start", {"node_id": "9999", "name": "Jímka"}, headers=h)
         self.assertEqual(st, 200, js)
-        self.assertTrue(n2.try_pair())
+        self.assertEqual(n2.try_pair(), "paired")
         n2.send(1000)
         time.sleep(0.3)
         st, js3, _ = self.req("GET", "/api/state?node=9999", headers=h)
@@ -190,19 +203,38 @@ class ServerTest(unittest.TestCase):
         st, js, _ = self.req("POST", "/api/pairing/start", {"node_id": "XYZ"}, headers=h)
         self.assertEqual(st, 400)
 
-        # re-pairing node 1 (battery change): the old key keeps working until the new one is proven
+        # a paired node ignores pairing unless its own hub asks (battery re-inserted)
+        n1.reboot()
+        self.assertIsNone(n1.try_pair())
+        # re-pairing node 1 = UNPAIR signed with the old key, then a new key
         old = n1.keys
         st, js, _ = self.req("POST", "/api/pairing/start", {"node_id": "1234"}, headers=h)
-        n1b = FakeNode(self.core, 0x1234)
-        self.assertTrue(n1b.try_pair())
-        n1.send(7200, keys=old)
-        n1b.ctr = 50
-        n1b.send(7300)
+        self.assertEqual(n1.try_pair(), "unpaired")
+        self.assertEqual(n1.try_pair(), "paired")
+        self.assertNotEqual(n1.keys, old)
+        n1.send(7300)
         time.sleep(0.3)
-        n1.send(7400, keys=old, ctr=60)                          # old key now rejected
+        n1.send(7400, keys=old)                                  # old key now rejected
         time.sleep(0.3)
         st, js4, _ = self.req("GET", "/api/state?node=1234", headers=h)
         self.assertEqual(js4["probe_mv"], 730.0)
+
+        # unpairing node 2: hub stops accepting data at once, the key is deleted only
+        # after the sensor confirms (battery re-inserted -> UNPAIR -> unpaired request)
+        st, js, _ = self.req("POST", "/api/nodes/remove", {"node_id": "9999"}, headers=h)
+        self.assertEqual(st, 200, js)
+        self.assertFalse(js["removed"])
+        n2.send(2000)
+        time.sleep(0.3)
+        st, js, _ = self.req("GET", "/api/nodes", headers=h)
+        self.assertTrue([n for n in js["nodes"] if n["id"] == "9999"][0]["unpairing"])
+        self.assertEqual(self.core.last.get(0x9999), None)
+        n2.reboot()
+        self.assertEqual(n2.try_pair(), "unpaired")
+        self.assertIsNone(n2.try_pair())                         # confirmation -> removed
+        time.sleep(0.3)
+        st, js, _ = self.req("GET", "/api/nodes", headers=h)
+        self.assertEqual([n["id"] for n in js["nodes"]], ["1234"])
 
         # HA token
         st, js, _ = self.req("GET", "/api/v1/water/state", port=self.ha_port)

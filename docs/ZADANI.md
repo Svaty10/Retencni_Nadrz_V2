@@ -60,8 +60,9 @@ Tři části:
 | Rámec | Délka | Obsah |
 |---|---|---|
 | DATA (čidlo → hub) | 21 B | `0x03` · `node_id` u16 · `ctr` u32 · šifrovaná telemetrie 10 B · MAC 4 B |
-| PAIR_REQ (čidlo → hub) | 35 B | `0x04` · `node_id` u16 · veřejný klíč X25519 čidla (32 B) |
-| PAIR_ACK (hub → čidlo) | 35 B | `0x05` · `node_id` u16 · veřejný klíč X25519 hubu (32 B) |
+| PAIR_REQ (čidlo → hub) | 36 B | `0x04` · `node_id` u16 · veřejný klíč X25519 čidla (32 B, nový po každém zapnutí) · stav (b0 = čidlo má klíč) |
+| PAIR_ACK (hub → čidlo) | 35 B | `0x05` · `node_id` u16 · veřejný klíč X25519 hubu (32 B) – přijme jen **nespárované** čidlo |
+| UNPAIR (hub → čidlo) | 19 B | `0x06` · `node_id` u16 · CMAC(Kmac, `0x06‖node_id‖veřejný klíč čidla`) 16 B – jediné, co přijme spárované čidlo |
 
 - **Telemetrie** (`struct '<BHhHHB'`): `flags` (b0 BAT_ERR, b1 SHT_ERR, b2 PROBE_ERR, b3 PROBE_CLIP,
   b4 BAT_LOW < 3,3 V jen varování, b5 BOOT, b6 WDT_RESET, b7 FAST) · `vbat_mv` · `temp_x100` (−32768 = chyba)
@@ -74,16 +75,32 @@ Tři části:
   (fuse EESAVE – přežijí i přehrání firmwaru) a v DB hubu (nikdy se neposílají do prohlížeče).
 - `node_id` = CRC-16 výrobního sériového čísla čipu (zapsat na štítek čidla).
 
-### 1.6 Párování (návrh zadavatele)
-1. Po vložení baterie (power-on reset) čidlo **10 minut nabízí párování**: každých 5 s PAIR_REQ a 0,6 s
-   poslouchá. Přitom normálně dál měří a vysílá se starým klíčem (každou minutu).
-2. Uživatel v hubu u daného ID klikne **Spárovat** (ověří ID se štítkem). Hub odpoví PAIR_ACK, nový klíč
-   začne platit až po prvním ověřeném DATA rámci (do té doby platí starý).
-3. Když nikdo nepotvrdí, čidlo si **ponechá původní klíč** – výměna baterie nic nerozbije.
-4. Nespárované čidlo nabízí párování 1× za cyklus (5 min) donekonečna. Hub bez jediného čidla (první
-   instalace) přijme první nabídku automaticky.
-5. Výpočet X25519 trvá na ATtiny ~9 s (CPU dočasně na 10 MHz), jen při párování. Entropie: šum ADC
+### 1.6 Párování a odpárování (návrh zadavatele)
+**Princip:** spárované čidlo patří svému hubu. Jiný hub si ho nepřevezme (PAIR_ACK spárované čidlo
+ignoruje); uvolnit ho může jen jeho hub podepsaným UNPAIR, a to jen během 10 min po vložení baterie.
+Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k čidlu**.
+
+1. Po vložení baterie (power-on reset) čidlo **10 minut** posílá každých 5 s PAIR_REQ a 0,6 s poslouchá.
+   Spárované čidlo přitom normálně měří a vysílá se svým klíčem (každou minutu).
+2. **Nové / nespárované čidlo** nabízí párování, dokud ho někdo nespáruje: v okně každých 5 s, pak
+   každou minutu, po prvním dni každých 5 min. Uživatel v hubu u daného ID klikne **Spárovat** (ověří
+   ID se štítkem) → PAIR_ACK. Nový klíč začne na hubu platit po prvním ověřeném DATA rámci.
+   Hub bez jediného čidla (první instalace) přijme první nabídku automaticky.
+3. **Odpárování:** v hubu *Odpárovat* → hub okamžitě přestane přijímat data čidla (klíč si zatím nechá).
+   Pořadí nevadí – kdykoli potom (nebo předtím, dokud běží 10min okno) se vloží baterie: čidlo pošle
+   PAIR_REQ se stavem „spárováno“, hub odpoví UNPAIR, čidlo ověří podpis svým klíčem, klíč smaže a
+   pošle PAIR_REQ „nespárováno“ = potvrzení → hub smaže klíč i čidlo (naměřená data zůstanou).
+   Bez potvrzení hub čeká libovolně dlouho, dá se zrušit.
+4. **Znovu spárovat** (nový klíč, stejný hub) = UNPAIR + PAIR_ACK v jednom okně; nastavení i historie zůstanou.
+5. **Výměna baterie** bez akce v hubu nic nemění – čidlo pokračuje se starým klíčem.
+6. **Ztracené / zničené čidlo:** *Odebrat bez čidla* smaže klíč hned. Kdyby se čidlo našlo, zůstane
+   zamčené na smazaný klíč – obnova jen přeprogramováním přes UPDI (vymazání EEPROM).
+7. **Ochrana proti přehrání UNPAIR:** podpis zahrnuje veřejný klíč z aktuálního PAIR_REQ, který čidlo
+   generuje po každém zapnutí znovu – nahraný UNPAIR z dřívějška je neplatný.
+8. Výpočet X25519 trvá na ATtiny ~9 s (CPU dočasně na 10 MHz), jednou po vložení baterie. Entropie: šum ADC
    (teplotní čidlo), jitter mezi 32kHz a hlavním oscilátorem, sériové číslo, pool uložený v EEPROM.
+9. **Záloha:** klíče čidel jsou jen v DB hubu (`/var/lib/retencka`). Při ztrátě SD karty bez zálohy
+   zůstanou čidla zamčená (UPDI) – zálohovat DB.
 
 ### 1.7 Baterie
 - Čidlo se **nikdy samo nevypíná** (elektronika funguje do ~1,8 V); pod 3,3 V nastaví flag BAT_LOW = jen varování.

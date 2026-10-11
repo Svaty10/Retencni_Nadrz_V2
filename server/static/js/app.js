@@ -704,21 +704,31 @@
         if (!d.summaries.length) body.innerHTML = '<tr><td colspan="6" class="muted">Zatím žádné čidlo – první přijaté se přidá samo.</td></tr>';
         d.summaries.forEach((n) => {
             const tr = document.createElement('tr');
-            const st = { online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status;
+            const st = n.unpairing ? 'odpárovává se – vyndejte a vložte do čidla baterii'
+                : ({ online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status);
             tr.innerHTML = `<td><strong>${esc(n.name)}</strong>${n.refill_configured ? ' 💧' : ''}${n.paired ? ' 🔒' : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
-                <td>${esc(st)}${n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${num(n.rssi, 0, ' dBm')}</td>
+                <td>${esc(st)}${!n.unpairing && n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${num(n.rssi, 0, ' dBm')}</td>
                 <td>${num(n.battery && n.battery.percent, 0, ' %')}</td><td class="td-actions"></td>`;
-            const sel = document.createElement('button');
-            sel.type = 'button'; sel.className = 'btn btn-outline btn-sm'; sel.textContent = 'Nastavit';
-            sel.addEventListener('click', () => { selectNode(n.id); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
-            const del = document.createElement('button');
-            del.type = 'button'; del.className = 'btn btn-danger btn-sm'; del.textContent = 'Odebrat';
-            del.addEventListener('click', () => {
-                if (!confirm(`Odebrat čidlo ${n.name} (${n.id})? Naměřená data zůstanou uložena, další pakety budou ignorovány.`)) return;
-                action(() => api('POST', '/api/nodes/remove', { node_id: n.id }), 'Čidlo odebráno.').then(() => { loadSettingsTab(); pollState(); });
-            });
-            tr.lastElementChild.appendChild(sel);
-            tr.lastElementChild.appendChild(del);
+            const btn = (label, cls, fn) => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = label;
+                b.addEventListener('click', fn);
+                tr.lastElementChild.appendChild(b);
+            };
+            const done = () => { loadSettingsTab(); pollState(); };
+            if (n.unpairing) {
+                btn('Zrušit', 'btn-outline', () => action(() => api('POST', '/api/nodes/unpair/cancel', { node_id: n.id }), 'Odpárování zrušeno.').then(done));
+                btn('Odebrat bez čidla', 'btn-danger', () => {
+                    if (!confirm(`Smazat klíč čidla ${n.id} bez jeho potvrzení?\n\nPoužijte jen u ztraceného nebo zničeného čidla – pokud se najde, zůstane zamčené na smazaný klíč a půjde obnovit jen přeprogramováním (UPDI).`)) return;
+                    action(() => api('POST', '/api/nodes/remove', { node_id: n.id, force: true }), 'Čidlo odebráno.').then(done);
+                });
+            } else {
+                btn('Nastavit', 'btn-outline', () => { selectNode(n.id); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+                btn('Odpárovat', 'btn-danger', () => {
+                    if (!confirm(`Odpárovat čidlo ${n.name} (${n.id})?\n\nHub hned přestane přijímat jeho data. Klíč se smaže, až čidlo odpárování potvrdí: vyndejte a vložte do něj baterii (do 10 minut se spojí s hubem). Naměřená data zůstanou uložena.`)) return;
+                    action(() => api('POST', '/api/nodes/remove', { node_id: n.id }), (r) => r.removed ? 'Čidlo odebráno.' : 'Čeká se na čidlo – vyndejte a vložte baterii.').then(done);
+                });
+            }
             body.appendChild(tr);
         });
 
@@ -731,9 +741,14 @@
         }
         pr.forEach((q) => {
             const tr = document.createElement('tr');
-            const state = q.answered ? 'odpovězeno – čekám na první data' : q.target ? 'čekám na čidlo…' : (q.known ? 'známé čidlo (nový klíč)' : 'nové čidlo');
+            const foreign = q.node_paired && !q.known;   // paired to another hub – cannot be taken over
+            const state = q.answered ? 'odpovězeno – čekám na první data'
+                : q.target ? (q.node_paired ? 'odpárovávám starý klíč…' : 'čekám na čidlo…')
+                : foreign ? 'spárované s jiným hubem – nejdřív ho odpárujte tam'
+                : q.known ? (q.node_paired ? 'naše čidlo (výměna baterie)' : 'naše čidlo bez klíče')
+                : 'nové čidlo';
             tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${num(q.rssi, 0, ' dBm')}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td></td>`;
-            if (!q.target) {
+            if (!q.target && !foreign) {
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'btn btn-primary btn-sm'; b.textContent = q.known ? 'Znovu spárovat' : 'Spárovat';
                 b.addEventListener('click', () => {
@@ -741,7 +756,7 @@
                     if (!q.known) {
                         name = prompt(`Název pro čidlo ${q.id} (např. Jímka). Ověřte, že ID souhlasí se štítkem čidla:`, '');
                         if (name === null) return;
-                    } else if (!confirm(`Znovu spárovat čidlo ${q.id}? Vygeneruje se nový klíč.`)) return;
+                    } else if (!confirm(`Znovu spárovat čidlo ${q.id}? Starý klíč se zruší a vygeneruje se nový.`)) return;
                     startPairing(q.id, name);
                 });
                 tr.lastElementChild.appendChild(b);

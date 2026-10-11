@@ -93,22 +93,32 @@
 /* DATA     21 B  [0x03][node_id 2][ctr 4][ciphertext 10][mac 4]              */
 /*                plaintext = telemetry_t (10 B), keystream = AES(Kenc,       */
 /*                node_id|ctr|0..), mac = CMAC(Kmac, bytes 0..16)[0..3]       */
-/* PAIR_REQ 35 B  [0x04][node_id 2][node X25519 public key 32]   (cleartext)  */
+/* PAIR_REQ 36 B  [0x04][node_id 2][node X25519 public key 32][state 1]      */
+/*                state bit0 = node holds a key (paired)          (cleartext) */
 /* PAIR_ACK 35 B  [0x05][node_id 2][hub  X25519 public key 32]   (hub -> node)*/
+/*                accepted ONLY by an unpaired node                           */
+/* UNPAIR   19 B  [0x06][node_id 2][CMAC(Kmac, 0x06|node_id|node pub) 16]     */
+/*                the only thing a paired node accepts: forget the key        */
 /*                shared S = X25519; K0 = S[0..15] ^ S[16..31];               */
 /*                Kenc = AES(K0,"RTK-ENC-KEY"), Kmac = AES(K0,"RTK-MAC-KEY")   */
 /* ========================================================================== */
 #define PKT_DATA                0x03
 #define PKT_PAIR_REQ            0x04
 #define PKT_PAIR_ACK            0x05
+#define PKT_UNPAIR              0x06
 #define PKT_DATA_LEN            21U
-#define PKT_PAIR_LEN            35U
+#define PKT_PAIR_LEN            35U     /**< PAIR_ACK */
+#define PKT_PAIR_REQ_LEN        36U
+#define PKT_UNPAIR_LEN          19U
+#define PAIR_REQ_PAIRED         0x01
 #define PKT_MAC_LEN             4U
-#define FW_VERSION              31U     /**< 3.1 – reported in every packet */
+#define FW_VERSION              33U     /**< 3.3 – reported in every packet */
 
 #define PAIR_WINDOW_S           600U    /**< Pairing offered for 10 min after a battery change */
 #define PAIR_PERIOD_S           5U      /**< One PAIR_REQ every 5 s inside the window */
-#define PAIR_RX_WINDOW_MS       600U    /**< Listen for PAIR_ACK after each request */
+#define PAIR_RX_WINDOW_MS       600U    /**< Listen for PAIR_ACK / UNPAIR after each request */
+#define UNPAIRED_FAST_S         60U     /**< Unpaired node: one PAIR_REQ per minute ... */
+#define UNPAIRED_FAST_TIME_S    86400UL /**< ... for the first day, then every INTERVAL_NORMAL_S */
 #define CTR_RESERVE             1024UL  /**< Frame counter persisted in EEPROM in steps of 1024 */
 
 #define PKT_FLAG_BAT_ERR        0x01    /**< Battery ADC conversion failed */

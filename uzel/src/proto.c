@@ -45,3 +45,23 @@ void proto_build_data(uint8_t p[21], const uint8_t k_enc[16], const uint8_t k_ma
     aes_cmac(k_mac, p, 17, tag);
     memcpy(&p[17], tag, 4);
 }
+
+bool proto_check_unpair(const uint8_t *pkt, uint8_t len, const uint8_t k_mac[16],
+                        uint16_t node_id, const uint8_t node_pub[32])
+{
+    uint8_t msg[35], tag[16], diff = 0;
+
+    if (len != 19U || pkt[0] != 0x06 ||
+        pkt[1] != (uint8_t)node_id || pkt[2] != (uint8_t)(node_id >> 8)) {
+        return false;
+    }
+    msg[0] = 0x06;
+    msg[1] = (uint8_t)node_id;
+    msg[2] = (uint8_t)(node_id >> 8);
+    memcpy(&msg[3], node_pub, 32);
+    aes_cmac(k_mac, msg, sizeof(msg), tag);
+    for (uint8_t i = 0; i < 16; i++) {
+        diff |= (uint8_t)(tag[i] ^ pkt[3 + i]);      /* constant time */
+    }
+    return diff == 0;
+}

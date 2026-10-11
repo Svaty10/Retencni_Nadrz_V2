@@ -10,10 +10,14 @@
  * Interval: 300 s, 60 s while the level changes fast (adaptive) and for the first
  * BOOT_FAST_CYCLES after a reset (installation feedback).
  *
- * Pairing: after a battery change (power-on reset) the node offers pairing for
- * PAIR_WINDOW_S (one PAIR_REQ every 5 s, listening 0.6 s for the hub's answer).
- * If the hub owner does not confirm a new pairing, the node simply keeps its old
- * keys. An unpaired node offers pairing once per cycle until paired.
+ * Pairing: after a battery change (power-on reset) the node sends a PAIR_REQ
+ * every 5 s for PAIR_WINDOW_S and listens 0.6 s for the hub's answer.
+ *  - paired node: keeps measuring with its key; accepts only an UNPAIR signed with
+ *    that key (its own hub, the user asked for unpair / re-pair). Without it the
+ *    node simply stays paired – a foreign hub cannot take it over.
+ *  - unpaired node (new, or just released): accepts a PAIR_ACK. After the window
+ *    it keeps offering pairing – every minute for the first day, then every 5 min –
+ *    until some hub pairs it.
  *
  * A low battery is only reported (PKT_FLAG_BAT_LOW); the node never stops itself.
  */
@@ -205,9 +209,14 @@ int main(void)
                 measure_and_send();              /* keep reporting with the old keys */
                 since_data = 0;
             }
-            if (radio_ready() && link_pair_attempt()) {
-                g.sticky_flags |= PKT_FLAG_BOOT; /* first packet with the new keys */
-                break;                           /* (re)paired – done */
+            if (radio_ready()) {
+                link_pair_t r = link_pair_attempt();
+                if (r == LINK_PAIR_PAIRED) {
+                    g.sticky_flags |= PKT_FLAG_BOOT; /* first packet with the new keys */
+                    break;                       /* paired – done */
+                }
+                /* LINK_PAIR_UNPAIRED: released by the hub, keep offering pairing in
+                 * this window (re-pair to the same hub, or to a new one) */
             }
             sleep_s(PAIR_PERIOD_S);
             since_data += PAIR_PERIOD_S + 1U;    /* + time spent sending/listening */
@@ -215,13 +224,17 @@ int main(void)
         }
     }
 
+    uint32_t unpaired_s = 0;
     for (;;) {
         if (!link_paired()) {
-            /* never paired: offer pairing once per cycle, nothing else to do */
-            if (radio_ready()) {
-                (void)link_pair_attempt();
+            /* unpaired: keep offering pairing until a hub accepts, nothing else to do */
+            if (radio_ready() && link_pair_attempt() == LINK_PAIR_PAIRED) {
+                g.sticky_flags |= PKT_FLAG_BOOT;
+                continue;                        /* report right away */
             }
-            sleep_s(INTERVAL_NORMAL_S);
+            uint16_t s = (unpaired_s < UNPAIRED_FAST_TIME_S) ? UNPAIRED_FAST_S : INTERVAL_NORMAL_S;
+            unpaired_s += s;
+            sleep_s(s);
             continue;
         }
         measure_and_send();

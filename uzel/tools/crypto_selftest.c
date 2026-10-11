@@ -23,6 +23,18 @@ int main(int argc, char **argv)
         proto_build_data(pkt, ke, km, (uint16_t)strtoul(argv[3], 0, 16), (uint32_t)strtoul(argv[4], 0, 10), tl);
         phex(pkt, 21); return 0;
     }
+    if (argc == 5 && !strcmp(argv[1], "unpair")) {   /* unpair <k_mac hex> <node_id> <pub hex>: build tag via CMAC and self-check */
+        uint8_t km[16], pub[32], pkt[19], msg[35];
+        uint16_t id = (uint16_t)strtoul(argv[3], 0, 16);
+        unhex(argv[2], km, 16); unhex(argv[4], pub, 32);
+        msg[0] = 0x06; msg[1] = (uint8_t)id; msg[2] = (uint8_t)(id >> 8); memcpy(&msg[3], pub, 32);
+        pkt[0] = 0x06; pkt[1] = msg[1]; pkt[2] = msg[2]; aes_cmac(km, msg, 35, &pkt[3]);
+        if (!proto_check_unpair(pkt, 19, km, id, pub)) { printf("FAIL\n"); return 1; }
+        pkt[18] ^= 1;
+        if (proto_check_unpair(pkt, 19, km, id, pub)) { printf("FAIL\n"); return 1; }
+        pkt[18] ^= 1;
+        phex(pkt, 19); return 0;
+    }
     if (argc == 4 && !strcmp(argv[1], "cmac")) { int n = (int)strlen(argv[3]) / 2; unhex(argv[2], k, 16); unhex(argv[3], p, n); aes_cmac(k, p, (uint8_t)n, o); phex(o, 16); return 0; }
     int ok = 1;
     /* FIPS-197 C.1 */

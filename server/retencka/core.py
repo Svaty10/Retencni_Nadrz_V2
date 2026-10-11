@@ -148,25 +148,39 @@ class Core:
             self.loop.call_soon_threadsafe(self._on_frame, payload, rssi, lqi)
 
     def responder(self, payload: bytes) -> Optional[bytes]:
-        """Radio thread: answer a PAIR_REQ immediately if the user wants this node paired.
+        """Radio thread: answer a PAIR_REQ immediately (the node listens only ~0.6 s).
 
-        Without any registered node (first installation) the first request is accepted
-        automatically. The new keys become valid only after the node proves them with
-        its first authenticated DATA frame; until then the old keys keep working."""
+        A node that holds a key (paired) accepts nothing but an UNPAIR signed with
+        that key – a foreign hub can never take it over. The hub sends UNPAIR only
+        when the user asked for it here (unpair, or re-pair = unpair + pair), and the
+        node asks only after its battery was re-inserted, so unpairing needs both the
+        hub login and physical access to the sensor.
+
+        An unpaired node gets a PAIR_ACK when the user wants it paired. Without any
+        registered node (first installation) the first request is accepted
+        automatically. New keys become valid only after the node proves them with
+        its first authenticated DATA frame."""
         req = crypto.parse_pair_req(payload)
         if req is None:
             return None
-        nid, node_pub = req
+        nid, node_pub, node_paired = req
         with self._pair_lock:
             t = self.pair_targets.get(nid)
+            if t is not None and t["expires"] < time.time():
+                t = None
             node = self.nodes.get(nid)
+            if node_paired:
+                keys = self.nodes.keys(nid)
+                if keys and (node.get("_unpair") or t is not None):
+                    return crypto.build_unpair(keys[1], nid, node_pub)
+                return None
             auto = (not self.nodes.ids() and not self.pair_targets) or (node is not None and not node.get("_secret"))
             if t is None and auto:
                 # first installation, or a registered node that never had a key (migration)
                 t = {"priv": None, "pub": None, "expires": time.time() + PAIR_TARGET_S,
                      "name": "Retenční nádrž", "user": "system (automaticky)"}
                 self.pair_targets[nid] = t
-            if t is None or t["expires"] < time.time():
+            if t is None:
                 return None
             if t["priv"] is None:
                 t["priv"], t["pub"] = crypto.x25519_keypair()
@@ -187,12 +201,17 @@ class Core:
     def _on_frame(self, payload: bytes, rssi: float, lqi: int) -> None:
         req = crypto.parse_pair_req(payload)
         if req is not None:
-            nid = req[0]
+            nid, _, node_paired = req
             self._heard(nid, rssi, "pair")
             with self._pair_lock:
                 pr = self.pair_requests.get(nid, {"count": 0})
-                pr.update(ts=int(time.time()), rssi=rssi, count=pr["count"] + 1)
+                pr.update(ts=int(time.time()), rssi=rssi, count=pr["count"] + 1, node_paired=node_paired)
                 self.pair_requests[nid] = pr
+            node = self.nodes.get(nid)
+            if node and not node_paired and node.get("_unpair"):
+                # the sensor confirmed it has forgotten its key -> unpairing complete
+                self.forget_node(nid, "NODE_UNPAIRED",
+                                 f"Čidlo {nid:04X} ({node['name']}) odpárováno – potvrzeno čidlem")
             return
 
         hdr = crypto.data_header(payload)
@@ -202,6 +221,9 @@ class Core:
             return
         nid, ctr = hdr
         self._heard(nid, rssi, "data")
+        node = self.nodes.get(nid)
+        if node and node.get("_unpair"):
+            return                                  # being unpaired: data no longer accepted
         fields = None
         keys = self.nodes.keys(nid)
         if keys:
@@ -248,6 +270,9 @@ class Core:
 
     # ------------------------------------------------------------- pairing
     def start_pairing(self, nid: int, name: str, user: str) -> None:
+        node = self.nodes.get(nid)
+        if node and node.get("_unpair"):
+            self.nodes.set_unpair(nid, False)       # re-pair instead of removing
         with self._pair_lock:
             self.pair_targets[nid] = {"priv": None, "pub": None, "expires": time.time() + PAIR_TARGET_S,
                                       "name": name, "user": user}
@@ -258,6 +283,34 @@ class Core:
             self.pair_targets.pop(nid, None)
             self._pending_keys.pop(nid, None)
 
+    def request_unpair(self, nid: int, user: str, ip: str = "") -> None:
+        """Step 1 of unpairing: stop accepting data, wait for the sensor to confirm."""
+        self.cancel_pairing(nid)
+        self.nodes.set_unpair(nid, True)
+        self.last.pop(nid, None)
+        self.invalidate()
+        node = self.nodes.get(nid) or {}
+        self.audit("NODE_UNPAIR_REQUESTED",
+                   f"Odpárování čidla {nid:04X} ({node.get('name', '')}) – čeká na vložení baterie do čidla",
+                   user, ip)
+
+    def cancel_unpair(self, nid: int, user: str, ip: str = "") -> None:
+        self.nodes.set_unpair(nid, False)
+        self._restore_node(nid)
+        self.invalidate()
+        self.audit("NODE_UNPAIR_CANCELLED", f"Odpárování čidla {nid:04X} zrušeno", user, ip)
+
+    def forget_node(self, nid: int, action: str, detail: str, user: str = "system", ip: str = "") -> None:
+        """Delete the node and its key (measured data stay in the database)."""
+        self.cancel_pairing(nid)
+        self.nodes.remove(nid)
+        self.last.pop(nid, None)
+        self.filters.pop(nid, None)
+        self._last_ctr.pop(nid, None)
+        self.invalidate()
+        self.audit(action, detail + "; naměřená data zůstávají", user, ip)
+        log.info("Node %04X removed (%s)", nid, action)
+
     def pairing_status(self) -> dict:
         now = time.time()
         with self._pair_lock:
@@ -265,7 +318,7 @@ class Core:
                 self.pair_targets.pop(k, None)
                 self._pending_keys.pop(k, None)
             reqs = [{"id": f"{k:04X}", "rssi": v["rssi"], "age_s": int(now - v["ts"]), "count": v["count"],
-                     "known": self.nodes.get(k) is not None,
+                     "known": self.nodes.get(k) is not None, "node_paired": v.get("node_paired", False),
                      "target": k in self.pair_targets, "answered": k in self._pending_keys}
                     for k, v in sorted(self.pair_requests.items(), key=lambda kv: -kv[1]["ts"])
                     if now - v["ts"] < 120]
@@ -392,7 +445,7 @@ class Core:
                         "age_s": self.age_s(nid), "battery": self.battery(nid),
                         "refilling": nid in self.refills,
                         "refill_configured": self._provider(n) is not None,
-                        "paired": bool(n.get("_secret"))})
+                        "paired": bool(n.get("_secret")), "unpairing": bool(n.get("_unpair"))})
         return out
 
     async def state(self, nid: Optional[int]) -> dict:

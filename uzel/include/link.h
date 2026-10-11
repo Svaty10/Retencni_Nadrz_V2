@@ -13,12 +13,22 @@ bool link_init(uint16_t node_id);
 
 bool link_paired(void);
 
+typedef enum {
+    LINK_PAIR_NONE = 0,     /**< no (valid) answer */
+    LINK_PAIR_PAIRED,       /**< unpaired node got keys from a PAIR_ACK and stored them */
+    LINK_PAIR_UNPAIRED      /**< paired node got a valid UNPAIR from its hub: key erased */
+} link_pair_t;
+
 /**
- * @brief One pairing attempt: send PAIR_REQ and listen PAIR_RX_WINDOW_MS for PAIR_ACK.
- * The X25519 key pair is generated on the first call after boot (~10 s of CPU at 10 MHz).
- * @return true if the node got (new) keys and stored them.
+ * @brief One pairing exchange: send PAIR_REQ and listen PAIR_RX_WINDOW_MS for the answer.
+ *
+ * A paired node accepts ONLY an UNPAIR authenticated with its current key (its own
+ * hub asked for it) – a foreign PAIR_ACK is ignored, so the sensor cannot be taken
+ * over by another hub. An unpaired node accepts a PAIR_ACK.
+ * The X25519 key pair is generated on the first call after boot (~9 s of CPU at 10 MHz);
+ * its public key also serves as the fresh nonce of the UNPAIR authentication.
  */
-bool link_pair_attempt(void);
+link_pair_t link_pair_attempt(void);
 
 /** Encrypt, authenticate and send one telemetry record. */
 bool link_send_data(const telemetry_t *t);

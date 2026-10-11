@@ -133,8 +133,10 @@ def x25519_keypair() -> tuple[bytes, bytes]:
 
 
 # ======================================================== protocol v3
-PKT_DATA, PKT_PAIR_REQ, PKT_PAIR_ACK = 0x03, 0x04, 0x05
+PKT_DATA, PKT_PAIR_REQ, PKT_PAIR_ACK, PKT_UNPAIR = 0x03, 0x04, 0x05, 0x06
 DATA_LEN, PAIR_LEN, MAC_LEN = 21, 35, 4
+PAIR_REQ_LEN, UNPAIR_LEN = 36, 19
+REQ_PAIRED = 0x01                           # PAIR_REQ state bit: node holds a key
 _TELEMETRY = struct.Struct("<BHhHHB")       # flags vbat temp hum probe fw
 
 
@@ -184,10 +186,32 @@ def build_pair_ack(node_id: int, hub_pub: bytes) -> bytes:
     return bytes([PKT_PAIR_ACK]) + struct.pack("<H", node_id) + hub_pub
 
 
-def parse_pair_req(pkt: bytes) -> Optional[tuple[int, bytes]]:
-    if len(pkt) != PAIR_LEN or pkt[0] != PKT_PAIR_REQ:
+def build_pair_req(node_id: int, node_pub: bytes, paired: bool) -> bytes:
+    return (bytes([PKT_PAIR_REQ]) + struct.pack("<H", node_id) + node_pub
+            + bytes([REQ_PAIRED if paired else 0]))
+
+
+def parse_pair_req(pkt: bytes) -> Optional[tuple[int, bytes, bool]]:
+    """(node_id, node public key, node is paired) of a PAIR_REQ."""
+    if len(pkt) != PAIR_REQ_LEN or pkt[0] != PKT_PAIR_REQ:
         return None
-    return struct.unpack_from("<H", pkt, 1)[0], bytes(pkt[3:35])
+    return struct.unpack_from("<H", pkt, 1)[0], bytes(pkt[3:35]), bool(pkt[35] & REQ_PAIRED)
+
+
+def unpair_tag(k_mac: bytes, node_id: int, node_pub: bytes) -> bytes:
+    """Authorises the node to forget its key. Bound to the fresh public key of this
+    boot (sent in the PAIR_REQ), so a recorded UNPAIR can never be replayed."""
+    return aes_cmac(k_mac, bytes([PKT_UNPAIR]) + struct.pack("<H", node_id) + node_pub)
+
+
+def build_unpair(k_mac: bytes, node_id: int, node_pub: bytes) -> bytes:
+    return bytes([PKT_UNPAIR]) + struct.pack("<H", node_id) + unpair_tag(k_mac, node_id, node_pub)
+
+
+def check_unpair(k_mac: bytes, node_id: int, node_pub: bytes, pkt: bytes) -> bool:
+    if len(pkt) != UNPAIR_LEN or pkt[0] != PKT_UNPAIR or struct.unpack_from("<H", pkt, 1)[0] != node_id:
+        return False
+    return _consteq(unpair_tag(k_mac, node_id, node_pub), pkt[3:19])
 
 
 def _consteq(a: bytes, b: bytes) -> bool:

@@ -563,19 +563,31 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
 
     @need("admin")
     async def api_nodes_remove(request):
+        """Unpair a sensor. Default: two-step (the sensor must confirm after a battery
+        re-insertion). force=true deletes the key at once – for a lost or broken
+        sensor, which then stays locked to the forgotten key (re-flash via UPDI)."""
         data = await read_json(request)
         nid = parse_node_id(data.get("node_id"))
         node = core.nodes.get(nid)
         if not node:
             return jerr("Čidlo neexistuje.", 404)
         if nid in core.refills:
-            await core.refill_stop(nid, "Čidlo odebráno", *user_of(request))
-        core.nodes.remove(nid)
-        core.last.pop(nid, None)
-        core.filters.pop(nid, None)
-        core.invalidate()
-        core.audit("NODE_REMOVED", f"Odebráno čidlo {nid:04X} ({node['name']}); naměřená data zůstávají",
-                   *user_of(request))
+            await core.refill_stop(nid, "Čidlo odpárováno", *user_of(request))
+        if data.get("force") or not node.get("_secret"):
+            core.forget_node(nid, "NODE_REMOVED", f"Odebráno čidlo {nid:04X} ({node['name']}) bez potvrzení čidlem",
+                             *user_of(request))
+            return jresp({"ok": True, "removed": True})
+        core.request_unpair(nid, *user_of(request))
+        return jresp({"ok": True, "removed": False})
+
+    @need("admin")
+    async def api_nodes_unpair_cancel(request):
+        data = await read_json(request)
+        nid = parse_node_id(data.get("node_id"))
+        node = core.nodes.get(nid)
+        if not node or not node.get("_unpair"):
+            return jerr("Čidlo nečeká na odpárování.", 404)
+        core.cancel_unpair(nid, *user_of(request))
         return jresp({"ok": True})
 
     @need("admin")
@@ -840,6 +852,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/pairing/start", api_pairing_start)
     r.add_post("/api/pairing/cancel", api_pairing_cancel)
     r.add_post("/api/nodes/remove", api_nodes_remove)
+    r.add_post("/api/nodes/unpair/cancel", api_nodes_unpair_cancel)
     r.add_get("/api/users", api_users)
     r.add_post("/api/users/add", api_users_add)
     r.add_post("/api/users/role", api_users_role)

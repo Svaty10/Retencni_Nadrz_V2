@@ -36,6 +36,17 @@ class VectorTest(unittest.TestCase):
         pkt = C.build_data(ke, km, 0xBEEF, 5, bytes.fromhex("00112233445566778899"))
         self.assertEqual(pkt.hex(), "03efbe0500000073df7627fc3818aaf2a910eb79b2")
 
+    def test_unpair(self):
+        # produced by uzel/tools/crypto_selftest.c: unpair 0011..eeff BEEF abab..ab
+        km, pub = bytes.fromhex("00112233445566778899aabbccddeeff"), bytes([0xab]) * 32
+        pkt = C.build_unpair(km, 0xBEEF, pub)
+        self.assertEqual(pkt.hex(), "06efbed25f9fde0a93a0cfd59c24881c7fe710")
+        self.assertTrue(C.check_unpair(km, 0xBEEF, pub, pkt))
+        self.assertFalse(C.check_unpair(os.urandom(16), 0xBEEF, pub, pkt))       # foreign hub
+        self.assertFalse(C.check_unpair(km, 0xBEEF, bytes(32), pkt))             # replay, other boot
+        req = C.build_pair_req(0xBEEF, pub, True)
+        self.assertEqual(C.parse_pair_req(req), (0xBEEF, pub, True))
+
     def test_open_and_tamper(self):
         ke, km = os.urandom(16), os.urandom(16)
         tel = C.build_telemetry(0x20, 4950, -150, 8000, 12400)

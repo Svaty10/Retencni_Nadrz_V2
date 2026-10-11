@@ -2,9 +2,11 @@
  * @file link.c
  * @brief Secure radio link of the sensor node.
  *
- * Keys come from an X25519 exchange with the hub (pairing). They are stored in
- * EEPROM, so a battery change keeps the existing pairing unless the hub owner
- * explicitly re-pairs the node during the 10 min window after power-up.
+ * Keys come from an X25519 exchange with the hub (pairing) and are stored in
+ * EEPROM, so a battery change keeps the existing pairing. A paired node can only
+ * be released by its own hub: an UNPAIR authenticated with the current key, sent
+ * during the 10 min window after a battery re-insertion (= physical access).
+ * Only an unpaired node accepts a new key (PAIR_ACK).
  *
  * Frame counter: 32 bit, strictly increasing over the whole life of the node.
  * EEPROM holds a reserved upper bound (ctr_base); after any reset counting
@@ -178,9 +180,9 @@ bool link_paired(void)
     return g_st.paired == 1;
 }
 
-bool link_pair_attempt(void)
+link_pair_t link_pair_attempt(void)
 {
-    uint8_t req[PKT_PAIR_LEN];
+    uint8_t req[PKT_PAIR_REQ_LEN];
     uint8_t ack[40];
 
     if (!g_keypair_ready) {
@@ -190,12 +192,29 @@ bool link_pair_attempt(void)
     req[1] = (uint8_t)g_node_id;
     req[2] = (uint8_t)(g_node_id >> 8);
     memcpy(&req[3], g_pub, 32);
+    req[35] = link_paired() ? PAIR_REQ_PAIRED : 0U;
 
     wdt_kick();
     int8_t n = cc1101_send(req, sizeof(req), ack, sizeof(ack), PAIR_RX_WINDOW_MS);
+    if (n <= 0) {
+        return LINK_PAIR_NONE;
+    }
+
+    if (link_paired()) {
+        /* only our own hub (holder of the current key) may release the node */
+        if (!proto_check_unpair(ack, (uint8_t)n, g_st.k_mac, g_node_id, g_pub)) {
+            return LINK_PAIR_NONE;
+        }
+        g_st.paired = 0;
+        memset(g_st.k_enc, 0, sizeof(g_st.k_enc));
+        memset(g_st.k_mac, 0, sizeof(g_st.k_mac));
+        store_save();
+        return LINK_PAIR_UNPAIRED;
+    }
+
     if (n != (int8_t)PKT_PAIR_LEN || ack[0] != PKT_PAIR_ACK ||
         ack[1] != (uint8_t)g_node_id || ack[2] != (uint8_t)(g_node_id >> 8)) {
-        return false;
+        return LINK_PAIR_NONE;
     }
 
     uint8_t s[32];
@@ -205,11 +224,11 @@ bool link_pair_attempt(void)
     fast_clock(false);
 
     if (!proto_derive_keys(s, g_st.k_enc, g_st.k_mac)) {
-        return false;
+        return LINK_PAIR_NONE;
     }
     g_st.paired = 1;
     store_save();
-    return true;
+    return LINK_PAIR_PAIRED;
 }
 
 bool link_send_data(const telemetry_t *t)

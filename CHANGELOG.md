@@ -2,6 +2,15 @@
 
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 
+## [3.3.0] - 2026-10-11
+
+### Změněno
+- Párování „patří hubu“: spárované čidlo ignoruje cizí PAIR_ACK, přijme jen UNPAIR podepsaný svým klíčem (vázaný na nový veřejný klíč po každém zapnutí → nelze přehrát).
+- Odpárování ve dvou krocích: hub hned přestane brát data, klíč se smaže až po potvrzení čidlem (vložení baterie, pořadí libovolné). *Odebrat bez čidla* pro ztracené čidlo.
+- Znovu spárovat = UNPAIR + nový klíč v jednom okně, nastavení a historie zůstávají.
+- Nespárované čidlo nabízí párování donekonečna: 10 min každých 5 s, pak 1× za minutu, po dni 1× za 5 min.
+- PAIR_REQ 36 B (stav čidla), nový rámec UNPAIR 19 B; DB migrace v4 (`nodes.unpair_at`). Firmware 3.3.
+
 ## [3.2.0] - 2026-10-11
 
 ### Přidáno

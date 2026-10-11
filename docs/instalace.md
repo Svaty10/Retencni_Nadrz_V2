@@ -33,8 +33,16 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem).
 
 ### Výměna baterie čidla
-Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem. Párování nabízí 10 minut;
-**nic potvrzovat nemusíte**. Nové párování (nový klíč) potvrďte jen při výměně čidla nebo podezření na kompromitaci.
+Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem; **nic potvrzovat nemusíte**.
+
+### Odpárování / přesun čidla k jinému hubu
+1. Ve starém hubu *Nastavení → Čidla a rádio → Odpárovat* (hub hned přestane brát data).
+2. Vyndat a vložit do čidla baterii (může být i v opačném pořadí, do 10 minut). Čidlo smaže klíč a hub ho odebere.
+3. Čidlo teď nabízí párování – spárovat v novém hubu.
+
+Čidlo spárované s jiným hubem se v seznamu zobrazí jako „spárované s jiným hubem“ a převzít ho nelze.
+Ztracené čidlo: *Odebrat bez čidla*. **Zálohujte `/var/lib/retencka`** – bez klíčů v DB jdou čidla
+odemknout jen přeprogramováním.
 
 ## 4. Co se děje při problémech (bezúdržbovost)
 | Situace | Reakce |

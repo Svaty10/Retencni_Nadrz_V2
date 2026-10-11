@@ -145,7 +145,7 @@ class Nodes:
 
     def reload(self) -> None:
         nodes = {}
-        for r in self.db.query("SELECT node_id, name, config, sort, secret, paired_at FROM nodes ORDER BY sort, node_id"):
+        for r in self.db.query("SELECT node_id, name, config, sort, secret, paired_at, unpair_at FROM nodes ORDER BY sort, node_id"):
             cfg = {k: v[0] for k, v in NODE_SCHEMA.items()}
             try:
                 cfg.update(json.loads(r["config"]))
@@ -156,6 +156,7 @@ class Nodes:
             cfg["sort"] = r["sort"]
             cfg["paired_at"] = r["paired_at"]
             cfg["_secret"] = r["secret"]
+            cfg["_unpair"] = r["unpair_at"]
             nodes[r["node_id"]] = cfg
         with self._lock:
             self._cache = nodes
@@ -205,6 +206,12 @@ class Nodes:
                         ((k_enc + k_mac).hex(), int(time.time()), node_id))
         self.reload()
 
+    def set_unpair(self, node_id: int, pending: bool) -> None:
+        """Mark the node for unpairing (hub ignores its data until the sensor confirms)."""
+        self.db.execute("UPDATE nodes SET unpair_at=? WHERE node_id=?",
+                        (int(time.time()) if pending else None, node_id))
+        self.reload()
+
     def public(self, node_id: int) -> Optional[dict]:
         n = self.get(node_id)
         if not n:
@@ -214,6 +221,7 @@ class Nodes:
             out[k] = mask(out.get(k))
         out["id"] = f"{node_id:04X}"
         out["paired"] = bool(n.get("_secret"))
+        out["unpairing"] = bool(n.get("_unpair"))
         return out
 
     def update(self, node_id: int, changes: dict, allow_internal: bool = False) -> list[str]:

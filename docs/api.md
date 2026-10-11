@@ -40,7 +40,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | POST | `/api/calibration/recompute?node=` | admin | přepočet historie (kalibrace + vyhlazení) |
 | POST | `/api/calibration/battery?node=` | admin | `actual_v` – korekce měření baterie |
 | POST | `/api/refill/start?node=` · `/api/refill/stop?node=` | admin | `target_pct` – dopouštění dané nádrže |
-| GET | `/api/nodes` · POST `/api/nodes/remove` | admin | čidla, slyšená čidla, stav párování, statistiky rádia |
+| GET | `/api/nodes` · POST `/api/nodes/remove` · `/api/nodes/unpair/cancel` | admin | čidla, slyšená čidla, stav párování, statistiky rádia; `remove` = odpárování s potvrzením čidlem, `{"force": true}` = smazat hned |
 | GET | `/api/pairing` · POST `/api/pairing/start` · `/api/pairing/cancel` | admin | párování (`node_id` hex, `name`) |
 | GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů |
 | GET | `/api/audit?page=&action=` | admin | audit log |
@@ -48,4 +48,4 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/system` · POST `/api/system/update` | admin | stav systému, ruční kontrola aktualizací |
 
 ## Rádiový protokol v3
-DATA 21 B (AES-128-CTR + CMAC), PAIR_REQ / PAIR_ACK 35 B (X25519) – podrobnosti v `docs/ZADANI.md` (1.5, 1.6).
+DATA 21 B (AES-128-CTR + CMAC), PAIR_REQ 36 B / PAIR_ACK 35 B (X25519), UNPAIR 19 B (CMAC) – podrobnosti v `docs/ZADANI.md` (1.5, 1.6).
