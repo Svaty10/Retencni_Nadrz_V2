@@ -2,6 +2,23 @@
 
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 
+## [3.4.0] - 2026-10-11
+
+### Přidáno
+- **Přehled všech nádrží** v liště čidel: karta s mini nádrží, %, litry, stavem, baterií a dopouštěním pro každé čidlo + společný graf hladin.
+- **Výhled** na dashboardu: na kolik dní voda vystačí (průměrná spotřeba 7 dní) a přítok z předpovědi deště (plocha střechy × odtokový součinitel).
+- Graf hladiny: **sloupce srážek** (Open-Meteo, až 92 dní zpět) a **značky událostí** (zapnutí čidla / výměna baterie, kalibrace) s detailem v tooltipu.
+- Graf **Baterie a signál** (RSSI) – výchozí 30 dní; hodinové agregace nově ukládají i signál.
+- **Záloha a obnova:** noční záloha na kartu (7 dní), stažení zálohy z webu, obnova nakopírováním `retencka-restore.db.gz` na spouštěcí oddíl.
+- Nastavení **Základní / Pokročilé** a průvodce párováním (4 kroky).
+- Snímky obrazovky v README.
+
+### Změněno
+- **Jeden ventil = jedna řídicí nádrž:** pokud má víc čidel stejný Hydrawise účet + zónu, ovládá ventil jen první čidlo v seznamu; ruční spuštění z druhé nádrže je odmítnuto. Zastavení funguje vždy.
+- Data se ve výchozím stavu nemažou (`retention_days = 0`); pojistka při zaplnění karty maže jen nejstarší podrobná data, hodinové průměry zůstávají.
+- CSV export jen pro admina (stejně jako nastavení a logy).
+- Mobilní zobrazení: opraveno přetékání karet na úzkém displeji.
+
 ## [3.3.0] - 2026-10-11
 
 ### Změněno

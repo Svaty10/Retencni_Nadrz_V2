@@ -137,6 +137,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE nodes ADD COLUMN unpair_at INTEGER;
     """,
+    # --- v5: signal strength in hourly aggregates (diagnostics chart) ----------
+    """
+    ALTER TABLE hourly ADD COLUMN rssi REAL;
+    """,
 ]
 
 

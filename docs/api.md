@@ -30,10 +30,10 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/me` | user | jméno, role, CSRF token, verze |
 | POST | `/api/me/password` | user | `old_password`, `new_password` |
 | GET | `/api/state` | user | kompletní živý stav pro dashboard |
-| GET | `/api/history?range=24h\|7d\|30d\|365d` nebo `?from=&to=` (epoch s) | user | zprůměrovaná řada (max ~600 bodů) |
+| GET | `/api/history?range=24h\|7d\|30d\|365d` nebo `?from=&to=` (epoch s) | user | zprůměrovaná řada (max ~600 bodů): hladina, objem, klima, baterie, `rssi`, `refill`, `events` (dopouštění / zapnutí čidla / kalibrace), `rain` (srážky po hodinách nebo dnech) |
 | GET | `/api/flows?…` | user | denní spotřeba / přítok ze srážek / dopouštění |
 | GET | `/api/weather` | user | předpověď 7 dní (Open-Meteo, cache 1 h) |
-| GET | `/api/export.csv?…` | user | CSV (středník, desetinná čárka) |
+| GET | `/api/export.csv?…` | admin | CSV (středník, desetinná čárka) |
 | GET/POST | `/api/settings` | admin | globální nastavení (validované; API klíč maskovaný) |
 | POST | `/api/node?node=` | admin | nastavení čidla (název, rozměry, `cal_points`, přesnost/rozsah sondy, …) |
 | POST | `/api/calibration/point?node=` | admin | `actual_cm` – kalibrační bod z aktuálního napětí sondy |
@@ -46,6 +46,10 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/audit?page=&action=` | admin | audit log |
 | GET | `/api/ha` · POST `/api/ha/rotate` | admin | token pro HA |
 | GET | `/api/system` · POST `/api/system/update` | admin | stav systému, ruční kontrola aktualizací |
+| GET | `/api/backup` · `/api/backup/download` | admin | seznam nočních záloh; stažení aktuální zálohy (`.db.gz`) |
+
+`/api/state` navíc obsahuje `outlook` (`days_left`, `use_per_day_l`, `rain_7d_mm`, `inflow_7d_l`, `pct_after_rain`)
+a v `refill.zone_controlled_by` nádrž, která ovládá stejný ventil (pak je dopouštění u této nádrže vypnuté).
 
 ## Rádiový protokol v3
 DATA 21 B (AES-128-CTR + CMAC), PAIR_REQ 36 B / PAIR_ACK 35 B (X25519), UNPAIR 19 B (CMAC) – podrobnosti v `docs/ZADANI.md` (1.5, 1.6).

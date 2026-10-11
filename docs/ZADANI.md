@@ -149,7 +149,14 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - SQLite, WAL, `synchronous=NORMAL`, kompaktní schéma (celá čísla, epoch s) ≈ 30 B/záznam.
 - Ukládá se **surová** hodnota (`probe_100uv`, `vbat_mv`, …) + vypočtená hladina v mm, takže změna kalibrace jde
   zpětně přepočítat.
-- Retence: surová data 2 roky, hodinové agregace navždy. Promazávání 1× denně.
+- Retence: **nic se nemaže** (výchozí; volitelně „mazat podrobná měření starší než N dní“). Hodinové agregace
+  zůstávají vždy. Odhad ~10 MB na čidlo a rok (~95 B na záznam) → 8GB karta vystačí na desítky let. Pojistka: když na kartě
+  zbývá < 300 MB, smaže se nejstarší měsíc podrobných dat (starších než půl roku) a zapíše se do logu.
+- **Záloha:** každou noc konzistentní kopie DB (SQLite online backup, gzip) do `data/backup/`, drží se 7 dní
+  (chrání před poškozením souboru / nepovedenou aktualizací). Proti odumření karty: tlačítko *Stáhnout zálohu*
+  (admin, stream gzip, nízká RAM). **Obnova:** soubor na spouštěcí FAT oddíl jako `retencka-restore.db.gz` →
+  při startu (root, `ExecStartPre=+`) se ověří (`integrity_check`, tabulky), stará DB se odloží, zdroj se
+  přejmenuje na `.done`. Záloha obsahuje klíče čidel – bez ní by se spárovaná čidla musela přeprogramovat.
 - Historie: SQL bucketing (`GROUP BY ts / bucket`) na max. ~600 bodů.
 - Konfigurace a uživatelé v SQLite (transakce = atomické zápisy, žádné rozbité JSON po výpadku).
 
@@ -164,6 +171,12 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   automatické pod prahem, odložení při předpovědi deště (Open-Meteo), uzavřená smyčka – zastavení po
   dosažení cíle, kalibrace reálného průtoku, detekce poruchy ventilu. Ventilu se vždy nastaví i vlastní
   časovač (pojistka při výpadku hubu). Každá akce je v audit logu.
+- **Jeden ventil = jeden řídicí senzor:** když má víc čidel nastavený stejný ventil (stejný Hydrawise účet +
+  stejná zóna/relay), ovládá ho jen první čidlo v seznamu; u ostatních je dopouštění vypnuté a UI ukáže, která
+  nádrž ventil řídí. Ani ruční spuštění ze dvou nádrží na stejný ventil neprojde → nikdy se nedopouští 2×.
+  Stejný účet s jinou zónou je v pořádku (dvě nádrže, dva ventily). Zastavení funguje vždy.
+- **Výhled:** „vystačí ~N dní“ (objem / průměrná spotřeba posledních 7 dní) a přítok z předpovědi deště na
+  7 dní (srážky × plocha střechy × odtokový součinitel, výchozí 0,8) → odhad % po dešti.
 - Systémy dopouštění jsou za rozhraním „provider“. Teď: **Hunter Hydrawise** (oficiální REST API s API
   klíčem – Hunter jej uvádí jako veřejné API pro domácí uživatele; GraphQL API aplikace není oficiálně
   dokumentované). Kandidáti do budoucna: OpenSprinkler (lokální HTTP API), Rachio (oficiální cloud API),
@@ -204,7 +217,15 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 ### 2.8 Dashboard
 - Vizuálně **shodný se `old/`** (dark glassmorphism, Outfit, animovaná nádrž, stat boxy, karty grafů,
   záložky Dashboard / Nastavení / Logování / Uživatelé / Můj účet).
-- Grafy: hladina (se zvýrazněním dopouštění), spotřeba/den, dopouštění/den, klima, počasí 7 dní, baterie.
+- Lišta čidel: **Všechny nádrže** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
+  čidlo + společný graf hladin) nebo konkrétní nádrž. Tečka = stav (zelená online, žlutá zpožděná, červená offline).
+- Grafy: hladina (se zvýrazněním dopouštění, **sloupce srážek** z Open-Meteo – až 92 dní zpět, hodinové/denní
+  podle rozsahu – a **značky událostí**: 🔋 zapnutí čidla/výměna baterie, 📐 kalibrace; detail v tooltipu),
+  spotřeba/den, dopouštění/den, klima, počasí 7 dní, **baterie a signál (RSSI), výchozí 30 dní**.
+- Nastavení i logy **jen pro admina** (záložky skryté, API vrací 403). Nastavení má přepínač
+  **Základní / Pokročilé** (pokročilé: offset a kalibrační body sondy, přesnost, limity a průtok dopouštění,
+  přepočet historie, kalibrace baterie, retence, slyšená čidla a statistiky rádia).
+- Párování s průvodcem (1 vložit baterii → 2 potvrdit ID → 3 první data → 4 hotovo).
 - U grafů s historií (hladina, spotřeba, dopouštění, klima, baterie) volba 24 h / 7 d / 30 d / 1 rok
   **+ vlastní rozsah od–do** (date pickery). Předpověď počasí má pevný výhled 7 dní.
 - Odstranit ESP32 relikty (OTA mód, intervaly den/noc, sync na celé hodiny) → nahradit stavem rádia

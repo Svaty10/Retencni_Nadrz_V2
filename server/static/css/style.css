@@ -886,3 +886,63 @@ pre.yaml {
     background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.35);
     padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5; color: #e0f2fe;
 }
+
+/* --- v3.4: přehled všech nádrží --- */
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+.ov-card { cursor: pointer; display: flex; gap: 18px; align-items: center; transition: border-color 0.2s ease; }
+.ov-card:hover { border-color: rgba(56, 189, 248, 0.5); }
+.ov-tank {
+    position: relative; width: 56px; height: 92px; flex-shrink: 0; overflow: hidden;
+    border: 2px solid #475569; border-radius: 10px; background: rgba(255, 255, 255, 0.04);
+}
+.ov-tank .water-level { border-radius: 0; }
+.ov-body { min-width: 0; }
+.ov-body h4 { margin: 0 0 4px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.ov-body .big { font-size: 26px; font-weight: 800; color: var(--text-main); }
+.ov-body .meta { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.ov-body .meta .warn { color: var(--warning); }
+.ov-body .meta .bad { color: var(--danger); }
+.ov-body .meta .ok { color: var(--success); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+.dot.online { background: var(--success); }
+.dot.stale { background: var(--warning); }
+.dot.offline { background: var(--danger); }
+.node-pill.all { font-weight: 700; }
+
+/* --- legenda grafu hladiny --- */
+.chart-legend-extra { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+.chart-legend-extra .lg { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.lg-rain { background: rgba(99, 102, 241, 0.55); }
+.lg-refill { background: rgba(16, 185, 129, 0.35); border: 1px dashed rgba(16, 185, 129, 0.8); }
+
+/* --- přepínač základní / pokročilé nastavení --- */
+.settings-mode {
+    display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 20px; font-size: 14px;
+}
+.settings-mode .muted { margin-right: auto; }
+body:not(.show-adv) #nastaveni .adv { display: none !important; }
+
+/* --- průvodce párováním --- */
+.steps { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0; margin: 0 0 20px; counter-reset: st; }
+.steps li {
+    counter-increment: st; position: relative; padding: 12px 12px 12px 46px; border-radius: 12px;
+    border: 1px solid var(--border); background: rgba(15, 23, 42, 0.4); color: var(--text-muted); font-size: 13px;
+}
+.steps li::before {
+    content: counter(st); position: absolute; left: 12px; top: 12px; width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-weight: 700;
+    border: 1px solid var(--border); color: var(--text-muted);
+}
+.steps li b { display: block; color: var(--text-main); margin-bottom: 2px; }
+.steps li.active { border-color: var(--primary); background: rgba(56, 189, 248, 0.08); }
+.steps li.active::before { background: var(--primary); border-color: var(--primary); color: #0f172a; }
+.steps li.done::before { content: "✓"; background: var(--success); border-color: var(--success); color: #0f172a; }
+.steps li.done b { color: var(--success); }
+@media (max-width: 760px) { .steps { grid-template-columns: 1fr 1fr; } }
+
+#zoneNote { margin-bottom: 15px; }
+a.btn { display: inline-block; width: auto; text-decoration: none; }
+/* grid položky se nesmí roztáhnout přes šířku displeje (canvas, stat boxy) */
+.grid > *, .overview-grid > * { min-width: 0; }
+@media (max-width: 992px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }

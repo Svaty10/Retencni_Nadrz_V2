@@ -15,6 +15,7 @@ import mimetypes
 import os
 import secrets
 import time
+import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -435,7 +436,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     async def api_history(request):
         nid = node_of(request)
         t_from, t_to = time_range(request)
-        return jresp(await asyncio.to_thread(core.history, nid, t_from, t_to))
+        out = await asyncio.to_thread(core.history, nid, t_from, t_to)
+        s = settings.all()
+        core.weather.cached(s["latitude"], s["longitude"])          # refresh in background
+        out["rain"] = core.weather.rain_series(t_from, t_to, 3600 if t_to - t_from <= 3 * 86400 else 86400)
+        return jresp(out)
 
     @need()
     async def api_flows(request):
@@ -449,7 +454,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         d = await core.weather.forecast(s["latitude"], s["longitude"])
         return jresp(d or {"time": [], "precipitation_sum": [], "temperature_2m_max": []})
 
-    @need()
+    @need("admin")
     async def api_export(request):
         nid = node_of(request)
         node = core.nodes.get(nid)
@@ -817,6 +822,42 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         return jresp(info)
 
     @need("admin")
+    async def api_backup_list(request):
+        return jresp({"backups": await asyncio.to_thread(core.backups)})
+
+    @need("admin")
+    async def api_backup_download(request):
+        """Fresh consistent snapshot, gzip-compressed while streaming (low RAM).
+        Contains sensor keys, password hashes and API keys – keep it private."""
+        tmp = os.path.join(core.backup_dir(), f"download-{secrets.token_hex(4)}.tmp")
+        await asyncio.to_thread(core.snapshot, tmp)
+        host = (core.hostnames() or ["retencka"])[0].split(".")[0]
+        resp = web.StreamResponse(headers={
+            "Content-Type": "application/gzip",
+            "Content-Disposition": f'attachment; filename="{host}-zaloha-{datetime.now():%Y%m%d-%H%M}.db.gz"',
+            "Cache-Control": "no-store"})
+        try:
+            await resp.prepare(request)
+            comp = zlib.compressobj(6, zlib.DEFLATED, 31)          # 31 = gzip container
+            with open(tmp, "rb") as f:
+                while True:
+                    chunk = await asyncio.to_thread(f.read, 65536)
+                    if not chunk:
+                        break
+                    data = comp.compress(chunk)
+                    if data:
+                        await resp.write(data)
+            await resp.write(comp.flush())
+            await resp.write_eof()
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        core.audit("BACKUP_DOWNLOADED", "Stažena záloha databáze", *user_of(request))
+        return resp
+
+    @need("admin")
     async def api_system_update(request):
         Path(core.data_dir, "update-request").write_text(str(int(time.time())))
         core.audit("UPDATE_REQUESTED", "Ruční kontrola aktualizací", request["session"]["username"], request["ip"])
@@ -863,6 +904,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/ha/rotate", api_ha_rotate)
     r.add_get("/api/system", api_system)
     r.add_post("/api/system/update", api_system_update)
+    r.add_get("/api/backup", api_backup_list)
+    r.add_get("/api/backup/download", api_backup_download)
     return app
 
 

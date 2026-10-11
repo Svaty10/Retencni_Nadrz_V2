@@ -16,6 +16,8 @@ Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 RETENCKA_DATA=/var/lib/
 # glibc: few arenas + return big blocks (scrypt) to the OS -> low, stable RSS
 Environment=MALLOC_ARENA_MAX=2 MALLOC_MMAP_THRESHOLD_=131072 MALLOC_TRIM_THRESHOLD_=131072
 WorkingDirectory=/var/lib/retencka/app/current/server
+# one-shot database restore from the boot partition (runs as root, "+")
+ExecStartPre=+/var/lib/retencka/app/current/system/bin/retencka-restore.sh
 ExecStart=/usr/bin/python3 -m retencka
 Restart=always
 RestartSec=3

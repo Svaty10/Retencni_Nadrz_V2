@@ -32,7 +32,9 @@ AUTO_COOLDOWN_S = 30 * 60
 NO_RISE_LOCK_S = 24 * 3600
 
 
-PAIR_TARGET_S = 15 * 60           # how long the hub waits for a node the user wants to pair
+PAIR_TARGET_S = 15 * 60
+LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
+BACKUP_KEEP = 7                   # nightly local backups kept           # how long the hub waits for a node the user wants to pair
 
 
 def time_synced() -> bool:
@@ -441,6 +443,8 @@ class Core:
             last = self.last.get(nid) or {}
             out.append({"id": f"{nid:04X}", "name": n["name"], "status": self.status(nid),
                         "level_pct": None if lv is None else round(lv.percent, 1),
+                        "volume_l": None if lv is None else round(lv.volume_l),
+                        "max_l": round(model.max_volume_l(n)),
                         "rssi": None if last.get("rssi_x2") is None else last["rssi_x2"] / 2.0,
                         "age_s": self.age_s(nid), "battery": self.battery(nid),
                         "refilling": nid in self.refills,
@@ -495,9 +499,32 @@ class Core:
             "radio": self._radio_info(),
             "refill": self.refill_info(nid),
             "expected_rain_mm": rain,
+            "outlook": self.outlook(node, lv, flows),
             "consumption_today": round(sum(d["use"] for d in flows if d["day"] == today)),
             "consumption_7d": round(sum(d["use"] for d in flows if d["day"] >= week_start)),
         }
+
+    def outlook(self, node: dict, lv: Optional[model.Level], flows: list[dict]) -> dict:
+        """Simple forecast: how long the water lasts at the recent consumption, and how
+        much the roof should bring with the forecast rain (next 7 days)."""
+        out = {"days_left": None, "use_per_day_l": None, "rain_7d_mm": None,
+               "inflow_7d_l": None, "pct_after_rain": None}
+        if lv is None:
+            return out
+        past = [d for d in flows if d["day"] < datetime.now().strftime("%Y-%m-%d")][-7:]
+        if len(past) >= 3:
+            use = sum(d["use"] for d in past) / len(past)
+            out["use_per_day_l"] = round(use)
+            if use >= 5:
+                out["days_left"] = round(lv.volume_l / use, 1)
+        rain = self.weather.rain_next_days(7)
+        if rain is not None:
+            inflow = rain * float(node["catchment_area_m2"]) * float(node.get("runoff_coef") or 0.8)
+            out["rain_7d_mm"] = rain
+            out["inflow_7d_l"] = round(inflow)
+            if lv.max_volume_l:
+                out["pct_after_rain"] = round(min(100.0, (lv.volume_l + inflow) / lv.max_volume_l * 100.0), 1)
+        return out
 
     def _radio_info(self) -> dict:
         return {"ok": bool(self.radio and self.radio.hardware_ok), "mode": getattr(self.radio, "mode", None)}
@@ -506,21 +533,48 @@ class Core:
     # Each node controls its own tank. The valve is driven through a provider
     # (currently Hydrawise); the provider's own timer is always set as a fail-safe,
     # so the valve closes even if the hub dies during refilling.
-    def _provider(self, node: dict):
-        if node.get("refill_provider") == "hydrawise":
-            key = node.get("hydrawise_api_key") or self.settings.get("hydrawise_api_key")
-            relay = node.get("hydrawise_relay_id")
-            if key and relay:
-                return (lambda secs: self.hydrawise.call(key, relay, "run", secs),
-                        lambda: self.hydrawise.call(key, relay, "stop"))
+    def _zone(self, node: Optional[dict]) -> Optional[tuple]:
+        """Identity of the valve a node drives (provider, account, zone) or None."""
+        if not node or node.get("refill_provider") != "hydrawise":
+            return None
+        key = str(node.get("hydrawise_api_key") or self.settings.get("hydrawise_api_key") or "").strip()
+        relay = str(node.get("hydrawise_relay_id") or "").strip()
+        return ("hydrawise", key, relay) if key and relay else None
+
+    def zone_owner(self, node: Optional[dict]) -> Optional[int]:
+        """Several sensors may be configured with the same valve (same account + zone).
+        Only one of them – the first in the node list – may drive it, otherwise two
+        controllers would start/stop the same valve and fill twice as much."""
+        zone = self._zone(node)
+        if zone is None:
+            return None
+        for n in self.nodes.all():
+            if not n.get("_unpair") and self._zone(n) == zone:
+                return n["node_id"]
         return None
+
+    def _provider(self, node: Optional[dict], for_stop: bool = False):
+        """(run, stop) callables of the node's valve, or None. Only the zone owner gets
+        them; stopping always works so a running refill can be ended after a change."""
+        zone = self._zone(node)
+        if zone is None or (not for_stop and self.zone_owner(node) != node["node_id"]):
+            return None
+        _, key, relay = zone
+        return (lambda secs: self.hydrawise.call(key, relay, "run", secs),
+                lambda: self.hydrawise.call(key, relay, "stop"))
 
     def refill_info(self, nid: Optional[int]) -> dict:
         node = self.nodes.get(nid)
         if node is None:
             return {"configured": False, "active": False, "status": "–"}
         r = self.refills.get(nid)
+        owner = self.zone_owner(node)
+        shared = None
+        if owner is not None and owner != nid:
+            on = self.nodes.get(owner) or {}
+            shared = {"id": f"{owner:04X}", "name": on.get("name", "")}
         info = {"configured": self._provider(node) is not None, "provider": node.get("refill_provider"),
+                "zone_controlled_by": shared,
                 "active": r is not None, "status": self.refill_notes.get(nid, "V normě"),
                 "max_pct": node["max_refill_pct"], "auto": node["auto_refill_enabled"],
                 "flow_lpm": node.get("real_flow_rate_lpm") or node["flow_rate_lpm"]}
@@ -536,9 +590,17 @@ class Core:
             return False, "Čidlo neexistuje."
         prov = self._provider(node)
         if prov is None:
+            owner = self.zone_owner(node)
+            if owner is not None and owner != nid:
+                name = (self.nodes.get(owner) or {}).get("name", f"{owner:04X}")
+                return False, f"Stejný ventil (zónu) ovládá nádrž „{name}“ – spusťte dopouštění tam."
             return False, "Dopouštění není pro tuto nádrž nastaveno."
         if nid in self.refills:
             return False, "Dopouštění už běží."
+        zone = self._zone(node)
+        busy = [k for k in self.refills if k != nid and self._zone(self.nodes.get(k)) == zone]
+        if busy:
+            return False, "Tento ventil už dopouští pro jinou nádrž."
         lv = self.level_now(nid)
         if lv is None or (self.age_s(nid) or 1e9) > FRESH_S:
             return False, "Chybí čerstvá data o hladině – dopouštění nelze bezpečně spustit."
@@ -570,7 +632,7 @@ class Core:
                           call_api: bool = True) -> tuple[bool, str]:
         node = self.nodes.get(nid)
         ok, msg = True, "OK"
-        prov = self._provider(node) if node else None
+        prov = self._provider(node, for_stop=True) if node else None
         if call_api and prov:
             ok, msg = await prov[1]()
         r = self.refills.pop(nid, None)
@@ -675,20 +737,21 @@ class Core:
             bucket = int(math.ceil(bucket / 3600.0)) * 3600
             rows = self.db.query(
                 "SELECT (hour/?)*? AS t, AVG(level_mm) l, AVG(volume_l) v, AVG(temp) te, AVG(hum) hu, "
-                "AVG(vbat) vb, MAX(refilling) rf FROM hourly WHERE node_id=? AND hour >= ? AND hour < ? "
+                "AVG(vbat) vb, MAX(refilling) rf, AVG(rssi) rs FROM hourly WHERE node_id=? AND hour >= ? AND hour < ? "
                 "GROUP BY t ORDER BY t", (bucket, bucket, nid, t_from, t_to))
-            scale_t = scale_h = 1.0
+            scale_t = scale_h = scale_r = 1.0
         else:
             rows = self.db.query(
                 "SELECT (ts/?)*? AS t, AVG(level_mm) l, AVG(volume_l) v, AVG(temp_x100) te, "
-                "AVG(hum_x100) hu, AVG(vbat_mv) vb, MAX(refilling) rf FROM measurements "
+                "AVG(hum_x100) hu, AVG(vbat_mv) vb, MAX(refilling) rf, AVG(rssi_x2) rs FROM measurements "
                 "WHERE node_id=? AND ts >= ? AND ts < ? GROUP BY t ORDER BY t",
                 (bucket, bucket, nid, t_from, t_to))
             scale_t = scale_h = 0.01
+            scale_r = 0.5
         max_mm = float(node["max_depth_cm"]) * 10.0
         trim = float(node["battery_trim"])
         out = {"bucket_s": bucket, "t": [], "level_pct": [], "level_cm": [], "volume_l": [],
-               "temp": [], "hum": [], "vbat": [], "refill": []}
+               "temp": [], "hum": [], "vbat": [], "rssi": [], "refill": []}
 
         def r1(x, k=1.0, nd=2):
             return None if x is None else round(x * k, nd)
@@ -699,7 +762,7 @@ class Core:
                 for k in out:                      # gap -> null point breaks the line
                     if k == "t":
                         out[k].append((prev_t + bucket) * 1000)
-                    elif k != "bucket_s":
+                    elif k not in ("bucket_s", "events"):
                         out[k].append(None)
             prev_t = r["t"]
             out["t"].append(r["t"] * 1000)
@@ -709,8 +772,33 @@ class Core:
             out["temp"].append(r1(r["te"], scale_t, 2))
             out["hum"].append(r1(r["hu"], scale_h, 1))
             out["vbat"].append(r1(r["vb"], 0.001 * trim, 3))
+            out["rssi"].append(r1(r["rs"], scale_r, 1))
             out["refill"].append(int(r["rf"] or 0))
+        out["events"] = self.events(nid, t_from, t_to)
         return out
+
+    def events(self, nid: int, t_from: int, t_to: int, limit: int = 60) -> list[dict]:
+        """Things that explain jumps in the charts: refills, sensor restarts (battery
+        change), calibration changes."""
+        ev = []
+        for r in self.db.query("SELECT start_ts, mode, target_pct FROM refills WHERE node_id=? "
+                               "AND start_ts >= ? AND start_ts < ? ORDER BY start_ts", (nid, t_from, t_to)):
+            ev.append({"t": r["start_ts"] * 1000, "kind": "refill",
+                       "label": f"Dopouštění ({'auto' if r['mode'] == 'auto' else 'ručně'}, cíl {r['target_pct']:.0f} %)"})
+        for r in self.db.query("SELECT ts, flags FROM measurements WHERE node_id=? AND ts >= ? AND ts < ? "
+                               "AND (flags & ?) != 0 ORDER BY ts", (nid, t_from, t_to, model.FLAG_BOOT)):
+            wdt = r["flags"] & model.FLAG_WDT_RESET
+            ev.append({"t": r["ts"] * 1000, "kind": "boot",
+                       "label": "Restart čidla (watchdog)" if wdt else "Zapnutí čidla / výměna baterie"})
+        tag = f"Čidlo {nid:04X}:%"
+        for r in self.db.query("SELECT ts, action, detail FROM audit WHERE ts >= ? AND ts < ? AND detail LIKE ? "
+                               "AND (action = 'CALIBRATION' OR (action = 'SETTINGS_CHANGED' AND "
+                               "(detail LIKE '%cal_points%' OR detail LIKE '%sensor_offset_cm%' "
+                               "OR detail LIKE '%max_depth_cm%'))) ORDER BY ts",
+                               (t_from, t_to, tag)):
+            ev.append({"t": r["ts"] * 1000, "kind": "cal", "label": "Kalibrace / změna rozměrů"})
+        ev.sort(key=lambda e: e["t"])
+        return ev[-limit:]
 
     def _daily_flows(self, nid: int, t_from: int, t_to: int) -> list[dict]:
         node = self.nodes.get(nid)
@@ -750,19 +838,87 @@ class Core:
         since -= since % 3600
         self.db.execute(
             "INSERT OR REPLACE INTO hourly(node_id, hour, n, level_mm, level_min, level_max, volume_l, temp, "
-            "hum, vbat, refilling) "
+            "hum, vbat, refilling, rssi) "
             "SELECT node_id, (ts/3600)*3600 h, COUNT(*), AVG(level_mm), MIN(level_mm), MAX(level_mm), "
-            "AVG(volume_l), AVG(temp_x100)/100.0, AVG(hum_x100)/100.0, AVG(vbat_mv), MAX(refilling) "
+            "AVG(volume_l), AVG(temp_x100)/100.0, AVG(hum_x100)/100.0, AVG(vbat_mv), MAX(refilling), "
+            "AVG(rssi_x2)/2.0 "
             "FROM measurements WHERE ts >= ? GROUP BY node_id, h", (since,))
 
     def maintenance(self) -> None:
-        """Daily: retention, session purge, statistics."""
-        keep = int(self.settings.get("retention_days")) * 86400
+        """Daily: retention, low-disk guard, session purge, local backup."""
         now = int(time.time())
-        self.db.execute("DELETE FROM measurements WHERE ts < ?", (now - keep,))
-        self.db.execute("DELETE FROM audit WHERE ts < ?", (now - 3 * 365 * 86400,))
+        keep_days = int(self.settings.get("retention_days"))
+        if keep_days > 0:
+            self.db.execute("DELETE FROM measurements WHERE ts < ?", (now - keep_days * 86400,))
+        self._disk_guard()
+        self.db.execute("DELETE FROM audit WHERE ts < ?", (now - 5 * 365 * 86400,))
         self.sessions.purge()
         self.db.execute("PRAGMA optimize")
+        try:
+            self.backup_local()
+        except Exception:
+            log.exception("local backup failed")
+
+    def _free_mb(self) -> float:
+        st = os.statvfs(self.data_dir)
+        return st.f_bavail * st.f_frsize / 1048576
+
+    def _disk_guard(self) -> None:
+        """Only if the card is nearly full: drop the oldest raw 5-min data (hourly
+        aggregates stay, so charts of old periods keep working)."""
+        if self._free_mb() >= LOW_DISK_MB:
+            return
+        oldest = self.db.scalar("SELECT MIN(ts) FROM measurements", (), None)
+        if oldest is None or oldest > time.time() - 180 * 86400:
+            return
+        n = self.db.execute("DELETE FROM measurements WHERE ts < ?", (oldest + 30 * 86400,)).rowcount
+        self.audit("DISK_LOW", f"Málo místa na kartě – smazáno {n} nejstarších podrobných měření "
+                               f"(hodinové průměry zůstávají)")
+
+    # ================================================================ backup
+    def backup_dir(self) -> str:
+        d = os.path.join(self.data_dir, "backup")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def snapshot(self, dest: str) -> None:
+        """Consistent copy of the live database (SQLite online backup, WAL-safe)."""
+        import sqlite3
+        if os.path.exists(dest):
+            os.remove(dest)
+        dst = sqlite3.connect(dest)
+        try:
+            self.db.conn().backup(dst, pages=256)
+        finally:
+            dst.close()
+
+    def backup_local(self) -> str:
+        """Nightly gzip copy on the card (protects against a corrupted DB file or a
+        bad update); the last BACKUP_KEEP days are kept. Against SD card failure
+        use the download in the web UI."""
+        import gzip
+        import shutil
+        d = self.backup_dir()
+        tmp = os.path.join(d, "snapshot.tmp")
+        self.snapshot(tmp)
+        out = os.path.join(d, f"retencka-{datetime.now():%Y-%m-%d}.db.gz")
+        with open(tmp, "rb") as fi, gzip.open(out + ".part", "wb", compresslevel=6) as fo:
+            shutil.copyfileobj(fi, fo, 65536)
+        os.replace(out + ".part", out)
+        os.remove(tmp)
+        files = sorted(f for f in os.listdir(d) if f.startswith("retencka-") and f.endswith(".db.gz"))
+        for f in files[:-BACKUP_KEEP]:
+            os.remove(os.path.join(d, f))
+        return out
+
+    def backups(self) -> list[dict]:
+        d = self.backup_dir()
+        out = []
+        for f in sorted(os.listdir(d), reverse=True):
+            if f.endswith(".db.gz") and f.startswith("retencka-"):
+                st = os.stat(os.path.join(d, f))
+                out.append({"name": f, "size_mb": round(st.st_size / 1048576, 2), "ts": int(st.st_mtime)})
+        return out
 
     def recompute_levels(self, nid: int) -> int:
         """Re-apply calibration + filter to the whole history of one node (worker thread)."""

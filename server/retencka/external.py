@@ -9,7 +9,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from typing import Any, Optional
+
+RAIN_PAST_DAYS = 92              # Open-Meteo maximum for the forecast endpoint
 
 log = logging.getLogger("retencka.external")
 
@@ -46,6 +49,7 @@ class Weather:
     def __init__(self, http: Http):
         self.http = http
         self._data: Optional[dict] = None
+        self._rain: list[tuple[int, float]] = []
         self._key: Optional[tuple] = None
         self._fetched = 0.0
         self._lock = asyncio.Lock()
@@ -57,17 +61,27 @@ class Weather:
             if time.time() - self._fetched >= 3600 or self._key != key:
                 try:
                     params = {"latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 7,
+                              "past_days": RAIN_PAST_DAYS, "hourly": "precipitation",
                               "daily": "precipitation_sum,temperature_2m_max,temperature_2m_min"}
                     status, body = await self.http.get(self.URL, params)
                     if status != 200:
                         raise RuntimeError(f"HTTP {status}")
-                    d = json.loads(body).get("daily", {})
+                    js = json.loads(body)
+                    d = js.get("daily", {})
+                    today = datetime.now().date().isoformat()
+                    days = d.get("time", [])
+                    i0 = days.index(today) if today in days else max(0, len(days) - 7)
                     self._data = {
-                        "time": d.get("time", [])[:7],
-                        "precipitation_sum": [x or 0.0 for x in d.get("precipitation_sum", [])][:7],
-                        "temperature_2m_max": d.get("temperature_2m_max", [])[:7],
-                        "temperature_2m_min": d.get("temperature_2m_min", [])[:7],
+                        "time": days[i0:i0 + 7],
+                        "precipitation_sum": [x or 0.0 for x in d.get("precipitation_sum", [])][i0:i0 + 7],
+                        "temperature_2m_max": d.get("temperature_2m_max", [])[i0:i0 + 7],
+                        "temperature_2m_min": d.get("temperature_2m_min", [])[i0:i0 + 7],
                     }
+                    h = js.get("hourly", {})
+                    # hourly rain (past ~3 months + forecast) as (epoch s, mm) – chart overlay
+                    self._rain = [(int(datetime.fromisoformat(t).timestamp()), float(mm))
+                                  for t, mm in zip(h.get("time", []), h.get("precipitation", []))
+                                  if mm is not None]
                     self._key = key
                     self._fetched = time.time()
                 except Exception as e:
@@ -81,6 +95,25 @@ class Weather:
         if (time.time() - self._fetched >= 3600 or self._key != key) and not self._lock.locked():
             asyncio.ensure_future(self.forecast(lat, lon))
         return self._data if self._key == key else None
+
+    def rain_series(self, t_from: int, t_to: int, bucket: int) -> dict:
+        """Cached hourly rain summed into buckets (hourly or daily) for a chart."""
+        sums: dict[int, float] = {}
+        for ts, mm in self._rain:
+            if t_from <= ts < t_to and mm > 0:
+                if bucket >= 86400:
+                    k = int(datetime.fromtimestamp(ts).replace(hour=0, minute=0, second=0).timestamp())
+                else:
+                    k = ts - ts % bucket
+                sums[k] = sums.get(k, 0.0) + mm
+        keys = sorted(sums)
+        return {"bucket_s": bucket, "t": [k * 1000 for k in keys], "mm": [round(sums[k], 1) for k in keys]}
+
+    def rain_next_days(self, days: int) -> Optional[float]:
+        d = self._data
+        if not d or not d["precipitation_sum"]:
+            return None
+        return round(sum(d["precipitation_sum"][:days]), 1)
 
     async def rain_next_2_days(self, lat: float, lon: float, wait: bool = True) -> Optional[float]:
         d = await self.forecast(lat, lon) if wait else self.cached(lat, lon)

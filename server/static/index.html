@@ -38,7 +38,19 @@
 
     <!-- ======================================================= DASHBOARD -->
     <div id="dashboard" class="tab-content active">
-        <div class="grid">
+        <!-- Přehled všech nádrží (volba „Všechny“ v liště čidel) -->
+        <div id="overview" class="hidden">
+            <div class="overview-grid" id="overviewGrid"></div>
+            <div class="card chart-card mt-25">
+                <div class="card-head">
+                    <h3>Hladina všech nádrží</h3>
+                    <div class="range-picker" data-chart="all" data-default="7d" data-kind="time"></div>
+                </div>
+                <div class="chart-container"><canvas id="allChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="grid" id="nodeDash">
             <div class="card tank-card">
                 <h3>Stav Nádrže</h3>
                 <div class="tank-wrapper">
@@ -72,6 +84,11 @@
                     <div class="stat-box"><label>Spotřeba dnes</label><div class="val" id="txtConsToday">–</div></div>
                     <div class="stat-box"><label>Spotřeba za 7 dní</label><div class="val" id="txtCons7d">–</div></div>
                     <div class="stat-box"><label>Předpověď srážek na 2 dny</label><div class="val" id="txtRain">–</div></div>
+                    <div class="stat-box" id="outlookBox">
+                        <label>Výhled</label>
+                        <div class="val" id="txtOutlook">–</div>
+                        <div class="sub-val" id="txtOutlookSub">–</div>
+                    </div>
                     <div class="stat-box" id="refillBox">
                         <label>Stav dopouštění</label>
                         <div class="val" id="txtRefillStatus">–</div>
@@ -98,6 +115,12 @@
                     <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
                 </div>
                 <div class="chart-container"><canvas id="historyChart"></canvas></div>
+                <div class="chart-legend-extra">
+                    <span><i class="lg lg-rain"></i>srážky (Open-Meteo)</span>
+                    <span><i class="lg lg-refill"></i>dopouštění</span>
+                    <span>🔋 zapnutí čidla / výměna baterie</span>
+                    <span>📐 kalibrace</span>
+                </div>
             </div>
 
             <!-- 2. Spotřeba -->
@@ -139,7 +162,7 @@
             <!-- 5. Baterie -->
             <div class="card chart-card">
                 <div class="card-head">
-                    <h3>Stav Baterie</h3>
+                    <h3>Baterie a Signál</h3>
                     <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
                 </div>
                 <div class="chart-container"><canvas id="batteryChart"></canvas></div>
@@ -149,6 +172,14 @@
 
     <!-- ======================================================= NASTAVENÍ -->
     <div id="nastaveni" class="tab-content">
+        <div class="settings-mode">
+            <span class="muted">Zobrazeno: <strong id="advLabel">základní nastavení</strong></span>
+            <label class="switch" title="Pokročilé nastavení">
+                <input type="checkbox" id="advToggle">
+                <span class="slider"></span>
+            </label>
+            <span>Pokročilé</span>
+        </div>
         <div class="stack">
             <!-- Kalibrace a rozměry -->
             <div class="card">
@@ -195,7 +226,7 @@
                             <label>Max. hloubka nádrže (cm) <small>(určuje 100 %)</small></label>
                             <input type="number" step="0.1" name="max_depth_cm" class="unified-input" required>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group adv">
                             <label>Výška sondy nade dnem (cm) <small>(offset – přičte se k vodnímu sloupci)</small></label>
                             <input type="number" step="0.1" name="sensor_offset_cm" class="unified-input" required>
                         </div>
@@ -206,11 +237,18 @@
                             <input type="number" step="0.01" name="tank_area_m2" class="unified-input" required>
                         </div>
                         <div class="form-group">
-                            <label>Plocha střechy (m²)</label>
+                            <label>Plocha střechy (m²) <small>(pro výhled přítoku)</small></label>
                             <input type="number" step="1" name="catchment_area_m2" class="unified-input">
                         </div>
                     </div>
+                    <div class="form-row adv">
+                        <div class="form-group">
+                            <label>Odtokový součinitel střechy <small>(0,8 šikmá taška/plech, 0,5–0,6 plochá s kačírkem)</small></label>
+                            <input type="number" step="0.05" min="0.05" max="1" name="runoff_coef" class="unified-input">
+                        </div>
+                    </div>
 
+                    <div class="adv">
                     <h3 class="mt-15">Kalibrace sondy (vodní sloupec NAD sondou)</h3>
                     <table class="cal-table">
                         <thead><tr><th>Bod</th><th>Napětí sondy (mV)</th><th>Vodní sloupec (cm)</th></tr></thead>
@@ -230,8 +268,10 @@
                     </div>
                     <p class="muted small" id="deadbandP">Mrtvé pásmo: <strong id="deadbandInfo">–</strong>. Změny menší než nejistota sondy se vyhlazují
                         (bez „zubů“ v grafu) a nepočítají se jako spotřeba ani přítok; skutečné změny (dopouštění, déšť) projdou hned.</p>
+                    </div>
 
                     <h3 class="mt-15">Dopouštění této nádrže</h3>
+                    <div class="alert-warning hidden" id="zoneNote"></div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Systém dopouštění</label>
@@ -268,7 +308,7 @@
                             <input type="number" step="1" name="auto_refill_target_pct" class="unified-input">
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="form-row adv">
                         <div class="form-group">
                             <label>Maximální limit dopouštění (%)</label>
                             <input type="number" step="1" min="0" max="100" name="max_refill_pct" class="unified-input">
@@ -278,7 +318,7 @@
                             <input type="number" step="1" name="critical_level_pct" class="unified-input">
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="form-row adv">
                         <div class="form-group">
                             <label>Průtok z řadu (L/min) <small id="realFlowHint"></small></label>
                             <input type="number" step="0.1" name="flow_rate_lpm" class="unified-input">
@@ -292,7 +332,7 @@
                     <button type="submit" class="btn btn-primary mt-20 w-100">Uložit nastavení nádrže</button>
                 </form>
 
-                <div class="config-form">
+                <div class="config-form adv">
                     <h3>Přepočet historie</h3>
                     <div class="alert-row">
                         <p class="muted small">Po změně kalibrace nebo rozměrů lze stávající historii přepočítat novou křivkou
@@ -301,7 +341,7 @@
                     </div>
                 </div>
 
-                <div class="config-form">
+                <div class="config-form adv">
                     <h3>Kalibrace napětí baterie</h3>
                     <div class="inline-actions">
                         <input type="number" step="0.001" id="batActualV" class="unified-input" placeholder="Změřené napětí baterie (V), např. 4.950">
@@ -316,12 +356,18 @@
             <div class="card">
                 <h2>Systémové Nastavení</h2>
                 <form id="sysForm" class="config-form">
-                    <h3 class="section-title">Baterie čidel</h3>
+                    <div class="adv">
+                    <h3 class="section-title">Baterie čidel a data</h3>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Kapacita baterie (mAh) <small>(pro odhad výdrže)</small></label>
                             <input type="number" step="1" name="battery_capacity_mah" class="unified-input">
                         </div>
+                        <div class="form-group">
+                            <label>Mazat podrobná měření starší než (dní) <small>(0 = nikdy; hodinové průměry zůstávají vždy)</small></label>
+                            <input type="number" step="1" min="0" name="retention_days" class="unified-input">
+                        </div>
+                    </div>
                     </div>
 
                     <h3 class="section-title">Počasí a Chytré dopouštění</h3>
@@ -375,6 +421,12 @@
                 </div>
                 <div class="config-form">
                     <h3>Spárovat čidlo</h3>
+                    <ol class="steps" id="pairSteps">
+                        <li data-step="1"><b>Vložte baterii</b><span>čidlo začne nabízet párování</span></li>
+                        <li data-step="2"><b>Potvrďte ID</b><span>porovnejte se štítkem a klikněte Spárovat</span></li>
+                        <li data-step="3"><b>První data</b><span>čidlo pošle první šifrovaný paket</span></li>
+                        <li data-step="4"><b>Hotovo</b><span>čidlo je v seznamu nahoře</span></li>
+                    </ol>
                     <p class="muted small">1) Vložte do čidla baterii – nové čidlo pak nabízí párování (prvních 10 minut každých 5 s,
                         potom každou minutu, po dni každých 5 minut), dokud ho nespárujete.
                         2) Níže se objeví jeho ID; porovnejte ho se štítkem čidla a klikněte na <b>Spárovat</b>.<br>
@@ -393,6 +445,7 @@
                         <button class="btn btn-primary" type="submit">Čekat na toto čidlo</button>
                     </form>
                 </div>
+                <div class="adv">
                 <h3 class="mt-25">Slyšená čidla v okolí</h3>
                 <div class="table-responsive">
                     <table class="user-table">
@@ -401,6 +454,26 @@
                     </table>
                 </div>
                 <dl class="kv mt-20" id="radioInfo"></dl>
+                </div>
+            </div>
+
+            <!-- Záloha -->
+            <div class="card">
+                <h2>Záloha a Obnova</h2>
+                <p class="muted">Hub každou noc uloží zálohu databáze na kartu (posledních 7 dní) – chrání před poškozením
+                    databáze nebo nepovedenou aktualizací. <b>Proti odumření SD karty</b> si zálohu občas stáhněte do počítače:
+                    obsahuje všechna měření, nastavení, uživatele a <b>klíče čidel</b> (bez nich by spárovaná čidla šla
+                    odemknout jen přeprogramováním) – uchovávejte ji v soukromí.</p>
+                <a class="btn btn-primary" id="backupBtn" href="/api/backup/download" download>Stáhnout zálohu teď</a>
+                <div class="table-responsive mt-20">
+                    <table class="user-table">
+                        <thead><tr><th>Noční zálohy na kartě</th><th>Velikost</th></tr></thead>
+                        <tbody id="backupBody"></tbody>
+                    </table>
+                </div>
+                <p class="muted small"><b>Obnova</b> (např. na nové kartě): stažený soubor zkopírujte na spouštěcí oddíl karty
+                    (ten, který Windows zobrazí) jako <code>retencka-restore.db.gz</code> a zapněte hub. Soubor se ověří,
+                    obnoví a přejmenuje na <code>.done</code>; původní databáze zůstane odložená.</p>
             </div>
 
             <!-- Home Assistant -->
@@ -449,6 +522,9 @@
                         <option value="REFILL_ERROR">Chyba dopouštění</option>
                         <option value="NODE_PAIRED">Přidání čidla</option>
                         <option value="NODE_REMOVED">Odebrání čidla</option>
+                        <option value="NODE_UNPAIR_REQUESTED">Odpárování (čeká na čidlo)</option>
+                        <option value="NODE_UNPAIRED">Odpárování dokončeno</option>
+                        <option value="BACKUP_DOWNLOADED">Stažení zálohy</option>
                         <option value="NODE_PAIRING">Čekání na párování</option>
                         <option value="TIME_FIXED">Oprava času</option>
                         <option value="NODE_BOOT">Restart čidla</option>

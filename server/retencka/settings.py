@@ -30,7 +30,9 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "node_sleep_uA":             (1.5, "float", 0.0, 1000.0),
     # system
     "stale_timeout_s":           (1800, "int", 300, 86400),
-    "retention_days":            (730, "int", 30, 36500),
+    # raw 5-min measurements older than this are deleted (0 = keep forever);
+    # hourly aggregates are always kept. ~10 MB per sensor and year.
+    "retention_days":            (0, "int", 0, 36500),
 }
 
 # Per-node configuration (tank + probe of that node)
@@ -44,6 +46,7 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "probe_accuracy_pct": (0.5, "float", 0.0, 10.0),
     "probe_range_cm":     (200.0, "float", 10.0, 10000.0),
     "catchment_area_m2":  (140.0, "float", 0.0, 100000.0),
+    "runoff_coef":        (0.8, "float", 0.05, 1.0),       # share of roof rain reaching the tank
     "battery_trim":       (1.0, "float", 0.8, 1.2),
     # refilling of THIS tank – provider "none" | "hydrawise" (more can be added later)
     "refill_provider":        ("none", "choice:none,hydrawise", None, None),

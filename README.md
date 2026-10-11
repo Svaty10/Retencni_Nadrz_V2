@@ -1,9 +1,18 @@
-# Retenční nádrž V3 – bezdrátové měření hladiny
+# 💧 Retenční nádrž V3 – bezdrátové měření hladiny
+
+![verze](https://img.shields.io/badge/verze-3.4.0-38bdf8)
+![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
+![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
+![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
+![rádio](https://img.shields.io/badge/rádio-433%20MHz%2C%20AES--128-10b981)
 
 Bezúdržbový systém pro retenční nádrž: bateriové čidlo v šachtě měří každých 5 minut hladinu,
-teplotu a vlhkost a posílá je rádiem (433 MHz) na Raspberry Pi Zero 2 W. Pi data ukládá,
-zobrazuje na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopouštění
-přes Hunter Hydrawise.
+teplotu a vlhkost a posílá je šifrovaně rádiem (433 MHz) na Raspberry Pi. Pi data ukládá, zobrazuje
+na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopouštění přes Hunter Hydrawise.
+
+<p align="center">
+  <img src="docs/img/dashboard.webp" alt="Dashboard jedné nádrže" width="780">
+</p>
 
 ```
  ┌──────────── šachta ───────────┐          ┌──────── dům ─────────────────────────────┐
@@ -14,13 +23,31 @@ přes Hunter Hydrawise.
  └───────────────────────────────┘          └──────────────────────────────────────────┘
 ```
 
-| Složka | Obsah |
-|---|---|
-| [`uzel/`](uzel/) | firmware čidla (C, avr-gcc ≥ 12) |
-| [`server/`](server/) | aplikace na Pi (Python 3.11+, **jen standardní knihovna** + spidev) |
-| [`system/`](system/) | instalace, systemd služby, Wi-Fi hotspot/portál, mDNS, aktualizace |
-| [`docs/`](docs/) | [zadání](docs/ZADANI.md), [instalace a provoz](docs/instalace.md), [zapojení](docs/zapojeni_rpi.md), [API](docs/api.md), [Home Assistant](docs/home_assistant.yaml) |
-| `old/` | původní verze (vzor vzhledu) |
+## Co umí
+
+**Čidlo**
+- Měření hladiny (hydrostatická sonda), teploty a vlhkosti v šachtě; baterie 1× za hodinu.
+- Výdrž na 3× AA Li-FeS2 omezuje hlavně samovybíjení (10+ let); při nízké baterii jen varuje, nikdy se nevypne.
+- Šifrované a podepsané pakety (AES-128-CTR + CMAC, klíč z párování X25519), ochrana proti přehrání.
+- **Čidlo patří svému hubu** – cizí hub ho nepřevezme; odpárovat jde jen z hubu + vložením baterie.
+
+**Hub a web**
+- Více nádrží na jeden hub (až 16), přehled **Všechny nádrže** i detail každé nádrže.
+- Grafy kreslí prohlížeč: hladina se **srážkami**, dopouštěním a značkami událostí (výměna baterie,
+  kalibrace), spotřeba, dopouštění, klima, počasí, baterie a signál; vlastní rozsah od–do.
+- **Výhled:** na kolik dní voda vystačí a kolik přiteče z předpovídaného deště.
+- Dopouštění pro každou nádrž zvlášť (Hydrawise) – automatika, odložení při dešti, pojistky;
+  jeden ventil ovládá vždy jen jedna nádrž (nikdy se nedopouští 2×).
+- Přihlášení s rolemi (admin / uživatel), audit log, nastavení **základní / pokročilé**, jen pro admina.
+- Home Assistant přes REST (YAML se vygeneruje sám), CSV export.
+- Noční zálohy + stažení zálohy, obnova nakopírováním souboru na kartu. Data se nemažou (~10 MB na čidlo a rok).
+- Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem.
+- Proces ~28–35 MB RAM, bez Dockeru a bez pip – jen standardní knihovna Pythonu.
+
+<p align="center">
+  <img src="docs/img/prehled.webp" alt="Přehled všech nádrží" width="560">
+  <img src="docs/img/mobil.webp" alt="Mobilní zobrazení" width="200">
+</p>
 
 ## Rychlý start
 ```bash
@@ -31,15 +58,33 @@ Pak `http://retencka.local` → první přihlášení `admin` + heslo ze štítk
 → vytvoření vlastního účtu. Funguje na Pi Zero 2 W i Pi 3 B/3 B+/4.
 Podrobně v [docs/instalace.md](docs/instalace.md).
 
+## Struktura repozitáře
+| Složka | Obsah |
+|---|---|
+| [`uzel/`](uzel/) | firmware čidla (C, avr-gcc ≥ 12) |
+| [`server/`](server/) | aplikace na Pi (Python 3.11+, **jen standardní knihovna** + spidev) |
+| [`system/`](system/) | instalace, systemd služby, Wi-Fi hotspot/portál, mDNS, aktualizace, obnova zálohy |
+| [`docs/`](docs/) | dokumentace (viz níže) |
+| `old/` | původní verze (vzor vzhledu) |
+
+## Dokumentace
+| Dokument | O čem |
+|---|---|
+| [Zadání a návrh](docs/ZADANI.md) | kompletní specifikace: měření, protokol, párování, server, bezpečnost |
+| [Instalace a provoz](docs/instalace.md) | instalace, uvedení do provozu, baterie, odpárování, záloha a obnova, problémy |
+| [Zapojení](docs/zapojeni_rpi.md) | CC1101 ↔ Raspberry Pi |
+| [API](docs/api.md) | REST API webu a Home Assistantu, rádiový protokol |
+| [Home Assistant](docs/home_assistant.yaml) | vzorová konfigurace (aktuální YAML vygeneruje web) |
+| [Changelog](CHANGELOG.md) | historie verzí |
+
 ## Firmware čidla
 ```bash
 cd uzel
-make                 # build/firmware.hex  (~8,8 kB flash)
+make                 # build/firmware.hex  (~9 kB flash z 16 kB)
 make test            # self-test kryptografie proti oficiálním vektorům (na PC)
 make fuses PORT=COM3 # jednou na čip
 make flash PORT=COM3 # SerialUPDI
 ```
-Data jsou šifrovaná (AES-128) a podepsaná (CMAC), klíč vzniká při párování (X25519).
 Fuse `EESAVE` zachová klíč i při přehrání firmwaru. Ladicí konstanty jsou v
 [`uzel/include/config.h`](uzel/include/config.h). Kalibrace hladiny se dělá na serveru.
 
@@ -54,6 +99,10 @@ Fuse `EESAVE` zachová klíč i při přehrání firmwaru. Ladicí konstanty jso
 Při 5min intervalu ≈ 3,3 mAs/cyklus → ~12 µA průměrně → výdrž 3× AA Li-FeS2 (3000 mAh) omezuje hlavně
 samovybíjení (10+ let). Skutečnou spotřebu sondy ověřte měřením.
 
-## Paměť a výkon serveru
-Proces ~28–35 MB RSS (limit v systemd 64 MB), CPU v klidu ≈ 0 %. Grafy kreslí prohlížeč,
-server posílá max. ~600 předem zprůměrovaných bodů. Databáze ~4 MB za rok.
+## Vývoj a testy
+```bash
+cd server
+python3 -m unittest discover -s tests                       # testy serveru (bez hardwaru)
+RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30         # demo data
+RETENCKA_DATA=/tmp/rt RETENCKA_MOCK=1 RETENCKA_WEB_PORT=8080 python3 -m retencka
+```
