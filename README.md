@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž V3 – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-3.4.0-38bdf8)
+![verze](https://img.shields.io/badge/verze-3.5.0-38bdf8)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -36,17 +36,23 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 - Grafy kreslí prohlížeč: hladina se **srážkami**, dopouštěním a značkami událostí (výměna baterie,
   kalibrace), spotřeba, dopouštění, klima, počasí, baterie a signál; vlastní rozsah od–do.
 - **Výhled:** na kolik dní voda vystačí a kolik přiteče z předpovídaného deště.
+- **Chytré dopouštění:** když má brzy pršet a déšť nádrž doplní, hub nedopouští a čeká; když déšť nepřijde
+  nebo hladina klesne příliš, dopustí – a jen tolik, kolik déšť nedodá.
 - Dopouštění pro každou nádrž zvlášť (Hydrawise) – automatika, odložení při dešti, pojistky;
   jeden ventil ovládá vždy jen jedna nádrž (nikdy se nedopouští 2×).
-- Přihlášení s rolemi (admin / uživatel), audit log, nastavení **základní / pokročilé**, jen pro admina.
+- Přihlášení s rolemi (admin / uživatel), přehledný log s filtry, nastavení **základní / pokročilé**, jen pro admina.
+- Plně funkční na mobilu.
 - Home Assistant přes REST (YAML se vygeneruje sám), CSV export.
-- Noční zálohy + stažení zálohy, obnova nakopírováním souboru na kartu. Data se nemažou (~10 MB na čidlo a rok).
+- Záloha i obnova přes web (nahraná data se sloučí bez duplicit), noční zálohy. Data se nemažou (~10 MB na čidlo a rok).
 - Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem.
 - Proces ~28–35 MB RAM, bez Dockeru a bez pip – jen standardní knihovna Pythonu.
 
 <p align="center">
   <img src="docs/img/prehled.webp" alt="Přehled všech nádrží" width="560">
   <img src="docs/img/mobil.webp" alt="Mobilní zobrazení" width="200">
+</p>
+<p align="center">
+  <img src="docs/img/log.webp" alt="Záznamy s filtry" width="780">
 </p>
 
 ## Rychlý start
@@ -63,7 +69,7 @@ Podrobně v [docs/instalace.md](docs/instalace.md).
 |---|---|
 | [`uzel/`](uzel/) | firmware čidla (C, avr-gcc ≥ 12) |
 | [`server/`](server/) | aplikace na Pi (Python 3.11+, **jen standardní knihovna** + spidev) |
-| [`system/`](system/) | instalace, systemd služby, Wi-Fi hotspot/portál, mDNS, aktualizace, obnova zálohy |
+| [`system/`](system/) | instalace, systemd služby, Wi-Fi hotspot/portál, mDNS, aktualizace |
 | [`docs/`](docs/) | dokumentace (viz níže) |
 | `old/` | původní verze (vzor vzhledu) |
 

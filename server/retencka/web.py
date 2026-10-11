@@ -32,6 +32,41 @@ COOKIE_PLAIN = "rt_sid"
 COOKIE_SECURE = "__Host-rt_sid"
 MAX_BODY = 64 * 1024
 
+FIELD_LABELS = {
+    "name": "název", "max_depth_cm": "hloubka nádrže", "tank_area_m2": "plocha dna",
+    "catchment_area_m2": "plocha střechy", "runoff_coef": "odtokový součinitel",
+    "sensor_offset_cm": "výška sondy", "cal_points": "kalibrační body", "probe_accuracy_pct": "přesnost sondy",
+    "probe_range_cm": "rozsah sondy", "battery_trim": "korekce baterie", "refill_provider": "ventil",
+    "hydrawise_relay_id": "zóna", "hydrawise_api_key": "Hydrawise klíč", "auto_refill_enabled": "automatické dopouštění",
+    "refill_threshold_pct": "dopouštět pod", "auto_refill_target_pct": "dopustit na",
+    "max_refill_pct": "nejvýš dopustit na", "flow_rate_lpm": "průtok", "max_refill_minutes": "nejdelší dopouštění",
+    "rain_wait_enabled": "čekat na déšť", "rain_wait_hours": "výhled deště",
+    "rain_wait_max_below_pct": "nečekat pod prahem o", "rain_wait_max_drop_pct": "přestat čekat po poklesu o",
+    "latitude": "poloha", "longitude": "poloha", "battery_capacity_mah": "kapacita baterie",
+    "retention_days": "mazání starých dat", "stale_timeout_s": "limit zpoždění dat",
+}
+
+
+def labels(keys: list[str]) -> str:
+    out: list[str] = []
+    for k in keys:
+        lbl = FIELD_LABELS.get(k, k)
+        if lbl not in out:
+            out.append(lbl)
+    return ", ".join(out)
+
+
+AUDIT_CATEGORIES = {
+    "login":    ["LOGIN_SUCCESS", "LOGIN_FAILED", "LOGOUT", "SETUP_LOGIN", "SETUP_FAILED", "PASSWORD_CHANGED"],
+    "users":    ["USER_ADDED", "USER_DELETED", "USER_ROLE_CHANGED"],
+    "settings": ["SETTINGS_CHANGED", "CALIBRATION"],
+    "refill":   ["MANUAL_REFILL", "AUTO_REFILL", "REFILL_ERROR", "REFILL_FAULT", "RAIN_WAIT"],
+    "sensors":  ["NODE_PAIRED", "NODE_PAIRING", "NODE_REMOVED", "NODE_UNPAIR_REQUESTED", "NODE_UNPAIRED",
+                 "NODE_UNPAIR_CANCELLED", "NODE_BOOT"],
+    "system":   ["TIME_FIXED", "UPDATE_REQUESTED", "BACKUP_DOWNLOADED", "BACKUP_IMPORTED", "DISK_LOW"],
+    "problems": ["LOGIN_FAILED", "SETUP_FAILED", "REFILL_ERROR", "REFILL_FAULT", "DISK_LOW"],
+}
+
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
        "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
        "form-action 'self'; frame-ancestors 'none'")
@@ -507,8 +542,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jerr(str(e))
         if changed:
             core.invalidate()
-            shown = [k if k != "hydrawise_api_key" else "hydrawise_api_key (skryto)" for k in changed]
-            core.audit("SETTINGS_CHANGED", "Změněno: " + ", ".join(shown), *user_of(request))
+            core.audit("SETTINGS_CHANGED", "Obecné: " + labels(changed), *user_of(request))
         return jresp({"ok": True, "changed": changed, "settings": settings.public()})
 
     # ---------------------------------------------------- nodes (sensors)
@@ -606,7 +640,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         node = core.nodes.get(nid)
         if changed:
             core.invalidate()
-            core.audit("SETTINGS_CHANGED", f"Čidlo {nid:04X}: " + ", ".join(changed), *user_of(request))
+            core.audit("SETTINGS_CHANGED", f"Čidlo {nid:04X}: " + labels(changed), *user_of(request))
         if "flow_rate_lpm" in changed:
             core.nodes.update(nid, {"real_flow_rate_lpm": None}, allow_internal=True)
         recalc = bool(set(changed) & {"cal_points", "sensor_offset_cm", "max_depth_cm", "tank_area_m2",
@@ -771,18 +805,50 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     # ----------------------------------------------------------------- audit
     @need("admin")
     async def api_audit(request):
+        """Audit log with filters: category, who (people/system/<username>), text, date range."""
+        q = request.query
         try:
-            page = max(1, int(request.query.get("page", 1)))
+            page = max(1, int(q.get("page", 1)))
         except ValueError:
             page = 1
-        action = request.query.get("action", "")
         per = 50
-        where, args = ("WHERE action = ?", [action]) if action else ("", [])
-        total = db.scalar(f"SELECT COUNT(*) FROM audit {where}", args, 0)
-        rows = db.query(f"SELECT ts, username, ip, action, detail FROM audit {where} "
-                        "ORDER BY id DESC LIMIT ? OFFSET ?", args + [per, (page - 1) * per])
+        where, args = [], []
+        cat = q.get("category", "")
+        if cat in AUDIT_CATEGORIES:
+            acts = AUDIT_CATEGORIES[cat]
+            where.append(f"action IN ({','.join('?' * len(acts))})")
+            args += acts
+        elif q.get("action"):
+            where.append("action = ?")
+            args.append(q["action"])
+        who = q.get("who", "")
+        if who == "people":
+            where.append("username NOT LIKE 'system%'")
+        elif who == "system":
+            where.append("username LIKE 'system%'")
+        elif who:
+            where.append("username = ? COLLATE NOCASE")
+            args.append(who[:64])
+        text = q.get("q", "").strip()[:100]
+        if text:
+            where.append("(detail LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR ip LIKE ? ESCAPE '\\')")
+            like = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            args += [like, like, like]
+        for key, op in (("from", ">="), ("to", "<")):
+            try:
+                v = int(q.get(key, ""))
+                where.append(f"ts {op} ?")
+                args.append(v)
+            except ValueError:
+                pass
+        w = ("WHERE " + " AND ".join(where)) if where else ""
+        total = db.scalar(f"SELECT COUNT(*) FROM audit {w}", args, 0)
+        rows = db.query(f"SELECT ts, username, ip, action, detail FROM audit {w} "
+                        "ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?", args + [per, (page - 1) * per])
+        users = [r[0] for r in db.query("SELECT DISTINCT username FROM audit WHERE username NOT LIKE 'system%' "
+                                        "AND username != '' ORDER BY username COLLATE NOCASE LIMIT 50")]
         return jresp({"logs": [dict(r) for r in rows], "total": total, "page": page,
-                      "total_pages": max(1, (total + per - 1) // per)})
+                      "total_pages": max(1, (total + per - 1) // per), "users": users})
 
     # --------------------------------------------------------- HA & system
     @need("admin")
@@ -858,6 +924,34 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         return resp
 
     @need("admin")
+    async def api_backup_import(request):
+        """Body = the backup file itself (streamed to disk, never held in RAM)."""
+        tmp = os.path.join(core.backup_dir(), f"upload-{secrets.token_hex(4)}.tmp")
+        try:
+            size = 0
+            with open(tmp, "wb") as f:
+                async for chunk in request.iter_body():
+                    size += len(chunk)
+                    await asyncio.to_thread(f.write, chunk)
+            if size < 100:
+                return jerr("Prázdný soubor.")
+            full = request.query.get("full") == "1"
+            try:
+                stats = await asyncio.to_thread(core.import_backup, tmp, full)
+            except ValueError as e:
+                return jerr(str(e))
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        core.audit("BACKUP_IMPORTED",
+                   f"Import zálohy: {stats['measurements']} nových měření, {stats['skipped']} duplicit přeskočeno, "
+                   f"{stats['nodes']} čidel" + (", nastavení a uživatelé" if stats["settings"] else ""),
+                   *user_of(request))
+        return jresp({"ok": True, **stats})
+
+    @need("admin")
     async def api_system_update(request):
         Path(core.data_dir, "update-request").write_text(str(int(time.time())))
         core.audit("UPDATE_REQUESTED", "Ruční kontrola aktualizací", request["session"]["username"], request["ip"])
@@ -906,6 +1000,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/system/update", api_system_update)
     r.add_get("/api/backup", api_backup_list)
     r.add_get("/api/backup/download", api_backup_download)
+    r.add_post("/api/backup/import", api_backup_import)
+    app.stream_paths["/api/backup/import"] = 1024 * 1024 * 1024
     return app
 
 

@@ -154,9 +154,12 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   zbývá < 300 MB, smaže se nejstarší měsíc podrobných dat (starších než půl roku) a zapíše se do logu.
 - **Záloha:** každou noc konzistentní kopie DB (SQLite online backup, gzip) do `data/backup/`, drží se 7 dní
   (chrání před poškozením souboru / nepovedenou aktualizací). Proti odumření karty: tlačítko *Stáhnout zálohu*
-  (admin, stream gzip, nízká RAM). **Obnova:** soubor na spouštěcí FAT oddíl jako `retencka-restore.db.gz` →
-  při startu (root, `ExecStartPre=+`) se ověří (`integrity_check`, tabulky), stará DB se odloží, zdroj se
-  přejmenuje na `.done`. Záloha obsahuje klíče čidel – bez ní by se spárovaná čidla musela přeprogramovat.
+  (admin, stream gzip, nízká RAM). **Nahrání zálohy** přes web (stejné místo): soubor se streamuje na disk
+  (nikdy celý do RAM), ověří se (`quick_check`, tabulky, verze schématu) a **sloučí** s aktuální databází:
+  měření se přidají, duplicity (stejné čidlo + číslo paketu) se přeskočí, chybějící čidla se doplní i s klíči,
+  dopouštění a log bez duplicit; volitelně i nastavení a chybějící uživatelé. Import běží po dávkách
+  (30 dní), aby nezdržoval příjem. Opakovaný import téhož souboru nic nezmění. Záloha obsahuje klíče
+  čidel – bez ní by se spárovaná čidla musela přeprogramovat.
 - Historie: SQL bucketing (`GROUP BY ts / bucket`) na max. ~600 bodů.
 - Konfigurace a uživatelé v SQLite (transakce = atomické zápisy, žádné rozbité JSON po výpadku).
 
@@ -168,13 +171,23 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   Ukládá se surová i vyhlazená hladina.
 - Spotřeba / přítok: hystereze na vyhlazené řadě s polovičním mrtvým pásmem (šum se nepočítá, pomalý odběr ano).
 - Dopouštění – **zvlášť pro každou nádrž** (vlastní ventil/zónu, pravidla, průtok): manuální na cílové %,
-  automatické pod prahem, odložení při předpovědi deště (Open-Meteo), uzavřená smyčka – zastavení po
+  automatické pod prahem, čekání na předpovězený déšť (viz níže), uzavřená smyčka – zastavení po
   dosažení cíle, kalibrace reálného průtoku, detekce poruchy ventilu. Ventilu se vždy nastaví i vlastní
   časovač (pojistka při výpadku hubu). Každá akce je v audit logu.
 - **Jeden ventil = jeden řídicí senzor:** když má víc čidel nastavený stejný ventil (stejný Hydrawise účet +
   stejná zóna/relay), ovládá ho jen první čidlo v seznamu; u ostatních je dopouštění vypnuté a UI ukáže, která
   nádrž ventil řídí. Ani ruční spuštění ze dvou nádrží na stejný ventil neprojde → nikdy se nedopouští 2×.
   Stejný účet s jinou zónou je v pořádku (dvě nádrže, dva ventily). Zastavení funguje vždy.
+- **Čekání na déšť** (u každé nádrže, lze vypnout): když hladina klesne pod práh dopouštění, hub spočítá
+  přítok z hodinové předpovědi Open-Meteo na příštích *N* hodin (výchozí 24): srážky × plocha střechy ×
+  odtokový součinitel → +X %. Pokud by déšť dostal hladinu nad práh, **nedopouští a čeká** (stav
+  „Čeká na déšť – předpověď 6 mm ≈ +8 % (nejdéle do 18:00)“, záznam v logu). Čekání skončí a dopouští se, když:
+  - hladina je pod prahem o víc než *nastavenou hodnotu* (výchozí 10 %) – na déšť se nečeká vůbec,
+  - během čekání klesne o víc než *nastavenou hodnotu* (výchozí 5 %),
+  - déšť nepřijde do 2 h po posledním předpovězeném deštivém úseku (nejdéle *N* hodin),
+  - předpověď se změní a déšť už nestačí.
+  Pokud se dopouští a déšť je stále předpovězen, **dopustí se jen to, co déšť nedodá** (cíl − očekávaný přítok,
+  min. práh + 2 %). Když déšť nádrž doplní, čekání se ukončí a zapíše do logu.
 - **Výhled:** „vystačí ~N dní“ (objem / průměrná spotřeba posledních 7 dní) a přítok z předpovědi deště na
   7 dní (srážky × plocha střechy × odtokový součinitel, výchozí 0,8) → odhad % po dešti.
 - Systémy dopouštění jsou za rozhraním „provider“. Teď: **Hunter Hydrawise** (oficiální REST API s API
@@ -222,6 +235,11 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Grafy: hladina (se zvýrazněním dopouštění, **sloupce srážek** z Open-Meteo – až 92 dní zpět, hodinové/denní
   podle rozsahu – a **značky událostí**: 🔋 zapnutí čidla/výměna baterie, 📐 kalibrace; detail v tooltipu),
   spotřeba/den, dopouštění/den, klima, počasí 7 dní, **baterie a signál (RSSI), výchozí 30 dní**.
+- Texty v aplikaci jsou pro koncového uživatele: krátké, bez technických poznámek.
+- **Mobil:** vše funguje na šířce 360–400 px (jeden sloupec, posuvné záložky a tabulky, bez vodorovného posunu stránky).
+- **Záznamy (log):** kategorie (dopouštění, čidla, nastavení, přihlášení, uživatelé, systém, problémy), filtr
+  kdo (uživatelé / automatika / konkrétní uživatel), hledání v textu, rozsah dat; seskupení po dnech,
+  barevné odlišení závažnosti, „Načíst starší“.
 - Nastavení i logy **jen pro admina** (záložky skryté, API vrací 403). Nastavení má přepínač
   **Základní / Pokročilé** (pokročilé: offset a kalibrační body sondy, přesnost, limity a průtok dopouštění,
   přepočet historie, kalibrace baterie, retence, slyšená čidla a statistiky rádia).

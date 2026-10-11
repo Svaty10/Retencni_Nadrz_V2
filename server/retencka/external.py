@@ -109,6 +109,19 @@ class Weather:
         keys = sorted(sums)
         return {"bucket_s": bucket, "t": [k * 1000 for k in keys], "mm": [round(sums[k], 1) for k in keys]}
 
+    def rain_ahead(self, hours: float) -> Optional[tuple[float, Optional[int]]]:
+        """Forecast rain in the next `hours` (mm) and the epoch of the last rainy hour
+        in that window. None without forecast data."""
+        if not self._rain:
+            return None
+        now = time.time()
+        total, last = 0.0, None
+        for ts, mm in self._rain:
+            if now - 3600 < ts < now + hours * 3600 and mm > 0:
+                total += mm
+                last = ts + 3600
+        return round(total, 1), last
+
     def rain_next_days(self, days: int) -> Optional[float]:
         d = self._data
         if not d or not d["precipitation_sum"]:

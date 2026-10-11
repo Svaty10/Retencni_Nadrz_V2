@@ -554,12 +554,11 @@
 
         const rf = s.refill || {};
         refillEndsAt = rf.active ? rf.ends_at : null;
-        $('txtRefillStatus').textContent = rf.active ? 'Dopouští' : 'Nedopouští';
+        $('txtRefillStatus').textContent = rf.active ? 'Dopouští' : rf.waiting_for_rain ? 'Čeká na déšť' : 'Nedopouští';
         const zc = rf.zone_controlled_by;
         $('txtRefillTime').textContent = zc ? `Ventil ovládá nádrž „${zc.name}“` : (rf.status || '–');
         $('zoneNote').classList.toggle('hidden', !zc);
-        $('zoneNote').textContent = zc ? `Stejný ventil (Hydrawise účet + zóna) má nastavená i nádrž „${zc.name}“ (${zc.id}). ` +
-            'Aby se nedopouštělo dvakrát, ovládá ho jen ta první v seznamu čidel – tady je dopouštění vypnuté.' : '';
+        $('zoneNote').textContent = zc ? `Tento ventil ovládá nádrž „${zc.name}“.` : '';
         $('refillBox').classList.toggle('ok', !!rf.active);
         $('refillActions').classList.toggle('hidden', !(ME.role === 'admin' && rf.configured));
         $('manualPctInput').max = rf.max_pct || 100;
@@ -628,7 +627,8 @@
 
     function renderNodeBar(nodes) {
         const bar = $('nodeBar');
-        bar.classList.toggle('hidden', nodes.length < 2);
+        const tabWithNodes = $('dashboard').classList.contains('active') || $('nastaveni').classList.contains('active');
+        bar.classList.toggle('hidden', nodes.length < 2 || !tabWithNodes);
         bar.textContent = '';
         const onDash = $('dashboard').classList.contains('active');
         const allActive = VIEW_ALL && onDash;
@@ -754,8 +754,8 @@
         fillForm($('calForm'), n);
         renderCalPoints(n.cal_points);
         $('batTrim').textContent = num(n.battery_trim, 4);
-        $('deadbandInfo').textContent = `±${num(n.deadband_cm, 1)} cm ≈ ${num(n.deadband_l, 0)} L`;
-        $('realFlowHint').textContent = n.real_flow_rate_lpm ? `(změřeno: ${num(n.real_flow_rate_lpm, 1)} L/min)` : '';
+        $('deadbandInfo').textContent = `±${num(n.deadband_cm, 1)} cm (≈ ${num(n.deadband_l, 0)} L)`;
+        $('realFlowHint').textContent = n.real_flow_rate_lpm ? `(naměřeno ${num(n.real_flow_rate_lpm, 1)})` : '';
     }
 
     function applySettings(s) {
@@ -803,7 +803,26 @@
         try { adv = localStorage.getItem('advSettings') === '1'; } catch (e) { /* ignore */ }
         setAdvanced(adv);
         $('advToggle').addEventListener('change', (e) => setAdvanced(e.target.checked));
-        $('backupBtn').addEventListener('click', () => toast('Připravuji zálohu – stahování začne za chvíli.'));
+        $('backupBtn').addEventListener('click', () => toast('Připravuji zálohu…'));
+        $('importFile').addEventListener('change', async (e) => {
+            const f = e.target.files[0];
+            e.target.value = '';
+            if (!f) return;
+            const full = $('importFull').checked;
+            if (!confirm(`Nahrát zálohu „${f.name}“?` + (full ? '\nPřepíše se i nastavení a doplní uživatelé.' : ''))) return;
+            toast('Nahrávám zálohu…');
+            try {
+                const r = await fetch('/api/backup/import' + (full ? '?full=1' : ''), {
+                    method: 'POST', credentials: 'same-origin', body: f,
+                    headers: { 'X-CSRF-Token': ME.csrf, 'Content-Type': 'application/octet-stream' }
+                });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok || d.ok === false) throw new Error(d.error || ('Chyba ' + r.status));
+                toast(`Hotovo: ${num(d.measurements, 0)} nových záznamů, ${num(d.skipped, 0)} duplicit přeskočeno` +
+                      (d.nodes ? `, ${d.nodes} čidel` : ''));
+                histCache.clear(); flowsCache.clear(); loadSettingsTab(); pollState();
+            } catch (err) { toast(err.message, true); }
+        });
         $('calForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const data = formData(e.target);
@@ -872,7 +891,7 @@
 
     async function startPairing(id, name) {
         const r = await action(() => api('POST', '/api/pairing/start', { node_id: id, name: name || '' }),
-            'Čekám na čidlo – párování proběhne při jeho příští nabídce (do 5 s).');
+            'Čekám na čidlo…');
         if (r) await refreshNodes();
         return !!r;
     }
@@ -895,10 +914,10 @@
 
         const body = $('nodesBody');
         body.textContent = '';
-        if (!d.summaries.length) body.innerHTML = '<tr><td colspan="6" class="muted">Zatím žádné čidlo – první přijaté se přidá samo.</td></tr>';
+        if (!d.summaries.length) body.innerHTML = '<tr><td colspan="6" class="muted">Zatím žádné čidlo</td></tr>';
         d.summaries.forEach((n) => {
             const tr = document.createElement('tr');
-            const st = n.unpairing ? 'odpárovává se – vyndejte a vložte do čidla baterii'
+            const st = n.unpairing ? 'odpárování – vyjměte a vložte baterii'
                 : ({ online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status);
             tr.innerHTML = `<td><strong>${esc(n.name)}</strong>${n.refill_configured ? ' 💧' : ''}${n.paired ? ' 🔒' : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
                 <td>${esc(st)}${!n.unpairing && n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${num(n.rssi, 0, ' dBm')}</td>
@@ -913,14 +932,14 @@
             if (n.unpairing) {
                 btn('Zrušit', 'btn-outline', () => action(() => api('POST', '/api/nodes/unpair/cancel', { node_id: n.id }), 'Odpárování zrušeno.').then(done));
                 btn('Odebrat bez čidla', 'btn-danger', () => {
-                    if (!confirm(`Smazat klíč čidla ${n.id} bez jeho potvrzení?\n\nPoužijte jen u ztraceného nebo zničeného čidla – pokud se najde, zůstane zamčené na smazaný klíč a půjde obnovit jen přeprogramováním (UPDI).`)) return;
+                    if (!confirm(`Odebrat čidlo ${n.id} bez potvrzení?\nJen pro ztracené nebo zničené čidlo – pokud se najde, bude nutné ho přeprogramovat.`)) return;
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id, force: true }), 'Čidlo odebráno.').then(done);
                 });
             } else {
                 btn('Nastavit', 'btn-outline', () => { selectNode(n.id); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
                 btn('Odpárovat', 'btn-danger', () => {
-                    if (!confirm(`Odpárovat čidlo ${n.name} (${n.id})?\n\nHub hned přestane přijímat jeho data. Klíč se smaže, až čidlo odpárování potvrdí: vyndejte a vložte do něj baterii (do 10 minut se spojí s hubem). Naměřená data zůstanou uložena.`)) return;
-                    action(() => api('POST', '/api/nodes/remove', { node_id: n.id }), (r) => r.removed ? 'Čidlo odebráno.' : 'Čeká se na čidlo – vyndejte a vložte baterii.').then(done);
+                    if (!confirm(`Odpárovat čidlo ${n.name} (${n.id})?\nDokončí se po vyjmutí a vložení baterie do čidla. Naměřená data zůstanou.`)) return;
+                    action(() => api('POST', '/api/nodes/remove', { node_id: n.id }), (r) => r.removed ? 'Čidlo odebráno.' : 'Vyjměte a vložte do čidla baterii.').then(done);
                 });
             }
             body.appendChild(tr);
@@ -932,16 +951,16 @@
         const pr = (d.pairing && d.pairing.requests) || [];
         const targets = (d.pairing && d.pairing.targets) || [];
         if (!pr.length && !targets.length) {
-            pb.innerHTML = '<tr><td colspan="5" class="muted">Žádné čidlo právě nenabízí párování.</td></tr>';
+            pb.innerHTML = '<tr><td colspan="5" class="muted">Žádné nové čidlo</td></tr>';
         }
         pr.forEach((q) => {
             const tr = document.createElement('tr');
             const foreign = q.node_paired && !q.known;   // paired to another hub – cannot be taken over
-            const state = q.answered ? 'odpovězeno – čekám na první data'
-                : q.target ? (q.node_paired ? 'odpárovávám starý klíč…' : 'čekám na čidlo…')
-                : foreign ? 'spárované s jiným hubem – nejdřív ho odpárujte tam'
-                : q.known ? (q.node_paired ? 'naše čidlo (výměna baterie)' : 'naše čidlo bez klíče')
-                : 'nové čidlo';
+            const state = q.answered ? 'čekám na data'
+                : q.target ? 'páruji…'
+                : foreign ? 'patří jinému hubu'
+                : q.known ? (q.node_paired ? 'výměna baterie' : 'bez klíče')
+                : 'nové';
             tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${num(q.rssi, 0, ' dBm')}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td></td>`;
             if (!q.target && !foreign) {
                 const b = document.createElement('button');
@@ -961,7 +980,7 @@
         targets.filter((t) => !pr.some((q) => q.id === t.id)).forEach((t) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `<td><code>${esc(t.id)}</code> ${esc(t.name || '')}</td><td>–</td><td>–</td>
-                <td>čekám na čidlo (ještě ${Math.ceil(t.expires_in / 60)} min) – vložte baterii</td><td></td>`;
+                <td>čekám (${Math.ceil(t.expires_in / 60)} min)</td><td></td>`;
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = 'Zrušit';
             b.addEventListener('click', () => action(() => api('POST', '/api/pairing/cancel', { node_id: t.id })).then(refreshNodes));
@@ -1051,55 +1070,101 @@
     }
 
     // ---------------------------------------------------------------- audit
+    // [ikona, text, závažnost]  závažnost: '' | ok | warn | bad | info
     const ACTIONS = {
-        LOGIN_SUCCESS: ['✅ Přihlášení', 'log-success'], LOGIN_FAILED: ['❌ Neoprávněný pokus', 'log-danger'],
-        LOGOUT: ['🚪 Odhlášení', ''], SETTINGS_CHANGED: ['⚙️ Nastavení', 'log-warning'],
-        CALIBRATION: ['📐 Kalibrace', 'log-warning'], USER_ADDED: ['👤+ Nový uživatel', 'log-success'],
-        USER_DELETED: ['👤− Smazán uživatel', 'log-danger'], USER_ROLE_CHANGED: ['🔄 Změna role', 'log-warning'],
-        PASSWORD_CHANGED: ['🔑 Změna hesla', ''], MANUAL_REFILL: ['💧 Dopouštění (manuální)', 'log-info'],
-        AUTO_REFILL: ['🤖 Dopouštění (automatické)', 'log-info'], REFILL_ERROR: ['⚠️ Chyba dopouštění', 'log-danger'],
-        REFILL_FAULT: ['⚠️ Porucha dopouštění', 'log-danger'], NODE_PAIRED: ['📡 Přidání čidla', 'log-warning'],
-        NODE_REMOVED: ['📡 Odebrání čidla', 'log-warning'], NODE_PAIRING: ['📡 Čekání na párování', ''],
-        TIME_FIXED: ['🕒 Oprava času', ''], SETUP_LOGIN: ['🔑 První přihlášení', 'log-warning'],
-        NODE_BOOT: ['📡 Restart čidla', ''], SETUP_FAILED: ['❌ Neplatné výchozí přihlášení', 'log-danger'],
-        UPDATE_REQUESTED: ['⬆️ Aktualizace', ''], NODE_UNPAIR_REQUESTED: ['📡 Odpárování (čeká na čidlo)', 'log-warning'],
-        NODE_UNPAIRED: ['📡 Odpárování dokončeno', 'log-warning'], NODE_UNPAIR_CANCELLED: ['📡 Odpárování zrušeno', ''],
-        BACKUP_DOWNLOADED: ['💾 Stažení zálohy', 'log-warning'], DISK_LOW: ['⚠️ Málo místa na kartě', 'log-danger']
+        LOGIN_SUCCESS: ['🔑', 'Přihlášení', 'ok'], LOGIN_FAILED: ['⛔', 'Neúspěšné přihlášení', 'bad'],
+        LOGOUT: ['🚪', 'Odhlášení', ''], SETUP_LOGIN: ['🔑', 'První přihlášení', 'warn'],
+        SETUP_FAILED: ['⛔', 'Neplatné výchozí přihlášení', 'bad'], PASSWORD_CHANGED: ['🔑', 'Změna hesla', ''],
+        USER_ADDED: ['👤', 'Nový uživatel', 'ok'], USER_DELETED: ['👤', 'Smazán uživatel', 'warn'],
+        USER_ROLE_CHANGED: ['👤', 'Změna role', 'warn'],
+        SETTINGS_CHANGED: ['⚙️', 'Změna nastavení', ''], CALIBRATION: ['📐', 'Kalibrace', ''],
+        MANUAL_REFILL: ['💧', 'Dopouštění (ručně)', 'info'], AUTO_REFILL: ['💧', 'Dopouštění (automaticky)', 'info'],
+        RAIN_WAIT: ['🌧️', 'Čekání na déšť', 'info'], REFILL_ERROR: ['⚠️', 'Chyba dopouštění', 'bad'],
+        REFILL_FAULT: ['⚠️', 'Porucha dopouštění', 'bad'],
+        NODE_PAIRED: ['📡', 'Čidlo spárováno', 'ok'], NODE_PAIRING: ['📡', 'Čekání na párování', ''],
+        NODE_REMOVED: ['📡', 'Čidlo odebráno', 'warn'], NODE_UNPAIR_REQUESTED: ['📡', 'Odpárování zahájeno', 'warn'],
+        NODE_UNPAIRED: ['📡', 'Čidlo odpárováno', 'warn'], NODE_UNPAIR_CANCELLED: ['📡', 'Odpárování zrušeno', ''],
+        NODE_BOOT: ['🔋', 'Restart čidla', ''],
+        TIME_FIXED: ['🕒', 'Oprava času', ''], UPDATE_REQUESTED: ['⬆️', 'Aktualizace', ''],
+        BACKUP_DOWNLOADED: ['💾', 'Stažení zálohy', ''], BACKUP_IMPORTED: ['💾', 'Nahrání zálohy', 'warn'],
+        DISK_LOW: ['⚠️', 'Málo místa na kartě', 'bad']
     };
+    const LOG = { page: 1, cat: '', items: 0 };
+    const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
+
+    function dayTitle(ms) {
+        const d = new Date(ms), today = new Date();
+        const y = new Date(Date.now() - 86400e3);
+        const same = (a, b) => a.toDateString() === b.toDateString();
+        if (same(d, today)) return 'Dnes';
+        if (same(d, y)) return 'Včera';
+        return `${DAYS[d.getDay()]} ${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`;
+    }
+
+    function auditQuery(page) {
+        const p = new URLSearchParams({ page: String(page) });
+        if (LOG.cat) p.set('category', LOG.cat);
+        if ($('logWho').value) p.set('who', $('logWho').value);
+        const q = $('logSearch').value.trim();
+        if (q) p.set('q', q);
+        if ($('logFrom').value) p.set('from', String(Math.floor(new Date($('logFrom').value + 'T00:00:00').getTime() / 1000)));
+        if ($('logTo').value) p.set('to', String(Math.floor(new Date($('logTo').value + 'T00:00:00').getTime() / 1000) + 86400));
+        return '/api/audit?' + p.toString();
+    }
 
     async function loadAuditLog(page) {
-        const filter = $('auditActionFilter').value;
-        const body = $('auditLogBody');
-        body.innerHTML = '<tr><td colspan="5" class="muted">Načítám…</td></tr>';
+        const list = $('auditList');
+        if (page === 1) { list.innerHTML = '<div class="muted">Načítám…</div>'; LOG.lastDay = null; }
         try {
-            const d = await api('GET', `/api/audit?page=${page}` + (filter ? `&action=${encodeURIComponent(filter)}` : ''));
-            if (!d.logs.length) {
-                body.innerHTML = '<tr><td colspan="5" class="muted">Žádné záznamy</td></tr>';
-                $('auditPagination').textContent = '';
-                return;
-            }
-            body.innerHTML = d.logs.map((l) => {
-                const [text, cls] = ACTIONS[l.action] || [l.action, ''];
-                return `<tr class="${cls}"><td>${fmtDateTime(l.ts * 1000)}</td><td>${esc(l.username)}</td>
-                    <td><code>${esc(l.ip || 'N/A')}</code></td><td>${esc(text)}</td><td class="detail-cell">${esc(l.detail || '—')}</td></tr>`;
-            }).join('');
+            const d = await api('GET', auditQuery(page));
+            LOG.page = page;
+            if (page === 1) list.textContent = '';
+            const who = $('logWho');
+            const known = Array.from(who.options).map((o) => o.value);
+            (d.users || []).forEach((u) => {
+                if (!known.includes(u)) {
+                    const o = document.createElement('option');
+                    o.value = u; o.textContent = u;
+                    who.appendChild(o);
+                }
+            });
+            if (who._render) who._render();
+            if (!d.logs.length && page === 1) list.innerHTML = '<div class="muted log-empty">Žádné záznamy</div>';
+            d.logs.forEach((l) => {
+                const ms = l.ts * 1000;
+                const day = dayTitle(ms);
+                if (day !== LOG.lastDay) {
+                    const h = document.createElement('div');
+                    h.className = 'log-day';
+                    h.textContent = day;
+                    list.appendChild(h);
+                    LOG.lastDay = day;
+                }
+                const [icon, text, sev] = ACTIONS[l.action] || ['•', l.action, ''];
+                const sys = !l.username || l.username.startsWith('system');
+                const row = document.createElement('div');
+                row.className = 'log-row ' + (sev ? 'sev-' + sev : '');
+                const t = new Date(ms);
+                row.innerHTML = `<div class="log-icon">${icon}</div>
+                    <div class="log-main"><div class="log-title">${esc(text)}</div>
+                    <div class="log-detail">${esc(l.detail || '')}</div></div>
+                    <div class="log-meta"><span class="log-time">${pad(t.getHours())}:${pad(t.getMinutes())}</span>
+                    <span class="log-user ${sys ? 'sys' : ''}">${sys ? 'automatika' : esc(l.username)}</span>
+                    ${l.ip && !sys ? `<span class="log-ip">${esc(l.ip)}</span>` : ''}</div>`;
+                list.appendChild(row);
+            });
+            $('logSummary').textContent = `${d.total} záznamů`;
             const pag = $('auditPagination');
             pag.textContent = '';
-            if (page > 1) pag.appendChild(pageBtn('← Předchozí', page - 1));
-            const info = document.createElement('span');
-            info.className = 'audit-page-info';
-            info.textContent = `Strana ${d.page} z ${d.total_pages} (${d.total} záznamů)`;
-            pag.appendChild(info);
-            if (page < d.total_pages) pag.appendChild(pageBtn('Další →', page + 1));
+            if (page < d.total_pages) {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'btn btn-outline'; b.textContent = 'Načíst starší';
+                b.addEventListener('click', () => loadAuditLog(page + 1));
+                pag.appendChild(b);
+            }
         } catch (e) {
-            body.innerHTML = `<tr><td colspan="5" class="muted">${esc(e.message)}</td></tr>`;
+            list.innerHTML = `<div class="muted">${esc(e.message)}</div>`;
         }
-    }
-    function pageBtn(label, page) {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = label;
-        b.addEventListener('click', () => loadAuditLog(page));
-        return b;
     }
 
     // ---------------------------------------------------------------- users
@@ -1155,7 +1220,14 @@
             action(() => api('POST', '/api/me/password', { old_password: $('pwOld').value, new_password: $('pwNew').value }), 'Heslo bylo změněno.')
                 .then((r) => { if (r) e.target.reset(); });
         });
-        $('auditActionFilter').addEventListener('change', () => loadAuditLog(1));
+        document.querySelectorAll('#logChips .chip').forEach((c) => c.addEventListener('click', () => {
+            document.querySelectorAll('#logChips .chip').forEach((x) => x.classList.toggle('active', x === c));
+            LOG.cat = c.dataset.cat;
+            loadAuditLog(1);
+        }));
+        ['logWho', 'logFrom', 'logTo'].forEach((id) => $(id).addEventListener('change', () => loadAuditLog(1)));
+        let searchT = null;
+        $('logSearch').addEventListener('input', () => { clearTimeout(searchT); searchT = setTimeout(() => loadAuditLog(1), 350); });
         $('auditRefresh').addEventListener('click', () => loadAuditLog(1));
         $('exportBtn').addEventListener('click', () => {
             window.location.href = `/api/export.csv?node=${CURRENT_NODE}&` + rangeQuery(rangeOf('export'));

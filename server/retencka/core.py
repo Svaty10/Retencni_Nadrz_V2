@@ -75,6 +75,7 @@ class Core:
         self.refills: dict[int, dict] = {}         # node_id -> open row of the refills table
         self.refill_notes: dict[int, str] = {}
         self._auto_block_until: dict[int, float] = {}
+        self._rain_wait: dict[int, dict] = {}       # node_id -> {start_pct, since, deadline}
 
         # clock correction after a late NTP sync (no RTC on the Pi)
         self._time_anchor: Optional[tuple[float, float, int]] = None   # (wall, monotonic, first id)
@@ -577,6 +578,7 @@ class Core:
                 "zone_controlled_by": shared,
                 "active": r is not None, "status": self.refill_notes.get(nid, "V normě"),
                 "max_pct": node["max_refill_pct"], "auto": node["auto_refill_enabled"],
+                "waiting_for_rain": nid in self._rain_wait,
                 "flow_lpm": node.get("real_flow_rate_lpm") or node["flow_rate_lpm"]}
         if r:
             info.update(mode=r["mode"], target_pct=r["target_pct"],
@@ -680,23 +682,75 @@ class Core:
                 if lv.percent >= r["target_pct"]:
                     await self.refill_stop(nid, f"Dosaženo cíle ({lv.percent:.1f} %)")
                 return
-            if not node["auto_refill_enabled"] or lv.percent >= node["refill_threshold_pct"]:
+            thr = float(node["refill_threshold_pct"])
+            if not node["auto_refill_enabled"] or lv.percent >= thr:
+                if self._rain_wait.pop(nid, None):
+                    self.audit("RAIN_WAIT", f"{node['name']}: déšť doplnil nádrž ({lv.percent:.0f} %), "
+                                            f"dopouštění nebylo potřeba")
                 self.refill_notes[nid] = "V normě"
                 return
             if time.time() < self._auto_block_until.get(nid, 0):
                 self.refill_notes[nid] = "Automatické dopouštění dočasně pozastaveno"
                 return
-            if s["rain_defer_enabled"] and lv.percent > node["critical_level_pct"]:
-                rain = await self.weather.rain_next_2_days(s["latitude"], s["longitude"])
-                if rain is not None and rain >= s["rain_defer_threshold_mm"]:
-                    self.refill_notes[nid] = f"Dopouštění odloženo (předpověď {rain:.1f} mm srážek)"
-                    return
-            ok, msg = await self.refill_start(nid, node["auto_refill_target_pct"], "auto", "system")
+            target = float(node["auto_refill_target_pct"])
+            gain = 0.0
+            if node.get("rain_wait_enabled", True):
+                await self.weather.forecast(s["latitude"], s["longitude"])
+                gain, rain_mm, rain_until = self.rain_gain_pct(node, lv)
+                decision = self._rain_wait_decision(nid, node, lv, gain, rain_mm, rain_until)
+                if decision is None:
+                    return                           # waiting for rain (note already set)
+                if decision:
+                    self.audit("RAIN_WAIT", f"{node['name']}: {decision}")
+                if gain > 0:
+                    # rain is still expected: top up only what the rain will not bring
+                    target = max(min(target, thr + 2.0), target - gain)
+            self._rain_wait.pop(nid, None)
+            ok, msg = await self.refill_start(nid, target, "auto", "system")
             if not ok:
                 self.refill_notes[nid] = f"Automatické dopouštění selhalo: {msg}"
                 self._auto_block_until[nid] = time.time() + AUTO_COOLDOWN_S
         except Exception:
             log.exception("refill logic failed")
+
+    def rain_gain_pct(self, node: dict, lv: model.Level) -> tuple[float, float, Optional[int]]:
+        """Level gain (%) expected from the forecast rain within rain_wait_hours:
+        rain [mm] × roof area [m²] × runoff coefficient = litres."""
+        ahead = self.weather.rain_ahead(float(node.get("rain_wait_hours") or 24))
+        if not ahead or not lv.max_volume_l:
+            return 0.0, 0.0, None
+        mm, until = ahead
+        litres = mm * float(node["catchment_area_m2"]) * float(node.get("runoff_coef") or 0.8)
+        return litres / lv.max_volume_l * 100.0, mm, until
+
+    def _rain_wait_decision(self, nid: int, node: dict, lv: model.Level, gain: float, mm: float,
+                            until: Optional[int]) -> Optional[str]:
+        """None = keep waiting for rain; otherwise refill now ("" = no wait happened,
+        text = why the wait was given up)."""
+        thr = float(node["refill_threshold_pct"])
+        now = time.time()
+        wait = self._rain_wait.get(nid)
+        floor = thr - float(node.get("rain_wait_max_below_pct", 10.0))
+        if lv.percent < floor:
+            return (f"hladina {lv.percent:.0f} % je víc než {thr - floor:.0f} % pod prahem – nečeká se na déšť"
+                    if wait or gain > 0 else "")
+        if wait:
+            if lv.percent < wait["start_pct"] - float(node.get("rain_wait_max_drop_pct", 5.0)):
+                return f"během čekání na déšť klesla hladina z {wait['start_pct']:.0f} % na {lv.percent:.0f} %"
+            if now > wait["deadline"]:
+                return "očekávaný déšť nepřišel"
+        if gain <= 0 or lv.percent + gain < thr:
+            return "" if not wait else "předpověď deště už nestačí"
+        if not wait:
+            hours = float(node.get("rain_wait_hours") or 24)
+            wait = {"start_pct": lv.percent, "since": now,
+                    "deadline": min(now + hours * 3600, (until or now) + 2 * 3600)}
+            self._rain_wait[nid] = wait
+            self.audit("RAIN_WAIT", f"{node['name']}: hladina {lv.percent:.0f} % pod prahem {thr:.0f} %, "
+                                    f"předpověď {mm:.1f} mm ≈ +{gain:.0f} % – čeká se na déšť")
+        self.refill_notes[nid] = (f"Čeká na déšť – předpověď {mm:.1f} mm ≈ +{gain:.0f} % "
+                                  f"(nejdéle do {datetime.fromtimestamp(wait['deadline']):%H:%M})")
+        return None
 
     async def refill_tick(self) -> None:
         """Every 30 s: timer expiry and stale-data safety stop, for every running refill."""
@@ -793,8 +847,8 @@ class Core:
         tag = f"Čidlo {nid:04X}:%"
         for r in self.db.query("SELECT ts, action, detail FROM audit WHERE ts >= ? AND ts < ? AND detail LIKE ? "
                                "AND (action = 'CALIBRATION' OR (action = 'SETTINGS_CHANGED' AND "
-                               "(detail LIKE '%cal_points%' OR detail LIKE '%sensor_offset_cm%' "
-                               "OR detail LIKE '%max_depth_cm%'))) ORDER BY ts",
+                               "(detail LIKE '%kalibrační body%' OR detail LIKE '%výška sondy%' "
+                               "OR detail LIKE '%hloubka nádrže%' OR detail LIKE '%cal_points%'))) ORDER BY ts",
                                (t_from, t_to, tag)):
             ev.append({"t": r["ts"] * 1000, "kind": "cal", "label": "Kalibrace / změna rozměrů"})
         ev.sort(key=lambda e: e["t"])
@@ -910,6 +964,136 @@ class Core:
         for f in files[:-BACKUP_KEEP]:
             os.remove(os.path.join(d, f))
         return out
+
+    def import_backup(self, path: str, full: bool = False) -> dict:
+        """Merge a backup (.db or .db.gz from the download) into the live database.
+
+        Data are ADDED, never overwritten: a measurement that already exists (same
+        sensor + frame counter, ±1 day to survive clock corrections) is skipped, so importing the same file twice changes nothing.
+        Sensors missing here are added together with their keys (paired sensors keep
+        working without re-pairing). full=True also restores settings and adds
+        missing user accounts. Runs in a worker thread, in batches, so the live
+        receiver is never blocked for long."""
+        import gzip
+        import shutil
+        import sqlite3
+        work = os.path.join(self.backup_dir(), "import.tmp")
+        with open(path, "rb") as f:
+            gz = f.read(2) == b"\x1f\x8b"
+        if gz:
+            try:
+                with gzip.open(path, "rb") as fi, open(work, "wb") as fo:
+                    shutil.copyfileobj(fi, fo, 65536)
+            except (OSError, EOFError):
+                raise ValueError("Soubor není platná záloha (poškozený gzip).")
+        else:
+            shutil.copyfile(path, work)
+        try:
+            try:
+                chk = sqlite3.connect(f"file:{work}?mode=ro", uri=True)
+                ok = chk.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+                tables = {r[0] for r in chk.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                ver = chk.execute("PRAGMA user_version").fetchone()[0]
+                chk.close()
+            except sqlite3.DatabaseError:
+                raise ValueError("Soubor není záloha Retenční nádrže.")
+            if not ok or not {"measurements", "settings", "users"} <= tables:
+                raise ValueError("Soubor není záloha Retenční nádrže (nebo je poškozený).")
+            if ver > self.db.scalar("PRAGMA user_version", (), 0):
+                raise ValueError("Záloha je z novější verze – nejdřív aktualizujte hub.")
+            return self._merge(work, tables, full)
+        finally:
+            for suffix in ("", "-journal", "-wal", "-shm"):
+                try:
+                    os.remove(work + suffix)
+                except OSError:
+                    pass
+
+    def _merge(self, work: str, tables: set, full: bool) -> dict:
+        c = self.db.conn()
+        c.execute("ATTACH DATABASE ? AS src", (work,))
+        stats = {"measurements": 0, "skipped": 0, "nodes": 0, "refills": 0, "audit": 0, "users": 0,
+                 "settings": False}
+        try:
+            def cols(table: str) -> list[str]:
+                main = [r[1] for r in c.execute(f"PRAGMA main.table_info({table})")]
+                src = {r[1] for r in c.execute(f"PRAGMA src.table_info({table})")}
+                return [x for x in main if x in src and x != "id"]
+
+            # sensors (+ keys) first
+            if "nodes" in tables:
+                nc = cols("nodes")
+                for r in c.execute(f"SELECT {', '.join(nc)} FROM src.nodes").fetchall():
+                    row = dict(zip(nc, r))
+                    row.pop("unpair_at", None)
+                    if self.nodes.get(row["node_id"]) is None:
+                        if len(self.nodes.ids()) >= 16:
+                            continue
+                        keys = [k for k in row if k != "sort"]
+                        c.execute(f"INSERT INTO nodes({', '.join(keys)}, sort) VALUES({', '.join('?' * len(keys))}, ?)",
+                                  [row[k] for k in keys] + [len(self.nodes.ids())])
+                        stats["nodes"] += 1
+                        self.nodes.reload()
+                    elif row.get("secret") and not self.nodes.get(row["node_id"]).get("_secret"):
+                        c.execute("UPDATE nodes SET secret=?, paired_at=? WHERE node_id=?",
+                                  (row["secret"], row.get("paired_at"), row["node_id"]))
+                        self.nodes.reload()
+
+            # measurements, in 30-day batches (short write locks)
+            mc = cols("measurements")
+            lo, hi = c.execute("SELECT MIN(ts), MAX(ts) FROM src.measurements").fetchone()
+            total = c.execute("SELECT COUNT(*) FROM src.measurements").fetchone()[0]
+            if lo is not None:
+                start = lo
+                while start <= hi:
+                    end = start + 30 * 86400
+                    with self.db.transaction():
+                        cur = c.execute(
+                            f"INSERT INTO main.measurements({', '.join(mc)}) SELECT {', '.join('s.' + x for x in mc)} "
+                            "FROM src.measurements s WHERE s.ts >= ? AND s.ts < ? AND NOT EXISTS ("
+                            "SELECT 1 FROM main.measurements m WHERE m.node_id = s.node_id AND m.seq = s.seq "
+                            "AND m.ts BETWEEN s.ts - 86400 AND s.ts + 86400)",
+                            (start, end))
+                        stats["measurements"] += max(0, cur.rowcount)
+                    start = end
+            stats["skipped"] = total - stats["measurements"]
+
+            with self.db.transaction():
+                if "hourly" in tables:
+                    hc = cols("hourly")
+                    c.execute(f"INSERT OR IGNORE INTO main.hourly({', '.join(hc)}) "
+                              f"SELECT {', '.join(hc)} FROM src.hourly")
+                if "refills" in tables:
+                    rc = cols("refills")
+                    stats["refills"] = c.execute(
+                        f"INSERT INTO main.refills({', '.join(rc)}) SELECT {', '.join('s.' + x for x in rc)} "
+                        "FROM src.refills s WHERE s.end_ts IS NOT NULL AND NOT EXISTS (SELECT 1 FROM main.refills m "
+                        "WHERE m.start_ts = s.start_ts AND IFNULL(m.node_id, -1) = IFNULL(s.node_id, -1))").rowcount
+                if "audit" in tables:
+                    stats["audit"] = c.execute(
+                        "INSERT INTO main.audit(ts, username, ip, action, detail) "
+                        "SELECT s.ts, s.username, s.ip, s.action, s.detail FROM src.audit s WHERE NOT EXISTS ("
+                        "SELECT 1 FROM main.audit m WHERE m.ts = s.ts AND m.action = s.action "
+                        "AND IFNULL(m.detail, '') = IFNULL(s.detail, ''))").rowcount
+                if full:
+                    stats["users"] = c.execute(
+                        "INSERT INTO main.users(username, pw_hash, role, created, pw_changed) "
+                        "SELECT s.username, s.pw_hash, s.role, s.created, s.pw_changed FROM src.users s "
+                        "WHERE NOT EXISTS (SELECT 1 FROM main.users m WHERE m.username = s.username)").rowcount
+                    c.execute("INSERT OR REPLACE INTO main.settings(key, value) SELECT key, value FROM src.settings")
+                    stats["settings"] = True
+        finally:
+            c.execute("DETACH DATABASE src")
+        self.settings.reload()
+        self.nodes.reload()
+        self.aggregate_hours(since=0)
+        for nid in self.nodes.ids():
+            n = self.nodes.get(nid)
+            self._restore_node(nid)
+            self._last_ctr[nid] = max(self._last_ctr.get(nid, -1), self.db.scalar(
+                "SELECT MAX(seq) FROM measurements WHERE node_id=? AND ts >= ?", (nid, n.get("paired_at") or 0), -1))
+        self.invalidate()
+        return stats
 
     def backups(self) -> list[dict]:
         d = self.backup_dir()

@@ -20,8 +20,6 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     # weather
     "latitude":                  (50.0755, "float", -90.0, 90.0),
     "longitude":                 (14.4378, "float", -180.0, 180.0),
-    "rain_defer_enabled":        (True, "bool", None, None),
-    "rain_defer_threshold_mm":   (5.0, "float", 0.0, 500.0),
     # Hydrawise account key (shared by all nodes unless a node has its own)
     "hydrawise_api_key":         ("", "str", 0, 128),
     # battery / node energy model (same hardware for all nodes)
@@ -56,7 +54,11 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "refill_threshold_pct":   (20.0, "float", 0.0, 100.0),
     "auto_refill_target_pct": (30.0, "float", 0.0, 100.0),
     "max_refill_pct":         (90.0, "float", 0.0, 100.0),
-    "critical_level_pct":     (5.0, "float", 0.0, 100.0),
+    # waiting for forecast rain instead of refilling (see Core._refill_on_measurement)
+    "rain_wait_enabled":       (True, "bool", None, None),
+    "rain_wait_hours":         (24, "int", 1, 72),       # forecast horizon / longest wait
+    "rain_wait_max_below_pct": (10.0, "float", 0.0, 100.0),  # never wait this far below the threshold
+    "rain_wait_max_drop_pct":  (5.0, "float", 0.0, 100.0),   # stop waiting after this drop
     "flow_rate_lpm":          (41.6, "float", 0.5, 1000.0),
     "max_refill_minutes":     (120, "int", 1, 1440),
     "real_flow_rate_lpm":     (None, "json", None, None),   # measured, internal

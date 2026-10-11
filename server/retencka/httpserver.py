@@ -85,6 +85,8 @@ class Request:
         self.match_info: dict[str, str] = {}
         self._store: dict[str, Any] = {}
         self.cookies = _parse_cookies(headers.get("Cookie", ""))
+        self._stream: Optional[asyncio.StreamReader] = None
+        self.stream_left = 0
 
     @property
     def host(self) -> str:
@@ -96,6 +98,15 @@ class Request:
 
     async def read(self) -> bytes:
         return self._body
+
+    async def iter_body(self, chunk: int = 65536):
+        """Streamed request body (only for Application.stream_paths)."""
+        while self._stream is not None and self.stream_left > 0:
+            data = await asyncio.wait_for(self._stream.read(min(chunk, self.stream_left)), BODY_TIMEOUT)
+            if not data:
+                raise ConnectionError("upload interrupted")
+            self.stream_left -= len(data)
+            yield data
 
     async def json(self) -> Any:
         return json.loads(self._body.decode("utf-8") or "null")
@@ -282,6 +293,9 @@ class Application:
         self.router = Router()
         self.prepare_hooks: list[Callable[[Request, Response], None]] = []
         self._store: dict[str, Any] = {}
+        # POST paths whose body is NOT read up front but streamed by the handler
+        # (large uploads); value = maximum size in bytes
+        self.stream_paths: dict[str, int] = {}
 
     def __getitem__(self, k: str) -> Any:
         return self._store[k]
@@ -389,12 +403,16 @@ class Server:
                 raise ValueError
         except ValueError:
             return await self._send_error(writer, 400)
-        if length > self.app.client_max_size:
+        stream_max = self.app.stream_paths.get(target.partition("?")[0]) if method == "POST" else None
+        if length > (stream_max or self.app.client_max_size):
             return await self._send_error(writer, 413)
         if length and headers.get("Expect", "").lower() == "100-continue":
             writer.write(b"HTTP/1.1 100 Continue\r\n\r\n")
             await writer.drain()
-        body = await asyncio.wait_for(reader.readexactly(length), BODY_TIMEOUT) if length else b""
+        if stream_max:
+            body = b""
+        else:
+            body = await asyncio.wait_for(reader.readexactly(length), BODY_TIMEOUT) if length else b""
 
         conn_hdr = headers.get("Connection", "").lower()
         keep_alive = (version == "HTTP/1.1" and conn_hdr != "close") or \
@@ -402,6 +420,8 @@ class Server:
 
         request = Request(self.app, method, target, version, headers, body, remote)
         request["_writer"] = writer
+        if stream_max:
+            request._stream, request.stream_left = reader, length
         try:
             resp = await self.app._dispatch(request)
         except HTTPException as e:
@@ -412,6 +432,8 @@ class Server:
 
         if isinstance(resp, StreamResponse):
             return False                       # chunked stream already written, close
+        if request.stream_left > 0:
+            keep_alive = False                 # unread upload left in the socket -> close
         payload = b"" if method == "HEAD" or resp.status in (204, 304) else resp.body
         writer.write(resp._head(keep_alive, len(resp.body) if resp.status not in (204, 304) else None) + payload)
         await writer.drain()

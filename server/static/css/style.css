@@ -946,3 +946,67 @@ a.btn { display: inline-block; width: auto; text-decoration: none; }
 .grid > *, .overview-grid > * { min-width: 0; }
 @media (max-width: 992px) { .grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+
+/* --- v3.5: záznamy (log) --- */
+.log-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+.chip {
+    border: 1px solid var(--border); background: rgba(15, 23, 42, 0.5); color: var(--text-muted);
+    border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 13px; cursor: pointer; transition: all 0.2s ease;
+}
+.chip:hover { color: var(--text-main); border-color: rgba(56, 189, 248, 0.5); }
+.chip.active { color: var(--primary); border-color: var(--primary); background: rgba(56, 189, 248, 0.12); }
+.chip-danger.active { color: #fca5a5; border-color: var(--danger); background: rgba(239, 68, 68, 0.12); }
+.log-filters { display: grid; grid-template-columns: 200px 1fr 160px 160px auto; gap: 10px; margin-bottom: 10px; }
+.log-summary { margin: 4px 0 10px; }
+.log-list { display: flex; flex-direction: column; }
+.log-day {
+    padding: 16px 2px 8px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted);
+}
+.log-row {
+    display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: start;
+    padding: 10px 14px; border-radius: 10px; border: 1px solid transparent; border-left: 3px solid var(--border);
+    background: rgba(15, 23, 42, 0.35); margin-bottom: 6px;
+}
+.log-row:hover { border-color: var(--border); }
+.log-row.sev-ok { border-left-color: var(--success); }
+.log-row.sev-warn { border-left-color: var(--warning); }
+.log-row.sev-bad { border-left-color: var(--danger); background: rgba(239, 68, 68, 0.07); }
+.log-row.sev-info { border-left-color: var(--primary); }
+.log-icon { font-size: 18px; line-height: 1.4; text-align: center; }
+.log-main { min-width: 0; }
+.log-title { font-weight: 600; font-size: 14px; }
+.log-detail { color: var(--text-muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.log-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }
+.log-time { font-weight: 700; color: var(--text-main); font-variant-numeric: tabular-nums; }
+.log-user { padding: 2px 8px; border-radius: 999px; background: rgba(56, 189, 248, 0.12); color: var(--primary); }
+.log-user.sys { background: rgba(148, 163, 184, 0.12); color: var(--text-muted); }
+.log-ip { color: var(--text-muted); font-family: monospace; }
+.log-empty { padding: 20px 0; }
+#auditPagination { justify-content: center; }
+@media (max-width: 760px) {
+    .log-filters { grid-template-columns: 1fr 1fr; }
+    .log-filters input[type=search] { grid-column: 1 / -1; order: -1; }
+    .log-row { grid-template-columns: 28px 1fr; }
+    .log-meta { grid-column: 2; flex-wrap: wrap; }
+}
+
+/* --- záloha, YAML, drobnosti --- */
+.backup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.file-btn { cursor: pointer; }
+.check { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--primary); width: 16px; height: 16px; }
+.yaml-box summary { cursor: pointer; color: var(--primary); font-weight: 600; margin-bottom: 10px; }
+.readonly-val {
+    padding: 12px 14px; border-radius: 10px; border: 1px dashed var(--border); color: var(--text-muted); font-size: 15px;
+}
+.table-responsive .user-table { min-width: 520px; }
+@media (max-width: 600px) {
+    .token-row { flex-wrap: wrap; }
+    .token-row .unified-input { flex-basis: 100%; }
+    .settings-mode .muted { display: none; }
+    .tab-nav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .tab-btn { white-space: nowrap; }
+    .inline-actions { flex-wrap: wrap; }
+    .inline-actions > * { flex: 1 1 100%; }
+}

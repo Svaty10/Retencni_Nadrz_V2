@@ -45,11 +45,11 @@ Ztracené čidlo: *Odebrat bez čidla*. **Zálohujte `/var/lib/retencka`** – b
 odemknout jen přeprogramováním.
 
 ### Záloha a obnova
-- Hub dělá každou noc zálohu na kartu (7 dní zpět). Proti odumření karty: *Nastavení → Záloha a obnova →
-  Stáhnout zálohu teď* a soubor uložit do PC / cloudu (občas, např. po přidání čidla).
-- **Obnova na nové kartě:** nainstalovat podle bodu 2, na spouštěcí oddíl karty (ve Windows viditelný disk
-  `bootfs`) nakopírovat zálohu jako `retencka-restore.db.gz`, kartu vložit a zapnout. Vrátí se měření,
-  nastavení, uživatelé, token HA i klíče čidel – čidla hned pokračují. Soubor se přejmenuje na `.done`.
+- Hub dělá každou noc zálohu na kartu (7 dní zpět). Proti odumření karty: *Nastavení → Záloha →
+  Stáhnout zálohu* a soubor uložit do PC / cloudu (občas, např. po přidání čidla).
+- **Obnova (např. nová karta):** nainstalovat podle bodu 2, přihlásit se, *Nastavení → Záloha → Nahrát zálohu*
+  (zaškrtnout „včetně nastavení a uživatelů“). Data se přidají k současným, duplicity se přeskočí – import
+  lze bezpečně opakovat. Vrátí se měření, čidla i s klíči (hned pokračují), nastavení, token HA a uživatelé.
 - Data se nemažou (8GB karta vystačí na desítky let); retenci lze nastavit v pokročilém nastavení.
 
 ## 4. Co se děje při problémech (bezúdržbovost)

@@ -2,6 +2,20 @@
 
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 
+## [3.5.0] - 2026-10-11
+
+### Přidáno
+- **Chytré dopouštění s předpovědí deště:** pod prahem hub spočítá přítok z hodinové předpovědi (srážky × střecha × součinitel). Když déšť nádrž doplní, čeká („Čeká na déšť“); dopustí, když déšť nepřijde, hladina během čekání klesne o víc než nastavené % nebo je pod prahem o víc než nastavené %. Při čekajícím dešti dopustí jen chybějící část. Nastavení u každé nádrže.
+- **Nahrání zálohy přes web:** sloučení s aktuálními daty bez duplicit (opakovatelné), doplnění čidel i s klíči, volitelně nastavení a uživatelé; upload se streamuje na disk.
+- **Nový log:** kategorie, filtr uživatel / automatika, hledání, rozsah dat, seskupení po dnech, barvy podle závažnosti, „Načíst starší“; dobře čitelný i na mobilu.
+
+### Změněno
+- Změny nastavení se v logu zobrazují srozumitelně (např. „dopouštět pod, dopustit na“ místo názvů proměnných).
+- Texty v nastavení zkrácené a vyčištěné pro koncového uživatele (bez technických poznámek), YAML pro Home Assistant ve skrytém bloku.
+- Mobil: posuvné záložky, tabulky a formuláře na šířku displeje, lišta nádrží jen na Dashboardu a v Nastavení.
+- Globální „odložení při dešti (mm)“ a „kritická hladina“ nahrazeny čekáním na déšť u každé nádrže.
+- Obnova nakopírováním na kartu odstraněna (nahrazena nahráním přes web).
+
 ## [3.4.0] - 2026-10-11
 
 ### Přidáno
