@@ -260,10 +260,10 @@
         charts[key] = new Chart($(canvasId).getContext('2d'), config);
     }
 
-    // Úseky dopouštění (jantarově) a přítoku z deště (modře): jemné podbarvení + přerušované hrany,
+    // Úseky dopouštění (zeleně) a přítoku z deště (modře): jemné podbarvení + přerušované hrany,
     // kreslí se pod křivku hladiny
     const BAND_STYLE = {
-        refill: { fill: 'rgba(251, 191, 36, 0.10)', edge: 'rgba(251, 191, 36, 0.7)' },
+        refill: { fill: 'rgba(16, 185, 129, 0.12)', edge: 'rgba(16, 185, 129, 0.6)' },
         rain: { fill: 'rgba(56, 189, 248, 0.09)', edge: 'rgba(56, 189, 248, 0.6)' }
     };
     const bandsPlugin = {
@@ -468,7 +468,7 @@
         const rows = await getFlows(rangeOf('refill'));
         upsert('refill', 'refillChart', {
             type: 'bar',
-            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: '#fbbf24' }] },
+            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: '#10b981' }] },
             options: { responsive: true, maintainAspectRatio: false }
         });
     }

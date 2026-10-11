@@ -6,7 +6,7 @@ Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle 
 
 ### Změněno
 - Úseky v grafu hladiny bez šrafování: jen jemné podbarvení pod křivkou a přerušované svislé hrany.
-- Dopouštění jantarově (úseky i denní graf dopouštění), přítok z deště zůstává modře.
+- Dopouštění zeleně jako ve staré verzi (úseky i denní graf dopouštění), přítok z deště modře.
 
 ## [3.6.0] - 2026-10-11
 

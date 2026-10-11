@@ -912,7 +912,7 @@ pre.yaml {
 /* --- legenda grafu hladiny --- */
 .chart-legend-extra { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12px; color: var(--text-muted); }
 .chart-legend-extra .lg { display: inline-block; width: 18px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-.lg-refill { background: rgba(251, 191, 36, 0.18); border-left: 1px dashed rgba(251, 191, 36, 0.9); border-right: 1px dashed rgba(251, 191, 36, 0.9); }
+.lg-refill { background: rgba(16, 185, 129, 0.2); border-left: 1px dashed rgba(16, 185, 129, 0.9); border-right: 1px dashed rgba(16, 185, 129, 0.9); }
 .lg-rain { background: rgba(56, 189, 248, 0.16); border-left: 1px dashed rgba(56, 189, 248, 0.85); border-right: 1px dashed rgba(56, 189, 248, 0.85); }
 
 /* --- přepínač základní / pokročilé nastavení --- */
