@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Vlastní účet | Retenční Nádrž</title>
+    <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-body">
+    <div class="login-box">
+        <h2>Vytvořte si účet</h2>
+        <p>Výchozí účet <code>admin</code> s heslem ze štítku slouží jen k prvnímu přihlášení.
+           Po vytvoření vlastního účtu bude zrušen.</p>
+        <div id="err" class="alert hidden" role="alert"></div>
+        <form id="setupForm">
+            <div class="form-group">
+                <label for="username">Vaše uživatelské jméno</label>
+                <input type="text" id="username" required autocomplete="username" maxlength="32" autofocus>
+            </div>
+            <div class="form-group">
+                <label for="password">Nové heslo (min. 10 znaků)</label>
+                <input type="password" id="password" required minlength="10" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label for="password2">Heslo znovu</label>
+                <input type="password" id="password2" required minlength="10" autocomplete="new-password">
+            </div>
+            <button type="submit" id="btn">Vytvořit účet a pokračovat</button>
+        </form>
+    </div>
+    <script src="/static/js/login.js"></script>
+</body>
+</html>

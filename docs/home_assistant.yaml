@@ -1,77 +1,89 @@
-# ==============================================================================
-# Home Assistant REST Integration for Retention Tank Telemetry
-# Place this configuration into your configuration.yaml or sensor package.
-# ==============================================================================
-
-sensor:
-  - platform: rest
-    name: "Retenční Nádrž"
-    resource: "http://192.168.1.150:8080/api/v1/water/state"  # Replace with your Raspberry Pi IP
-    scan_interval: 30
+# =============================================================================
+# Home Assistant – Retenční nádrž (integrace REST, 1 dotaz za minutu -> všechny entity)
+#
+# 1) secrets.yaml:   retencka_auth: "Bearer <token z Nastavení -> Home Assistant>"
+# 2) níže upravte adresu (retencka-xxxx.local nebo IP; port 8081 = jen místní síť)
+# 3) Nastavení -> Systém -> Restartovat
+#
+# Hotový YAML včetně správné adresy a VŠECH čidel vygeneruje web: Nastavení -> Home Assistant.
+# Další čidla: stejný blok s ?node=<ID> a jinými názvy (např. "Retencka jimka hladina").
+# Vzniknou entity: sensor.retencka_hladina, sensor.retencka_teplota,
+# sensor.retencka_vlhkost, sensor.retencka_baterie (+ objem, cm, napětí, signál, stav)
+# =============================================================================
+rest:
+  - resource: http://retencka.local:8081/api/v1/water/state   # první čidlo (nebo ?node=<ID>)
+    headers:
+      Authorization: !secret retencka_auth
+    scan_interval: 60
     timeout: 10
-    availability: >-
-      {{ value_json.status is defined and value_json.status != 'offline' }}
-    json_attributes:
-      - water_level_cm
-      - water_level_percent
-      - current_liters
-      - temperature
-      - humidity
-      - battery_voltage
-      - battery_low
-      - battery_est_days
-      - is_refilling
-      - refill_status
-      - expected_rain_mm
-      - last_seen_seconds_ago
-      - status
-      - timestamp
-    value_template: "{{ value_json.water_level_cm }}"
-    unit_of_measurement: "cm"
-    device_class: distance
-    state_class: measurement
-    icon: mdi:cup-water
-
-template:
-  - sensor:
-      - name: "Retenčka Hladina Procenta"
-        unique_id: retencka_hladina_procenta
-        state: "{{ state_attr('sensor.retencni_nadrz', 'water_level_percent') }}"
+    sensor:
+      - name: "Retencka hladina"
+        unique_id: retencka_hladina
+        value_template: "{{ value_json.water_level_percent }}"
         unit_of_measurement: "%"
         state_class: measurement
-        icon: mdi:gauge
-
-      - name: "Retenčka Objem Vody"
-        unique_id: retencka_objem_vody
-        state: "{{ state_attr('sensor.retencni_nadrz', 'current_liters') }}"
+        icon: mdi:water-percent
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka hladina cm"
+        unique_id: retencka_hladina_cm
+        value_template: "{{ value_json.water_level_cm }}"
+        unit_of_measurement: "cm"
+        device_class: distance
+        state_class: measurement
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka objem"
+        unique_id: retencka_objem
+        value_template: "{{ value_json.volume_liters }}"
         unit_of_measurement: "L"
         device_class: volume_storage
         state_class: measurement
-        icon: mdi:water-well
-
-      - name: "Retenčka Teplota Šachty"
-        unique_id: retencka_teplota_sachty
-        state: "{{ state_attr('sensor.retencni_nadrz', 'temperature') }}"
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka teplota"
+        unique_id: retencka_teplota
+        value_template: "{{ value_json.temperature }}"
         unit_of_measurement: "°C"
         device_class: temperature
         state_class: measurement
-
-      - name: "Retenčka Vlhkost Šachty"
-        unique_id: retencka_vlhkost_sachty
-        state: "{{ state_attr('sensor.retencni_nadrz', 'humidity') }}"
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka vlhkost"
+        unique_id: retencka_vlhkost
+        value_template: "{{ value_json.humidity }}"
         unit_of_measurement: "%"
         device_class: humidity
         state_class: measurement
-
-      - name: "Retenčka Napětí Baterie"
-        unique_id: retencka_napeti_baterie
-        state: "{{ state_attr('sensor.retencni_nadrz', 'battery_voltage') }}"
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka baterie"
+        unique_id: retencka_baterie
+        value_template: "{{ value_json.battery_percent }}"
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka baterie napeti"
+        unique_id: retencka_baterie_napeti
+        value_template: "{{ value_json.battery_voltage }}"
         unit_of_measurement: "V"
         device_class: voltage
         state_class: measurement
-
-  - binary_sensor:
-      - name: "Retenčka Baterie Vybitá"
-        unique_id: retencka_baterie_vybita
-        state: "{{ state_attr('sensor.retencni_nadrz', 'battery_low') }}"
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka signal"
+        unique_id: retencka_signal
+        value_template: "{{ value_json.rssi }}"
+        unit_of_measurement: "dBm"
+        device_class: signal_strength
+        state_class: measurement
+        entity_category: diagnostic
+        availability: "{{ value_json is defined and value_json.status != 'offline' }}"
+      - name: "Retencka stav"
+        unique_id: retencka_stav
+        value_template: "{{ value_json.status }}"
+        icon: mdi:access-point
+    binary_sensor:
+      - name: "Retencka baterie slaba"
+        unique_id: retencka_baterie_slaba
+        value_template: "{{ value_json.battery_low }}"
         device_class: battery
+      - name: "Retencka dopousti"
+        unique_id: retencka_dopousti
+        value_template: "{{ value_json.is_refilling }}"
+        device_class: running

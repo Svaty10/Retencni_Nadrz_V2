@@ -1,0 +1,14 @@
+[Unit]
+Description=Retenční nádrž – mDNS alias retencka.local
+After=avahi-daemon.service network-online.target
+Requires=avahi-daemon.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/var/lib/retencka/app/current/system/bin/retencka-alias.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

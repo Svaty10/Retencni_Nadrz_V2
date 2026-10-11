@@ -1,0 +1,11 @@
+[Unit]
+Description=Retenční nádrž – denní kontrola aktualizací
+
+[Timer]
+OnBootSec=15min
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

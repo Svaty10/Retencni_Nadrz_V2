@@ -1,4 +1,4 @@
-# Build artifacts (AVR bare-metal)
+# Build (AVR)
 build/
 *.elf
 *.hex
@@ -8,25 +8,31 @@ build/
 *.o
 *.d
 
-# Python & Webserver runtime
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.db
-*.sqlite
-*.sqlite3
 venv/
-env/
 .venv/
 
-# Editor & IDE directories
+# Runtime data & secrets – NIKDY do gitu
+*.db
+*.db-wal
+*.db-shm
+*.sqlite*
+secret_key.txt
+users.json
+setup_code
+release.key
+*.key
+dist/
+old/config.json
+old/state.json
+
+# Editor / OS
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
-
-# Operating System specific
 Thumbs.db
 Desktop.ini
 .DS_Store

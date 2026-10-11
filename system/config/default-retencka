@@ -1,0 +1,14 @@
+# /etc/default/retencka – nastavení služby (po změně: sudo systemctl restart retencka)
+RETENCKA_WEB_PORT=80
+RETENCKA_HA_PORT=8081
+RETENCKA_BIND=0.0.0.0
+RETENCKA_SPI_BUS=0
+RETENCKA_SPI_DEV=0
+RETENCKA_SPI_HZ=5000000
+RETENCKA_GDO0_GPIO=25
+RETENCKA_LOGLEVEL=INFO
+
+# Aktualizace z GitHubu (podepsané releasy)
+RETENCKA_REPO=Svaty10/Retencni_Nadrz_V2
+RETENCKA_CHANNEL=stable
+RETENCKA_AUTO_UPDATE=1

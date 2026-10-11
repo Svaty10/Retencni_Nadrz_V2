@@ -1,0 +1,20 @@
+[Unit]
+Description=Retenční nádrž – portál pro nastavení Wi-Fi (jen v režimu hotspotu)
+# started/stopped by retencka-netwatch
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /var/lib/retencka/app/current/system/bin/retencka-portal.py
+Restart=on-failure
+RestartSec=2
+MemoryMax=40M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/run/retencka
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=

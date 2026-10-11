@@ -1,0 +1,14 @@
+[Unit]
+Description=Retenční nádrž – hlídání Wi-Fi a záložní hotspot
+After=NetworkManager.service retencka-identity.service
+Requires=NetworkManager.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/var/lib/retencka/app/current/system/bin/retencka-netwatch.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

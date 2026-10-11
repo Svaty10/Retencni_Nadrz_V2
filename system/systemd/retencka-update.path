@@ -1,0 +1,9 @@
+[Unit]
+Description=Retenční nádrž – ruční žádost o aktualizaci z webu
+
+[Path]
+PathExists=/var/lib/retencka/data/update-request
+Unit=retencka-update.service
+
+[Install]
+WantedBy=multi-user.target

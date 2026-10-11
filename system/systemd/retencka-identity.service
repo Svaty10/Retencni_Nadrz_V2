@@ -1,0 +1,14 @@
+[Unit]
+Description=Retenční nádrž – identita zařízení (hostname, hotspot, setup kód)
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target avahi-daemon.service retencka.service retencka-netwatch.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/var/lib/retencka/app/current/system/bin/retencka-identity.sh
+
+[Install]
+WantedBy=multi-user.target

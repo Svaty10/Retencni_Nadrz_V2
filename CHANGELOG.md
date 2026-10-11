@@ -1,61 +1,69 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.2.0] - 2026-10-11
+
+### Přidáno
+- Šifrovaný a podepsaný rádiový protokol v3: AES-128-CTR + AES-CMAC, 32bit čítač proti přehrání, klíč z párování X25519 (firmware i server bez externích knihoven, ověřeno oficiálními vektory a vzájemnou interoperabilitou).
+- Párování: po vložení baterie čidlo 10 min nabízí párování; bez potvrzení na hubu si ponechá starý klíč. Nový klíč platí až po prvním ověřeném paketu.
+- Dopouštění zvlášť pro každou nádrž (vlastní ventil, pravidla, průtok); rozhraní pro další systémy dopouštění.
+- Automatická oprava časových razítek po pozdní synchronizaci času (Pi bez RTC).
+
+### Změněno
+- Hotspot na adrese 192.168.4.1.
+- Fuse EESAVE – klíče čidla přežijí přehrání firmwaru.
+
+## [3.1.0] - 2026-10-11
+
+### Změněno
+- První přihlášení: výchozí účet `admin` + heslo ze štítku (= heslo hotspotu) → povinné vytvoření vlastního účtu, výchozí přístup se zruší.
+- Hotspot: DHCP option 114 (RFC 8910) – telefon hned nabídne „Přihlásit se k síti“; portál i na `retencka-xxxx.local`.
+- Firmware: baterie se měří 1× za hodinu, čidlo se nikdy samo nevypíná (pod 3,3 V jen varování); odstraněn ohřev SHT40; kratší okno vzorkování sondy.
+- Baterie: křivka Li-FeS2 s 0 % při 3,0 V.
+- Kalibrace: 2 body + výška sondy nade dnem; nové pole přesnost a rozsah sondy → mrtvé pásmo, vyhlazení hladiny (medián + adaptivní EMA) a výpočet spotřeby/přítoku bez šumu; ukládá se surová i vyhlazená hladina.
+
+### Přidáno
+- Více čidel na jeden hub (až 16): přidání podle ID nebo ze seznamu slyšených, vlastní nastavení/grafy/export/HA entity pro každé čidlo, výběr čidla pro dopouštění.
+
+## [3.0.0] - 2026-10-11
+
+Kompletní revize celého systému pro Raspberry Pi Zero 2 W a nasazení u koncových zákazníků.
+
+### Uzel (firmware)
+- **Opraveno:** ADC driver přepsán pro tinyAVR řady 2 (`CTRLC.REFSEL`, `COMMAND`, 32bit `RESULT`) – původní kód se pro ATtiny1624 nepřeložil.
+- **Opraveno:** frekvence 433,92 MHz (`0x10B071`; dříve 434,00 MHz na obou stranách).
+- Paket v2 (14 B): verze, flagy chyb, ID uzlu z výrobního sériového čísla, sekvenční číslo, napětí sondy (0,1 mV) místo pevného přepočtu na mm.
+- Měření sondy: 16 dávek × 64 vzorků rozložených do ~100 ms, ořezaný průměr; ustálení 150 ms; detekce saturace.
+- Interval 5 min, adaptivně 60 s při rychlé změně hladiny, 10× 60 s po zapnutí (instalace).
+- Úsporný režim při vybité baterii (6 h) místo trvalého vypnutí; ohřev SHT40 proti kondenzaci.
+- Obnova TEST registrů CC1101 po SLEEP, vypnuté vstupní buffery plovoucích pinů ve spánku.
+
+### Server
+- Náhrada FastAPI/Jinja vlastním HTTP serverem nad asyncio – **bez externích závislostí**, ~30 MB RSS.
+- **Bezpečnost:** všechna API vyžadují přihlášení (dříve bylo možné bez přihlášení spustit dopouštění, číst Hydrawise klíč a podvrhnout data); session na serveru, CSRF, kontrola Origin, zpomalování a zamykání účtů, striktní CSP, oprava XSS v audit logu, maskování API klíče, první nastavení přes instalační kód.
+- Home Assistant API na samostatném portu 8081 s Bearer tokenem + generátor YAML.
+- Kalibrace na serveru (vícebodová, „skutečná hladina je teď X cm“), přepočet historie, korekce baterie.
+- Párování čidla (sousední nádrže se nepletou), statistika ztrát paketů a RSSI.
+- Dopouštění v uzavřené smyčce s bezpečnostními pojistkami (čerstvá data, max. doba, detekce poruchy ventilu, odklad při dešti, kalibrace průtoku).
+- Spotřeba počítaná hysterezí (zachytí i pomalý odběr), přítok ze srážek.
+- Grafy s volbou 24 h / 7 d / 30 d / rok **a vlastním rozsahem od–do**; vzhled převzat z původní verze; font a Chart.js lokálně.
+- SQLite WAL, hodinové agregace, retence, samooprava poškozené DB; systemd watchdog.
+
+### Systém
+- Instalační skript, sandboxované systemd služby, HW watchdog, logy v RAM, vypnutý swap.
+- Wi-Fi provisioning: hotspot `Retencka-XXXX` + captive portál, automatický návrat ke známé síti.
+- Unikátní `retencka-xxxx.local` + sdílený alias `retencka.local` bez kolizí.
+- Podepsané (Ed25519) aktualizace z GitHub Releases s automatickým rollbackem; GitHub Action pro vydání.
 
 ## [2.2.0] - 2026-10-10
-
-### Added
-- Complete user authentication and session management system using Starlette `SessionMiddleware` and persistent `secret_key.txt`.
-- Responsive glassmorphism login portal (`webserver/templates/login.html`) with route protection redirecting unauthenticated users from `/` to `/login`.
-- User account database (`webserver/users.json`) with role-based access control (`admin`, `user`) and Werkzeug `scrypt` password hashing.
-- Brute-force protection tracking failed login attempts per client IP with a 5-minute lockout policy after 5 consecutive failures.
-- User session badge in dashboard header displaying current username, role, and logout action (`/logout`).
-- Dedicated "🔒 Moje heslo" tab allowing logged-in users to securely change their password (`POST /api/v1/user/password`).
+- Přihlašování, role, brute-force ochrana, změna hesla.
 
 ## [2.1.0] - 2026-10-10
-
-### Added
-- Hunter Hydrawise REST API integration (`/api/v1/water/refill/start`, `/api/v1/water/refill/stop`) allowing automated and manual tank refilling.
-- Dynamic refill duration calculations based on tank dimensions, missing volume, and measured municipal water flow rate.
-- Open-Meteo precipitation forecast integration with smart rain deferral logic protecting against unnecessary municipal water consumption.
-- Three-tab web dashboard interface:
-  - **Dashboard**: Live tank animation, telemetry cards, tactile `[−]` and `[+]` refill stepping buttons, and Chart.js history.
-  - **Nastavení & Hydrawise**: Live configuration form persisting to `config.json` without server restart.
-  - **Historie & Data**: Real-time tabular logs with streaming CSV export (`/api/v1/water/export.csv`).
-- High-capacity SQLite storage scaled for 8 GB+ USB flash drives (up to 500 000 records / 14+ years retention).
-- Battery runtime estimation algorithm based on Li-FeS2 3S multi-day discharge trend.
-- Updated documentation in `docs/api.md`, `docs/home_assistant.yaml`, and `README.md`.
+- Hydrawise, Open-Meteo, záložky dashboardu, CSV export.
 
 ## [2.0.0] - 2026-10-10
-
-### Added
-- Reorganized complete codebase into 3 dedicated components: `uzel/`, `webserver/`, and `docs/`.
-- Lightweight FastAPI / Uvicorn telemetry webserver for Raspberry Pi 3 B+ (`webserver/app.py`) with memory footprint < 35 MB RAM.
-- Hardware SPI CC1101 transceiver driver (`webserver/cc1101_receiver.py`) on SPI0 (5 MHz) and BCM GPIO 25 with automatic state-machine watchdog and soft-reset recovery.
-- Compact 8-byte Little-Endian binary telemetry packet (`vbat_raw_mv`, `temp_x100`, `hum_x100`, `level_mm`) across both microcontroller firmware and Python backend.
-- Thread-safe in-memory cache and lightweight rotating SQLite database (`history.db`).
-- Home Assistant REST endpoints: `GET /api/v1/water/state` with online/stale/offline state tracking, `GET /api/v1/water/history`, and `GET /health`.
-- Responsive single-page web dashboard (`webserver/templates/index.html`) featuring an animated water tank graphic, live telemetry cards, and interactive historical Chart.js graphs.
-- Production systemd unit file (`webserver/retencka.service`) enforcing strict memory caps (`MemoryMax=50M`) and automatic crash recovery.
-- Complete Home Assistant sensor configuration YAML (`docs/home_assistant.yaml`).
-- Raspberry Pi 3 B+ 40-pin GPIO wiring diagram and hardware setup manual (`docs/wiring_rpi.md`).
-- REST API specification document (`docs/api.md`) and deployment guide (`docs/installation.md`).
+- Rozdělení na `uzel/`, `webserver/`, `docs/`; FastAPI server pro Pi 3 B+.
 
 ## [1.0.0] - 2026-10-10
-
-### Added
-- Git repository initialization with LF normalization (`.gitattributes`) and build exclusion rules (`.gitignore`).
-- Complete bare-metal C (AVR-libc) firmware implementation for ATtiny1624 SOIC-14 microcontrollers.
-- Low-power clock management module (`power.c`, `power.h`) configuring CPU prescaler to 3.333 MHz and RTC Periodic Interrupt Timer (PIT) for 15-minute wakeups.
-- Digital input buffer elimination (`PORT_ISC_INPUT_DISABLE_gc`) on analog pins and unused buffers for sleep current reduction down to < 1.2 µA.
-- Brown-Out Detector (BOD) configuration with active monitoring and complete sleep disablement.
-- Oversampled ADC0 driver (`adc.c`, `adc.h`) with 16× hardware sample accumulation and dedicated internal references (1.024 V for battery, 2.500 V for hydrostatic probe).
-- High-side P-MOSFET battery switcher control via PA7 and TPS63900 5V boost control via PB3 with exact RC settling delays.
-- Hardware/Software timeout-protected TWI0 driver for Sensirion SHT40 (`sht40.c`, `sht40.h`) featuring 9-clock SCL bus recovery and Sensirion CRC-8 checksum verification.
-- CC1101 transceiver driver (`cc1101.c`, `cc1101.h`) operating at 433.92 MHz with 4.8 kBaud 2-FSK, hardware whitening, CRC-16, crystal startup handshake, and instant `SPWD` sleep entry.
-- Critical battery failsafe shutdown routine protecting 3S Li-FeS2 battery cells below 3.0 V cut-off cliff.
-- Production `Makefile` supporting compilation, disassembly generation, size checks, and SerialUPDI flashing via `avrdude`.
-- Architectural guide and hardware pinout map in `README.md`.
+- První firmware ATtiny1624.

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<!--
+  Retenční Nádrž – hlavní panel (v3)
+  Statická stránka bez serverových šablon; data se načítají z /api/* (JSON).
+  Žádné inline skripty ani styly (striktní Content-Security-Policy).
+-->
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Retenční Nádrž</title>
+    <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-container">
+    <header class="app-header">
+        <div class="logo">💧 Retenční Nádrž</div>
+        <div class="header-actions">
+            <span class="status-pill" id="statusPill">Načítám…</span>
+            <span class="user-badge" id="userBadge"></span>
+            <button class="btn btn-outline" id="logoutBtn" type="button">Odhlásit</button>
+        </div>
+    </header>
+
+    <nav class="tab-nav" id="tabNav">
+        <button class="tab-btn active" data-tab="dashboard" type="button">Dashboard</button>
+        <button class="tab-btn admin-only hidden" data-tab="nastaveni" type="button">Nastavení</button>
+        <button class="tab-btn admin-only hidden" data-tab="logovani" type="button">Logování</button>
+        <button class="tab-btn admin-only hidden" data-tab="uzivatele" type="button">Správa uživatelů</button>
+        <button class="tab-btn" data-tab="heslo" type="button">Můj účet</button>
+    </nav>
+
+    <div id="nodeBar" class="node-bar hidden" role="tablist" aria-label="Čidla"></div>
+
+    <div id="banner" class="banner hidden"></div>
+
+    <!-- ======================================================= DASHBOARD -->
+    <div id="dashboard" class="tab-content active">
+        <div class="grid">
+            <div class="card tank-card">
+                <h3>Stav Nádrže</h3>
+                <div class="tank-wrapper">
+                    <div class="tank-glass">
+                        <div class="water-level" id="waterLevel"></div>
+                        <div class="tank-text">
+                            <h2 id="txtPercent">– %</h2>
+                            <p id="txtLiters">– L</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-item"><span>Výška hladiny</span><strong id="txtLevelCm">–</strong></div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-item"><span>Poslední aktualizace</span><strong id="txtUpdated">–</strong></div>
+                </div>
+            </div>
+
+            <div class="card info-cards">
+                <h3>Přehled</h3>
+                <div class="stats-grid">
+                    <div class="stat-box"><label>Teplota</label><div class="val" id="txtTemp">–</div></div>
+                    <div class="stat-box"><label>Vlhkost</label><div class="val" id="txtHum">–</div></div>
+                    <div class="stat-box" id="batBox">
+                        <label>Baterie (3× Li-FeS2)</label>
+                        <div class="val" id="txtBat">–</div>
+                        <div class="sub-val" id="txtBatV">–</div>
+                    </div>
+                    <div class="stat-box"><label>Odhad výdrže baterie</label><div class="val" id="txtBatEst">–</div></div>
+                    <div class="stat-box"><label>Spotřeba dnes</label><div class="val" id="txtConsToday">–</div></div>
+                    <div class="stat-box"><label>Spotřeba za 7 dní</label><div class="val" id="txtCons7d">–</div></div>
+                    <div class="stat-box"><label>Předpověď srážek na 2 dny</label><div class="val" id="txtRain">–</div></div>
+                    <div class="stat-box" id="refillBox">
+                        <label>Stav dopouštění</label>
+                        <div class="val" id="txtRefillStatus">–</div>
+                        <div class="sub-val" id="txtRefillTime">–</div>
+                    </div>
+                    <div class="stat-box" id="linkBox">
+                        <label>Signál čidla</label>
+                        <div class="val" id="txtRssi">–</div>
+                        <div class="sub-val" id="txtLoss">–</div>
+                    </div>
+                </div>
+
+                <div class="action-buttons admin-only hidden" id="refillActions">
+                    <input type="number" id="manualPctInput" placeholder="Cílová hladina (%)" min="1" max="100" class="unified-input">
+                    <button class="btn btn-primary" id="refillStartBtn" type="button">Dopustit</button>
+                    <button class="btn btn-danger" id="refillStopBtn" type="button">Zastavit dopouštění</button>
+                </div>
+            </div>
+
+            <!-- 1. Hladina -->
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h3>Hladina vody</h3>
+                    <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
+                </div>
+                <div class="chart-container"><canvas id="historyChart"></canvas></div>
+            </div>
+
+            <!-- 2. Spotřeba -->
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h3>Spotřeba vody</h3>
+                    <div class="range-picker" data-chart="consumption" data-default="7d" data-kind="days"></div>
+                </div>
+                <div class="chart-container"><canvas id="consumptionChart"></canvas></div>
+            </div>
+
+            <!-- 2b. Dopouštění -->
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h3>Dopouštění vody z řadu</h3>
+                    <div class="range-picker" data-chart="refill" data-default="7d" data-kind="days"></div>
+                </div>
+                <div class="chart-container"><canvas id="refillChart"></canvas></div>
+            </div>
+
+            <!-- 3. Klima -->
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h3>Klima v šachtě</h3>
+                    <div class="range-picker" data-chart="klima" data-default="7d" data-kind="time"></div>
+                </div>
+                <div class="chart-container"><canvas id="klimaChart"></canvas></div>
+            </div>
+
+            <!-- 4. Počasí -->
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h3>Předpověď počasí</h3>
+                    <span class="hint">Výhled na 7 dní</span>
+                </div>
+                <div class="chart-container"><canvas id="weatherChart"></canvas></div>
+            </div>
+
+            <!-- 5. Baterie -->
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h3>Stav Baterie</h3>
+                    <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
+                </div>
+                <div class="chart-container"><canvas id="batteryChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================= NASTAVENÍ -->
+    <div id="nastaveni" class="tab-content">
+        <div class="stack">
+            <!-- Kalibrace a rozměry -->
+            <div class="card">
+                <h2>Kalibrace a Rozměry Nádrže – <span id="calNodeName">–</span></h2>
+                <p class="muted">Sonda vrací napětí; převod na výšku vodního sloupce dělá server podle dvou kalibračních bodů
+                    a výšky sondy nade dnem. Kalibraci lze kdykoli změnit bez zásahu do čidla v nádrži.
+                    Nastavení platí pro čidlo vybrané nahoře.</p>
+
+                <div class="live-data-box mb-25">
+                    <h3>Živá data ze senzoru</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box"><label>Napětí sondy</label><div class="val" id="liveProbeMv">–</div></div>
+                        <div class="stat-box"><label>Vodní sloupec nad sondou</label><div class="val" id="liveColumn">–</div></div>
+                        <div class="stat-box"><label>Hladina od dna</label><div class="val" id="liveLevel">–</div></div>
+                        <div class="stat-box"><label>Interval čidla</label><div class="val" id="liveInterval">–</div></div>
+                    </div>
+                </div>
+
+                <div class="config-form">
+                    <h3>Rychlá kalibrace podle skutečnosti</h3>
+                    <p class="muted small">Změřte skutečnou hladinu (od dna) metrem a zadejte ji – nahradí bližší ze dvou kalibračních bodů.
+                        Nejpřesnější je jeden bod při nízké a druhý při vysoké hladině.</p>
+                    <div class="inline-actions">
+                        <input type="number" step="0.1" id="calActualCm" class="unified-input" placeholder="Skutečná hladina od dna (cm)">
+                        <button class="btn btn-primary" id="calAddBtn" type="button">Uložit kalibrační bod</button>
+                    </div>
+                </div>
+
+                <form id="calForm" class="config-form">
+                    <h3>Čidlo</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Název (např. Retenční nádrž, Jímka)</label>
+                            <input type="text" name="name" maxlength="40" class="unified-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>ID čidla</label>
+                            <input type="text" id="calNodeId" class="unified-input" disabled>
+                        </div>
+                    </div>
+                    <h3 class="mt-15">Základní fyzické rozměry</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Max. hloubka nádrže (cm) <small>(určuje 100 %)</small></label>
+                            <input type="number" step="0.1" name="max_depth_cm" class="unified-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Výška sondy nade dnem (cm) <small>(offset – přičte se k vodnímu sloupci)</small></label>
+                            <input type="number" step="0.1" name="sensor_offset_cm" class="unified-input" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Plocha nádrže (m²)</label>
+                            <input type="number" step="0.01" name="tank_area_m2" class="unified-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Plocha střechy (m²)</label>
+                            <input type="number" step="1" name="catchment_area_m2" class="unified-input">
+                        </div>
+                    </div>
+
+                    <h3 class="mt-15">Kalibrace sondy (vodní sloupec NAD sondou)</h3>
+                    <table class="cal-table">
+                        <thead><tr><th>Bod</th><th>Napětí sondy (mV)</th><th>Vodní sloupec (cm)</th></tr></thead>
+                        <tbody id="calPoints"></tbody>
+                    </table>
+
+                    <h3 class="mt-15">Přesnost sondy a vyhlazení</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Přesnost sondy (% z rozsahu) <small>(z datasheetu, typicky 0,2–0,5 %)</small></label>
+                            <input type="number" step="0.01" name="probe_accuracy_pct" class="unified-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Měřicí rozsah sondy (cm) <small>(např. 200 pro 0–2 m)</small></label>
+                            <input type="number" step="1" name="probe_range_cm" class="unified-input" required>
+                        </div>
+                    </div>
+                    <p class="muted small" id="deadbandP">Mrtvé pásmo: <strong id="deadbandInfo">–</strong>. Změny menší než nejistota sondy se vyhlazují
+                        (bez „zubů“ v grafu) a nepočítají se jako spotřeba ani přítok; skutečné změny (dopouštění, déšť) projdou hned.</p>
+
+                    <h3 class="mt-15">Dopouštění této nádrže</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Systém dopouštění</label>
+                            <select name="refill_provider" class="unified-select">
+                                <option value="none">Žádný</option>
+                                <option value="hydrawise">Hunter Hydrawise</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Hydrawise Relay ID (ventil / zóna)</label>
+                            <input type="text" name="hydrawise_relay_id" class="unified-input" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Vlastní Hydrawise API Key <small>(jen pokud je ventil na jiném účtu)</small></label>
+                            <input type="password" name="hydrawise_api_key" class="unified-input" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Automatické dopouštění</label>
+                            <select name="auto_refill_enabled" class="unified-select">
+                                <option value="false">Vypnuto</option>
+                                <option value="true">Zapnuto</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Hranice pro spuštění (%)</label>
+                            <input type="number" step="1" name="refill_threshold_pct" class="unified-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Automaticky dopustit na (%)</label>
+                            <input type="number" step="1" name="auto_refill_target_pct" class="unified-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Maximální limit dopouštění (%)</label>
+                            <input type="number" step="1" min="0" max="100" name="max_refill_pct" class="unified-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Kritická hladina (%) <small>(dopouští i při předpovědi deště)</small></label>
+                            <input type="number" step="1" name="critical_level_pct" class="unified-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Průtok z řadu (L/min) <small id="realFlowHint"></small></label>
+                            <input type="number" step="0.1" name="flow_rate_lpm" class="unified-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Nejdelší doba dopouštění (min)</label>
+                            <input type="number" step="1" name="max_refill_minutes" class="unified-input">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary mt-20 w-100">Uložit nastavení nádrže</button>
+                </form>
+
+                <div class="config-form">
+                    <h3>Přepočet historie</h3>
+                    <div class="alert-row">
+                        <p class="muted small">Po změně kalibrace nebo rozměrů lze stávající historii přepočítat novou křivkou
+                            (surová napětí sondy se ukládají).</p>
+                        <button class="btn btn-outline" id="recomputeBtn" type="button">Přepočítat historii</button>
+                    </div>
+                </div>
+
+                <div class="config-form">
+                    <h3>Kalibrace napětí baterie</h3>
+                    <div class="inline-actions">
+                        <input type="number" step="0.001" id="batActualV" class="unified-input" placeholder="Změřené napětí baterie (V), např. 4.950">
+                        <button class="btn btn-primary" id="batCalBtn" type="button">Kalibrovat</button>
+                    </div>
+                    <p class="muted small mt-15">Korekční faktor: <strong id="batTrim">–</strong>. Baterie se měří 1× za hodinu;
+                        u 3,0 V (1,0 V na článek) hlásí 0 %, čidlo se ale samo nevypíná.</p>
+                </div>
+            </div>
+
+            <!-- Systémové nastavení -->
+            <div class="card">
+                <h2>Systémové Nastavení</h2>
+                <form id="sysForm" class="config-form">
+                    <h3 class="section-title">Baterie čidel</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Kapacita baterie (mAh) <small>(pro odhad výdrže)</small></label>
+                            <input type="number" step="1" name="battery_capacity_mah" class="unified-input">
+                        </div>
+                    </div>
+
+                    <h3 class="section-title">Počasí a Chytré dopouštění</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Zohlednit počasí</label>
+                            <select name="rain_defer_enabled" class="unified-select">
+                                <option value="true">Ano</option>
+                                <option value="false">Ne</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Hranice pro odložení (mm srážek za 2 dny)</label>
+                            <input type="number" step="0.1" name="rain_defer_threshold_mm" class="unified-input">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Zeměpisná šířka (Latitude)</label>
+                            <input type="number" step="0.0001" name="latitude" class="unified-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Zeměpisná délka (Longitude)</label>
+                            <input type="number" step="0.0001" name="longitude" class="unified-input">
+                        </div>
+                    </div>
+
+                    <h3 class="section-title">Hydrawise účet</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Hydrawise API Key <small>(společný pro všechny nádrže; uložený klíč se nezobrazuje)</small></label>
+                            <input type="password" name="hydrawise_api_key" class="unified-input" autocomplete="off">
+                        </div>
+                    </div>
+                    <p class="muted small">Ventil a pravidla dopouštění se nastavují u každé nádrže zvlášť (Kalibrace a rozměry → Dopouštění této nádrže).</p>
+
+                    <button type="submit" class="btn btn-primary mt-20 w-100">Uložit Systémové Nastavení</button>
+                </form>
+            </div>
+
+            <!-- Čidla a rádio -->
+            <div class="card">
+                <h2>Čidla a Rádio</h2>
+                <p class="muted">Data z čidel jsou šifrovaná a podepsaná (AES-128 + CMAC, klíč z párování X25519).
+                    Hub přijímá jen spárovaná čidla – sousední nádrže se nepletou a data nelze podvrhnout.</p>
+                <div class="table-responsive">
+                    <table class="user-table">
+                        <thead><tr><th>Čidlo</th><th>ID</th><th>Stav</th><th>Signál</th><th>Baterie</th><th></th></tr></thead>
+                        <tbody id="nodesBody"></tbody>
+                    </table>
+                </div>
+                <div class="config-form">
+                    <h3>Spárovat čidlo</h3>
+                    <p class="muted small">1) Vložte do čidla baterii (při výměně baterie vyndat a vložit) – čidlo pak 10 minut nabízí párování.
+                        2) Níže se objeví jeho ID; porovnejte ho se štítkem čidla a klikněte na <b>Spárovat</b>.
+                        Pokud nové párování nepotvrdíte, čidlo si po výměně baterie ponechá původní klíč a dál funguje.</p>
+                    <div class="table-responsive">
+                        <table class="user-table">
+                            <thead><tr><th>Čidlo nabízí párování</th><th>Signál</th><th>Naposledy</th><th>Stav</th><th></th></tr></thead>
+                            <tbody id="pairBody"></tbody>
+                        </table>
+                    </div>
+                    <form id="addNodeForm" class="inline-actions">
+                        <input type="text" id="newNodeId" class="unified-input" placeholder="…nebo zadejte ID ze štítku, např. 3F2A" maxlength="6" required autocomplete="off">
+                        <input type="text" id="newNodeName" class="unified-input" placeholder="Název (např. Jímka)" maxlength="40">
+                        <button class="btn btn-primary" type="submit">Čekat na toto čidlo</button>
+                    </form>
+                </div>
+                <h3 class="mt-25">Slyšená čidla v okolí</h3>
+                <div class="table-responsive">
+                    <table class="user-table">
+                        <thead><tr><th>ID</th><th>Signál</th><th>Naposledy</th><th>Paketů</th><th>Typ</th></tr></thead>
+                        <tbody id="heardBody"></tbody>
+                    </table>
+                </div>
+                <dl class="kv mt-20" id="radioInfo"></dl>
+            </div>
+
+            <!-- Home Assistant -->
+            <div class="card">
+                <h2>Home Assistant</h2>
+                <p class="muted">Endpoint běží na samostatném portu jen v místní síti a vyžaduje token.
+                    Do Cloudflare tunelu jej nepřidávejte. YAML obsahuje entity pro všechna přidaná čidla.</p>
+                <div class="token-row mb-20">
+                    <input type="password" id="haToken" class="unified-input" readonly>
+                    <button class="btn btn-outline" id="haShow" type="button">Zobrazit</button>
+                    <button class="btn btn-outline" id="haCopy" type="button">Kopírovat YAML</button>
+                    <button class="btn btn-danger" id="haRotate" type="button">Nový token</button>
+                </div>
+                <pre class="yaml" id="haYaml"></pre>
+            </div>
+
+            <!-- Systém -->
+            <div class="card">
+                <h2>Systém a Aktualizace</h2>
+                <dl class="kv" id="sysInfo"></dl>
+                <button class="btn btn-primary mt-20" id="updateBtn" type="button">Zkontrolovat aktualizace</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================= LOGOVÁNÍ -->
+    <div id="logovani" class="tab-content">
+        <div class="stack">
+            <div class="card">
+                <h2>📋 Systémový Log</h2>
+                <p class="muted mb-20">Přehled všech akcí v systému – přihlášení, změny nastavení, dopouštění a další.</p>
+                <div class="card-head">
+                    <select id="auditActionFilter" class="unified-select">
+                        <option value="">Všechny akce</option>
+                        <option value="LOGIN_SUCCESS">Přihlášení (úspěšné)</option>
+                        <option value="LOGIN_FAILED">Přihlášení (neúspěšné)</option>
+                        <option value="LOGOUT">Odhlášení</option>
+                        <option value="SETTINGS_CHANGED">Změna nastavení</option>
+                        <option value="CALIBRATION">Kalibrace</option>
+                        <option value="USER_ADDED">Přidání uživatele</option>
+                        <option value="USER_DELETED">Smazání uživatele</option>
+                        <option value="USER_ROLE_CHANGED">Změna role</option>
+                        <option value="PASSWORD_CHANGED">Změna hesla</option>
+                        <option value="MANUAL_REFILL">Manuální dopouštění</option>
+                        <option value="AUTO_REFILL">Automatické dopouštění</option>
+                        <option value="REFILL_ERROR">Chyba dopouštění</option>
+                        <option value="NODE_PAIRED">Přidání čidla</option>
+                        <option value="NODE_REMOVED">Odebrání čidla</option>
+                        <option value="NODE_PAIRING">Čekání na párování</option>
+                        <option value="TIME_FIXED">Oprava času</option>
+                        <option value="NODE_BOOT">Restart čidla</option>
+                    </select>
+                    <button class="btn btn-outline" id="auditRefresh" type="button">🔄 Obnovit</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="audit-table">
+                        <thead><tr><th>Datum a čas</th><th>Uživatel</th><th>IP adresa</th><th>Akce</th><th>Detail</th></tr></thead>
+                        <tbody id="auditLogBody"></tbody>
+                    </table>
+                </div>
+                <div class="audit-pagination" id="auditPagination"></div>
+            </div>
+
+            <div class="card">
+                <h2>Export dat</h2>
+                <p class="muted">Naměřená data vybraného čidla ve formátu CSV (oddělovač středník, desetinná čárka – otevře se přímo v Excelu).</p>
+                <div class="card-head">
+                    <div class="range-picker" data-chart="export" data-default="30d" data-kind="days"></div>
+                    <button class="btn btn-primary" id="exportBtn" type="button">Stáhnout CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================= UŽIVATELÉ -->
+    <div id="uzivatele" class="tab-content">
+        <div class="card">
+            <h2>Správa uživatelů</h2>
+            <div class="table-responsive">
+                <table class="user-table">
+                    <thead><tr><th>Jméno</th><th>Role</th><th>Poslední přihlášení</th><th>Akce</th></tr></thead>
+                    <tbody id="usersBody"></tbody>
+                </table>
+            </div>
+            <div class="config-form mt-25">
+                <form id="addUserForm">
+                    <h3>Přidat nového uživatele</h3>
+                    <div class="form-row">
+                        <div class="form-group"><label>Jméno</label><input type="text" id="newUsername" class="unified-input" required maxlength="32" autocomplete="off"></div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <select id="newRole" class="unified-select">
+                                <option value="user">Uživatel (jen čtení)</option>
+                                <option value="admin">Administrátor</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Heslo (min. 10 znaků)</label><input type="password" id="newPassword" class="unified-input" required minlength="10" autocomplete="new-password"></div>
+                        <div class="form-group"><label>Potvrzení hesla</label><input type="password" id="newPasswordConfirm" class="unified-input" required minlength="10" autocomplete="new-password"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-15 w-100">Přidat uživatele</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================= MŮJ ÚČET -->
+    <div id="heslo" class="tab-content">
+        <div class="card account-card">
+            <h2>🔑 Změna hesla</h2>
+            <p class="muted mb-20">Heslo musí mít alespoň 10 znaků. Po změně budou odhlášena všechna ostatní zařízení.</p>
+            <form id="pwForm" class="config-form">
+                <div class="form-group mb-20">
+                    <label>Současné heslo</label>
+                    <input type="password" id="pwOld" class="unified-input" required autocomplete="current-password">
+                </div>
+                <div class="form-group mb-20">
+                    <label>Nové heslo</label>
+                    <input type="password" id="pwNew" class="unified-input" required minlength="10" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>Potvrzení nového hesla</label>
+                    <input type="password" id="pwNew2" class="unified-input" required minlength="10" autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn btn-primary mt-15 w-100">Uložit nové heslo</button>
+            </form>
+            <p class="muted small mt-20" id="aboutLine"></p>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,8 +1,6 @@
 /**
  * @file sht40.h
- * @brief Sensirion SHT40 Temperature and Humidity sensor driver via TWI0 (I2C).
- * @author Matej
- * @date 2026-10-10
+ * @brief Sensirion SHT40 driver (TWI0, timeouts, bus recovery, CRC-8).
  */
 
 #ifndef SHT40_H_
@@ -10,55 +8,18 @@
 
 #include "config.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/** SHT40 7-bit I2C Address */
 #define SHT40_I2C_ADDR              0x44
-
-/** SHT40 Measurement Commands */
 #define SHT40_CMD_MEASURE_HIGH_PREC 0xFD
-#define SHT40_CMD_MEASURE_MED_PREC  0xF6
-#define SHT40_CMD_MEASURE_LOW_PREC  0xE0
-#define SHT40_CMD_READ_SERIAL       0x89
 #define SHT40_CMD_SOFT_RESET        0x94
 
 /**
- * @brief Initialize TWI0 master peripheral at 100 kHz with hardware timeouts.
- */
-void sht40_init(void);
-
-/**
- * @brief Deinitialize TWI0 to eliminate peripheral leakage in deep sleep.
- */
-void sht40_deinit(void);
-
-/**
- * @brief Perform a high-precision measurement on SHT40 with timeout and CRC validation.
- *
- * @param[out] temp_x100 Pointer to store temperature in 0.01 deg C (e.g. 2150 = 21.50 C).
- * @param[out] hum_x100 Pointer to store relative humidity in 0.01 % RH (e.g. 6540 = 65.40 %).
- * @return true if measurement and CRC-8 checks succeeded, false on bus/timeout/CRC error.
+ * @brief High-precision measurement.
+ * @param[out] temp_x100 Temperature [0.01 degC].
+ * @param[out] hum_x100  Relative humidity [0.01 %], clamped to 0..10000.
+ * @return false on bus error, timeout or CRC mismatch.
  */
 bool sht40_read_measurements(int16_t *temp_x100, uint16_t *hum_x100);
 
-/**
- * @brief Calculate Sensirion 8-bit CRC.
- *
- * @param data Pointer to input data buffer.
- * @param len Number of bytes.
- * @return Calculated 8-bit CRC.
- */
 uint8_t sht40_calc_crc(const uint8_t *data, uint8_t len);
-
-/**
- * @brief Perform TWI hardware/software bus recovery in case SDA line gets held low.
- */
-void sht40_bus_recover(void);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* SHT40_H_ */

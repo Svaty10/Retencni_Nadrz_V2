@@ -1,181 +1,162 @@
 /**
  * @file adc.c
- * @brief Deterministic, oversampled ADC0 implementation for ATtiny1624.
- * @author Matej
- * @date 2026-10-10
+ * @brief Deterministic oversampled ADC0 driver for the ATtiny1624 (tinyAVR 2-series).
+ *
+ * The 2-series ADC differs from 0/1-series and AVR-Dx parts:
+ *  - reference is selected in ADC0.CTRLC (REFSEL) together with TIMEBASE,
+ *  - conversions are started via ADC0.COMMAND (MODE + START),
+ *  - the accumulated result is a 32-bit ADC0.RESULT.
+ *
+ * Each "burst" is one BURST-mode conversion of 64 accumulated 12-bit samples
+ * (max 64 * 4095 = 262080). We scale bursts to a 16x-oversampled count
+ * (sum / 4, max 65520) which keeps all following math in 32 bits.
  */
 
 #include "adc.h"
 #include <util/delay.h>
 
-/* Maximum loop iterations before timing out on an ADC conversion */
-#define ADC_TIMEOUT_CYCLES  30000UL
+#define ADC_TIMEOUT_LOOPS     60000UL      /* >> 64 samples * ~20 us */
+#define ADC_TIMEBASE_VAL      ((F_CPU + 999999UL) / 1000000UL)   /* CLK_PER cycles per 1 us */
+#define ADC_SAMPDUR_VAL       16U           /* extra sample time for high-Z dividers */
+#define BURST_FULLSCALE_X16   65000UL       /* ~99.2 % of full scale -> clip flag */
+
+/* Simple insertion sort for tiny arrays (n <= 16). */
+static void sort_u32(uint32_t *a, uint8_t n)
+{
+    for (uint8_t i = 1; i < n; i++) {
+        uint32_t key = a[i];
+        int8_t j = (int8_t)(i - 1);
+        while (j >= 0 && a[j] > key) {
+            a[j + 1] = a[j];
+            j--;
+        }
+        a[j + 1] = key;
+    }
+}
 
 void adc_init(void)
 {
-    /* Keep ADC disabled until an active measurement sequence begins */
-    ADC0.CTRLA = 0;
-
-    /* Set clock prescaler to DIV4 (3.333 MHz / 4 = ~833 kHz ADC clock) */
-    ADC0.CTRLB = ADC_PRESC_DIV4_gc;
-
-    /* Sample duration: extend sampling period by 32 ADC clock cycles
-     * to properly charge ADC S/H capacitance through high impedance RC divider (180k / 68k) */
-    ADC0.CTRLE = 32;
-
-    /* Enable 16x sample accumulation for noise filtering and increased resolution */
-    ADC0.CTRLF = ADC_SAMPNUM_ACC16_gc;
+    ADC0.CTRLA = 0;                              /* disabled until needed */
+    ADC0.CTRLB = ADC_PRESC_DIV4_gc;              /* 3.333 MHz / 4 = 833 kHz */
+    ADC0.CTRLE = ADC_SAMPDUR_VAL;
+    ADC0.CTRLF = ADC_SAMPNUM_ACC64_gc;           /* 64 samples per burst */
+    ADC0.MUXNEG = 0;
+    ADC0.PGACTRL = 0;                            /* PGA off (saves current) */
 }
 
-static bool adc_convert_channel(uint8_t muxpos, uint16_t *result)
+static void adc_start(uint8_t refsel, uint8_t muxpos)
 {
-    /* Select input channel */
+    ADC0.CTRLC = refsel | (uint8_t)(ADC_TIMEBASE_VAL << ADC_TIMEBASE_gp);
     ADC0.MUXPOS = muxpos;
+    ADC0.CTRLA = ADC_ENABLE_bm;
+    _delay_us(100);                              /* internal reference start-up */
+}
 
-    /* Clear any pending result flag */
+static void adc_stop(void)
+{
+    ADC0.CTRLA = 0;
+}
+
+/** One burst (64 accumulated samples) -> 16x-oversampled count (0..65520). */
+static bool adc_burst_x16(uint32_t *out_x16)
+{
     ADC0.INTFLAGS = ADC_RESRDY_bm;
+    ADC0.COMMAND = ADC_MODE_BURST_gc | ADC_START_IMMEDIATE_gc;
 
-    /* Start conversion */
-    ADC0.COMMAND = ADC_STCONV_bm;
-
-    /* Wait for result ready with software timeout to prevent deadlocks */
-    uint32_t timeout = ADC_TIMEOUT_CYCLES;
+    uint32_t timeout = ADC_TIMEOUT_LOOPS;
     while (!(ADC0.INTFLAGS & ADC_RESRDY_bm)) {
         if (--timeout == 0) {
-            return false; /* Timeout error */
+            ADC0.COMMAND = 0;                    /* stop */
+            return false;
         }
     }
-
-    /* Read 16-bit accumulated result */
-    *result = ADC0.RES;
-
-    /* Clear interrupt flag by writing 1 */
-    ADC0.INTFLAGS = ADC_RESRDY_bm;
-
+    uint32_t sum = ADC0.RESULT;                  /* reading RESULT clears RESRDY */
+    *out_x16 = sum >> 2;                         /* 64 samples -> 16x scale */
     return true;
 }
 
 bool adc_measure_battery(uint16_t *vbat_mv)
 {
-    if (vbat_mv == NULL) {
+    uint32_t b[4];
+    bool ok = true;
+
+    PORTA.OUTSET = PIN_EN_BAT_MEASURE;           /* divider on */
+    _delay_ms(BAT_SETTLE_MS);
+    adc_start(ADC_REFSEL_1024MV_gc, ADC_MUXPOS_AIN5_gc);
+
+    uint32_t dummy;
+    (void)adc_burst_x16(&dummy);                 /* flush reference transient */
+    for (uint8_t i = 0; i < 4 && ok; i++) {
+        ok = adc_burst_x16(&b[i]);
+    }
+
+    adc_stop();
+    PORTA.OUTCLR = PIN_EN_BAT_MEASURE;           /* divider off immediately */
+
+    if (!ok) {
         return false;
     }
 
-    /* 1. Set internal reference to 1.024 V */
-    VREF.ADC0REF = VREF_REFSEL_1V024_gc;
+    sort_u32(b, 4);
+    uint32_t x16 = (b[1] + b[2]) / 2U;           /* median of 4 */
 
-    /* 2. Switch on battery measurement high-side P-MOSFET via Q3 (PA7 HIGH) */
-    PORTA.OUTSET = PIN_EN_BAT_MEASURE;
-
-    /* 3. Hardware settling delay for RC divider (Tau ~ 3.96 ms, wait 20 ms ~ 5*Tau) */
-    _delay_ms(BAT_DIVIDER_SETTLE_MS);
-
-    /* 4. Enable ADC */
-    ADC0.CTRLA = ADC_ENABLE_bm;
-
-    /* 5. Perform dummy conversion to flush reference settling transient */
-    uint16_t dummy = 0;
-    (void)adc_convert_channel(ADC_MUXPOS_AIN5_gc, &dummy);
-
-    /* 6. Perform actual 16x oversampled conversion on AIN5 (PA5) */
-    uint16_t raw_acc = 0;
-    bool success = adc_convert_channel(ADC_MUXPOS_AIN5_gc, &raw_acc);
-
-    /* 7. Disable ADC and immediately disconnect divider to conserve battery */
-    ADC0.CTRLA = 0;
-    PORTA.OUTCLR = PIN_EN_BAT_MEASURE;
-
-    if (!success) {
-        return false;
-    }
-
-    /*
-     * Calculation derivation:
-     * - Resistors: R_top = 1000 kOhm (1%), R_bot = 220 kOhm (1%)
-     * - Divider ratio: V_pin = V_bat * (220 / (1000 + 220)) = V_bat * (11 / 61)
-     * - V_REF = 1024 mV
-     * - 12-bit ADC full-scale = 4096 counts
-     * - 16x Accumulation: raw_acc = 16 * count_single
-     * - count_single = raw_acc / 16
-     * - V_pin_mv = (count_single * 1024) / 4096 = count_single / 4 = raw_acc / 64
-     * - V_bat_mv = V_pin_mv * (61 / 11) = (raw_acc * 61) / (64 * 11) = (raw_acc * 61) / 704
-     */
-    uint32_t calc = ((uint32_t)raw_acc * 61UL) / 704UL;
-    *vbat_mv = (uint16_t)calc;
-
+    /* pin_uV = x16 * 1024000 / 65536 = x16 * 125 / 8   (max ~1.02e6)
+     * vbat_mV = pin_uV * (RTOP + RBOT) / RBOT / 1000                 */
+    uint32_t pin_uv = (x16 * 125UL) / 8UL;
+    uint32_t mv = (pin_uv * (BAT_RTOP_K + BAT_RBOT_K)) / (BAT_RBOT_K * 1000UL);
+    *vbat_mv = (mv > 65534UL) ? 65534U : (uint16_t)mv;
     return true;
 }
 
-bool adc_measure_probe(uint16_t *probe_raw_acc, uint16_t *probe_mv)
+bool adc_measure_probe(uint16_t *probe_100uv, bool *clipped)
 {
-    if (probe_raw_acc == NULL || probe_mv == NULL) {
-        return false;
-    }
+    uint32_t b[PROBE_BURSTS];
+    bool ok = true;
 
-    /* 1. Set internal reference to 2.500 V */
-    VREF.ADC0REF = VREF_REFSEL_2V500_gc;
+    *clipped = false;
 
-    /* 2. Turn on 5V boost regulator (TPS63900 via PB3 HIGH) */
-    PORTB.OUTSET = PIN_EN_5V_PROBE;
-
-    /* 3. Hardware settling delay: TPS63900 startup + probe internal circuitry stabilization */
+    PORTB.OUTSET = PIN_EN_5V_PROBE;              /* 5 V boost on */
     _delay_ms(PROBE_SETTLE_MS);
+    adc_start(ADC_REFSEL_2500MV_gc, ADC_MUXPOS_AIN6_gc);
 
-    /* 4. Enable ADC */
-    ADC0.CTRLA = ADC_ENABLE_bm;
+    uint32_t dummy;
+    (void)adc_burst_x16(&dummy);
 
-    /* 5. Dummy conversion to stabilize VREF switched state */
-    uint16_t dummy = 0;
-    (void)adc_convert_channel(ADC_MUXPOS_AIN6_gc, &dummy);
+    for (uint8_t i = 0; i < PROBE_BURSTS && ok; i++) {
+        ok = adc_burst_x16(&b[i]);
+        if (!ok) {
+            break;
+        }
+        if (b[i] >= BURST_FULLSCALE_X16) {
+            *clipped = true;
+        }
+        if (i + 1U < PROBE_BURSTS) {
+            _delay_ms(PROBE_BURST_GAP_MS);
+        }
+    }
 
-    /* 6. Perform 16x oversampled conversion on AIN6 (PA6) */
-    uint16_t raw_acc = 0;
-    bool success = adc_convert_channel(ADC_MUXPOS_AIN6_gc, &raw_acc);
+    adc_stop();
+    PORTB.OUTCLR = PIN_EN_5V_PROBE;              /* boost off as early as possible */
 
-    /* 7. Immediately shut down 5V regulator and ADC to minimize peak current duration */
-    ADC0.CTRLA = 0;
-    PORTB.OUTCLR = PIN_EN_5V_PROBE;
-
-    if (!success) {
+    if (!ok) {
         return false;
     }
 
-    *probe_raw_acc = raw_acc;
+    /* Trimmed mean: drop the lowest and highest (BURSTS - KEEP) / 2 bursts. */
+    sort_u32(b, PROBE_BURSTS);
+    const uint8_t first = (PROBE_BURSTS - PROBE_TRIM_KEEP) / 2U;
+    uint32_t acc = 0;
+    for (uint8_t i = 0; i < PROBE_TRIM_KEEP; i++) {
+        acc += b[first + i];
+    }
+    uint32_t x16 = (acc + PROBE_TRIM_KEEP / 2U) / PROBE_TRIM_KEEP;
 
-    /*
-     * Calculation derivation:
-     * - Probe output divider: R_top = 100 kOhm (1%), R_bot = 220 kOhm (1%)
-     * - Divider ratio: V_pin = V_probe * (220 / (100 + 220)) = V_probe * (11 / 16)
-     * - V_REF = 2500 mV
-     * - 12-bit ADC full-scale = 4096 counts
-     * - 16x Accumulation: raw_acc = 16 * count_single
-     * - V_pin_mv = (raw_acc * 2500) / (16 * 4096) = (raw_acc * 2500) / 65536
-     * - V_probe_mv = V_pin_mv * (16 / 11)
-     *             = (raw_acc * 2500 * 16) / (65536 * 11)
-     *             = (raw_acc * 2500) / (4096 * 11)
-     *             = (raw_acc * 625) / (1024 * 11)
-     *             = (raw_acc * 625) / 11264
-     */
-    uint32_t calc = ((uint32_t)raw_acc * 625UL) / 11264UL;
-    *probe_mv = (uint16_t)calc;
-
+    /* pin [10 uV] = x16 * 250000 / 65536 = x16 * 15625 / 4096   (max 2.5e5)
+     * probe [10 uV] = pin * (RTOP + RBOT) / RBOT
+     * probe [0.1 mV] = probe[10 uV] / 10                                  */
+    uint32_t pin_10uv = (x16 * 15625UL) / 4096UL;
+    uint32_t probe_10uv = (pin_10uv * (PROBE_RTOP_K + PROBE_RBOT_K)) / PROBE_RBOT_K;
+    uint32_t v = (probe_10uv + 5UL) / 10UL;
+    *probe_100uv = (v > 65534UL) ? 65534U : (uint16_t)v;
     return true;
-}
-
-uint16_t adc_probe_mv_to_depth_mm(uint16_t probe_mv,
-                                  uint16_t v_zero_mv,
-                                  uint16_t v_span_mv,
-                                  uint16_t depth_max_mm)
-{
-    if (probe_mv <= v_zero_mv) {
-        return 0;
-    }
-
-    uint32_t delta_v = (uint32_t)(probe_mv - v_zero_mv);
-    if (delta_v >= v_span_mv) {
-        return depth_max_mm;
-    }
-
-    uint32_t depth = (delta_v * (uint32_t)depth_max_mm) / (uint32_t)v_span_mv;
-    return (uint16_t)depth;
 }

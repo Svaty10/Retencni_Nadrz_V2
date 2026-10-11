@@ -1,0 +1,31 @@
+# Po pushnutí tagu vX.Y.Z vytvoří GitHub Release s podepsaným balíkem.
+# Potřebný secret: RELEASE_SIGNING_KEY (obsah souboru release.key, Ed25519 PEM).
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kontrola verze
+        run: |
+          VER=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' server/retencka/__init__.py)
+          test "v$VER" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != verze $VER"; exit 1; }
+      - name: Testy
+        run: python3 -m unittest discover -s server/tests -v
+      - name: Balík a podpis
+        env:
+          KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$KEY" > /tmp/release.key
+          tools/make-release.sh /tmp/release.key
+          rm -f /tmp/release.key
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --title "${GITHUB_REF_NAME}" --generate-notes
