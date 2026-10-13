@@ -1,4 +1,4 @@
-# Zadání – Retenční nádrž V3 (upřesněný „master prompt“)
+# Zadání – Retenční nádrž (upřesněný „master prompt“)
 
 > Tento dokument je závazná specifikace celého systému. Vznikl revizí původního zadání a kódu v2
 > (2026-10-11). Při dalším vývoji (člověk i AI) se řiďte tímto souborem.

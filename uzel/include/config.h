@@ -112,7 +112,7 @@
 #define PKT_UNPAIR_LEN          19U
 #define PAIR_REQ_PAIRED         0x01
 #define PKT_MAC_LEN             4U
-#define FW_VERSION              33U     /**< 3.3 – reported in every packet */
+#define FW_VERSION              10U     /**< 1.0 – reported in every packet */
 
 #define PAIR_WINDOW_S           600U    /**< Pairing offered for 10 min after a battery change */
 #define PAIR_PERIOD_S           5U      /**< One PAIR_REQ every 5 s inside the window */

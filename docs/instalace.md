@@ -75,7 +75,7 @@ odemknout jen přeprogramováním.
   openssl pkey -in release.key -pubout -out system/keys/release.pub   # tento commitnout
   ```
   Obsah `release.key` vložte do GitHub secretu `RELEASE_SIGNING_KEY`.
-- Vydání verze: zvýšit `__version__` v `server/retencka/__init__.py`, commit, `git tag v3.0.1 && git push --tags`.
+- Vydání verze: zvýšit `__version__` v `server/retencka/__init__.py`, commit, `git tag v1.0.1 && git push --tags`.
   GitHub Action sestaví a podepíše balík. Ručně: `tools/make-release.sh release.key`.
 - Kanál (`stable`/`beta`) a vypnutí automatiky: `/etc/default/retencka`.
 

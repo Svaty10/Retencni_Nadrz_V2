@@ -1,5 +1,5 @@
 /* ==========================================================================
- * Retenční Nádrž – klientská aplikace (v3)
+ * Retenční Nádrž – klientská aplikace
  * Vanilla JS, žádné inline handlery (CSP). Grafy kreslí prohlížeč (Chart.js),
  * server posílá jen předem zprůměrovaná data.
  * ========================================================================== */

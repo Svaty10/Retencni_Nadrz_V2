@@ -1,4 +1,4 @@
-# Architektura – Retenční nádrž V3
+# Architektura – Retenční nádrž
 
 Popis toho, jak je systém poskládaný a jak teče data. Závazné požadavky jsou v
 [ZADANI.md](ZADANI.md), HTTP API v [api.md](api.md).
@@ -185,9 +185,9 @@ Globální (`settings.SCHEMA`): poloha, Hydrawise API klíč, energetický model
 Každé čidlo (`settings.NODE_SCHEMA`): geometrie nádrže, kalibrace a přesnost sondy, střecha,
 korekce baterie a celé dopouštění včetně průtoku z řádu (`flow_rate_lpm`, v UI pod *Pokročilé*).
 
-Převod parametrů ze staré verze (`old/app.py`):
+Převod parametrů ze staré verze (`old/app.py`, Flask + ESP32):
 
-| Stará verze | V3 | Poznámka |
+| Stará verze (`old/`) | Nová verze | Poznámka |
 |---|---|---|
 | `tank_area_m2`, `max_depth_cm`, `sensor_offset_cm` | stejné, per čidlo | |
 | `flow_rate_lpm` | `flow_rate_lpm` (per čidlo) | + `max_refill_minutes` jako horní mez |

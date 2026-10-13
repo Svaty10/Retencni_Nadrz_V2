@@ -178,7 +178,7 @@ def open_data(k_enc: bytes, k_mac: bytes, pkt: bytes) -> Optional[tuple]:
     return _TELEMETRY.unpack(plain)
 
 
-def build_telemetry(flags: int, vbat: int, temp: int, hum: int, probe: int, fw: int = 31) -> bytes:
+def build_telemetry(flags: int, vbat: int, temp: int, hum: int, probe: int, fw: int = 10) -> bytes:
     return _TELEMETRY.pack(flags, vbat, temp, hum, probe, fw)
 
 

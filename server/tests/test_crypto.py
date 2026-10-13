@@ -51,7 +51,7 @@ class VectorTest(unittest.TestCase):
         ke, km = os.urandom(16), os.urandom(16)
         tel = C.build_telemetry(0x20, 4950, -150, 8000, 12400)
         pkt = C.build_data(ke, km, 0x1234, 77, tel)
-        self.assertEqual(C.open_data(ke, km, pkt), (0x20, 4950, -150, 8000, 12400, 31))
+        self.assertEqual(C.open_data(ke, km, pkt), (0x20, 4950, -150, 8000, 12400, 10))
         for i in range(21):
             bad = bytearray(pkt)
             bad[i] ^= 0x01

@@ -15,7 +15,7 @@ Hlavička `Authorization: Bearer <token>` (token: *Nastavení → Home Assistant
 ```
 `status`: `online` (paket < 16 min), `stale` (< 30 min, nastavitelné), `offline`.
 
-`GET /health` (bez tokenu) → `{"status":"ok","version":"3.0.0","radio":"gdo0"}`; 503 = rádio nepracuje.
+`GET /health` (bez tokenu) → `{"status":"ok","version":"1.0.0","radio":"gdo0"}`; 503 = rádio nepracuje.
 
 ## Webová aplikace – port 80
 Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `export.csv`). Vše pod `/api/` vyžaduje přihlášení (cookie session). Změnové požadavky navíc hlavičku
