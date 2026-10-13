@@ -34,3 +34,6 @@ dist/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Generated demo data (server/tools/seed_demo.py --backup)
+demo/

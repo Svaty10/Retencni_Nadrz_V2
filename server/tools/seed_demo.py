@@ -2,10 +2,14 @@
 """Fill a data directory with N days of synthetic measurements (development / UI demo).
 
     RETENCKA_DATA=/tmp/rtdata python3 tools/seed_demo.py 30
+    python3 tools/seed_demo.py 90 BEEF --backup demo.db.gz   # file for "Nahrát zálohu" in the web UI
 """
 
+import gzip
 import math
 import os
+import shutil
+import tempfile
 import random
 import sys
 import time
@@ -19,8 +23,16 @@ from retencka.settings import Nodes, Settings  # noqa: E402
 
 
 def main() -> None:
+    args = sys.argv[1:]
+    backup = None
+    if "--backup" in args:
+        i = args.index("--backup")
+        backup = args[i + 1]
+        del args[i:i + 2]
+    sys.argv[1:] = args
     days = int(sys.argv[1]) if len(sys.argv) > 1 else 30
-    data = os.environ.get("RETENCKA_DATA", "/tmp/rtdata")
+    tmp = tempfile.mkdtemp() if backup else None
+    data = tmp or os.environ.get("RETENCKA_DATA", "/tmp/rtdata")
     os.makedirs(data, exist_ok=True)
     db = Database(os.path.join(data, "retencka.db"))
     s = Settings(db)
@@ -59,8 +71,36 @@ def main() -> None:
     with db.transaction() as c:
         c.executemany("INSERT INTO measurements(ts,node_id,seq,flags,vbat_mv,temp_x100,hum_x100,probe_100uv,"
                       "level_mm,volume_l,rssi_x2,lqi,refilling,time_ok) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
-    Core(db, s, data).recompute_levels(nid)          # calibration + filter + hourly
-    print(f"Inserted {len(rows)} measurements into {data}")
+    core = Core(db, s, data)
+    core.recompute_levels(nid)                       # calibration + filter + hourly
+    refills = add_refills(db, nid)
+    print(f"Inserted {len(rows)} measurements and {refills} refills into {data}")
+    if backup:
+        snap = os.path.join(data, "snapshot.db")
+        core.snapshot(snap)
+        db.close_thread()
+        with open(snap, "rb") as fi, gzip.open(backup, "wb") as fo:
+            shutil.copyfileobj(fi, fo)
+        shutil.rmtree(data, ignore_errors=True)
+        print(f"Backup for the web import: {backup} ({os.path.getsize(backup) // 1024} kB)")
+
+
+def add_refills(db: Database, nid: int) -> int:
+    """Refill log rows for the synthetic refilling stretches (green bands in the chart)."""
+    out, cur = [], None
+    for r in db.query("SELECT ts, volume_l, refilling FROM measurements WHERE node_id=? ORDER BY ts", (nid,)):
+        if r["refilling"] and cur is None:
+            cur = [r["ts"], r["volume_l"], r["ts"], r["volume_l"]]
+        elif r["refilling"]:
+            cur[2:] = [r["ts"], r["volume_l"]]
+        elif cur is not None:
+            out.append(cur)
+            cur = None
+    with db.transaction() as c:
+        c.executemany("INSERT INTO refills(start_ts, end_ts, mode, target_pct, start_l, end_l, planned_s, result, "
+                      "username, node_id) VALUES(?,?,'auto',30,?,?,?,'Dosaženo cíle (ukázková data)','system',?)",
+                      [(a, b, sl, el, b - a + 120, nid) for a, sl, b, el in out])
+    return len(out)
 
 
 if __name__ == "__main__":
