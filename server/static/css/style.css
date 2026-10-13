@@ -802,7 +802,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 /* výběr časového rozsahu (rychlé volby + vlastní od–do) */
 .range-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .range-custom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.range-custom input[type="date"] { width: 150px; color-scheme: dark; }
+.date-cz { position: relative; display: inline-flex; align-items: center; }
+.date-cz input[type="text"] { width: 140px; padding-right: 34px; }
+.date-cz-btn { position: absolute; right: 4px; background: none; border: 0; padding: 4px 6px; cursor: pointer;
+               font-size: 14px; line-height: 1; opacity: 0.75; }
+.date-cz-btn:hover { opacity: 1; }
+/* skryté nativní políčko – drží hodnotu (ISO) a otevírá kalendář pod viditelným polem */
+.date-native { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0;
+               opacity: 0; pointer-events: none; color-scheme: dark; }
 .range-custom span { color: var(--text-muted); font-size: 13px; }
 
 /* kalibrační body */
@@ -827,7 +834,14 @@ pre.yaml {
 .token-row .unified-input { flex: 1; font-family: ui-monospace, monospace; }
 
 .user-table select, .user-table .btn { display: inline-flex; }
-.td-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* výběr v tabulce: nativní <select> – jeho seznam kreslí prohlížeč nad stránkou, takže ho
+   posuvný rámeček tabulky neořízne (vlastní rozbalovací seznam by se ořízl) */
+.table-select { width: auto; min-width: 150px; cursor: pointer; color-scheme: dark; }
+.table-select:disabled { opacity: 0.6; cursor: default; }
+.table-select option { background: #1e293b; color: var(--text-main); }
+/* buňka zůstává table-cell (flex by rozbil zarovnání řádku); tlačítka vedle sebe */
+.td-actions { white-space: nowrap; }
+.td-actions .btn + .btn { margin-left: 8px; }
 .detail-cell { max-width: 350px; word-break: break-word; }
 
 /* přihlášení / první nastavení */

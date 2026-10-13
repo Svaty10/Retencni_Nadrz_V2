@@ -167,6 +167,58 @@
 
     function isoDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 
+    // České datum: <input type="date"> kreslí prohlížeč podle SVÉHO jazyka (v anglickém
+    // Chromu mm/dd/yyyy). Nativní políčko proto zůstává skryté jako úložiště hodnoty
+    // (ISO, id i posluchače beze změny) a kalendář; uživatel vidí a píše „13. 10. 2026“.
+    function fmtCzDate(iso) {
+        if (!iso) return '';
+        const [y, m, d] = iso.split('-');
+        return `${+d}. ${+m}. ${y}`;
+    }
+    function parseCzDate(txt) {
+        const m = txt.trim().match(/^(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{4})$/);
+        if (!m) return null;
+        const d = new Date(+m[3], +m[2] - 1, +m[1]);
+        return d.getDate() === +m[1] && d.getMonth() === +m[2] - 1 ? isoDate(d) : null;
+    }
+    function czDateInput(native) {
+        if (native.dataset.cz) return;
+        native.dataset.cz = '1';
+        const wrap = document.createElement('span');
+        wrap.className = 'date-cz';
+        native.parentNode.insertBefore(wrap, native);
+        const shown = document.createElement('input');
+        shown.type = 'text';
+        shown.className = native.className;
+        shown.placeholder = 'd. m. rrrr';
+        shown.inputMode = 'numeric';
+        shown.autocomplete = 'off';
+        if (native.title) shown.title = native.title;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'date-cz-btn';
+        btn.title = 'Vybrat v kalendáři';
+        btn.textContent = '📅';
+        native.classList.add('date-native');
+        native.tabIndex = -1;
+        wrap.append(shown, btn, native);
+        const sync = () => { shown.value = fmtCzDate(native.value); };
+        native.addEventListener('change', sync);
+        native.addEventListener('input', sync);
+        shown.addEventListener('change', () => {
+            const txt = shown.value.trim();
+            const iso = txt ? parseCzDate(txt) : '';
+            if (iso === null) { toast('Datum zadejte jako 13. 10. 2026.', true); sync(); return; }
+            native.value = (iso && native.max && iso > native.max) ? native.max : iso;
+            sync();
+            native.dispatchEvent(new Event('change'));
+        });
+        btn.addEventListener('click', () => {
+            try { native.showPicker(); } catch (e) { shown.focus(); }
+        });
+        sync();
+    }
+
     function buildRangePicker(el) {
         const key = el.dataset.chart;
         const kind = el.dataset.kind || 'time';
@@ -187,7 +239,9 @@
             <button type="button" class="btn btn-outline btn-sm">Zobrazit</button>`;
         el.appendChild(custom);
         el.appendChild(select);
-        const [inFrom, inTo] = custom.querySelectorAll('input');
+        const [inFrom, inTo] = custom.querySelectorAll('input[type="date"]');
+        czDateInput(inFrom);
+        czDateInput(inTo);
         const state = { key, preset: el.dataset.default, from: null, to: null };
         pickers[key] = state;
 
@@ -219,7 +273,9 @@
     Chart.defaults.color = '#94a3b8';
     Chart.defaults.font.family = 'Outfit, sans-serif';
     Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
-    Chart.defaults.animation = { duration: 300 };
+    // jen délka – nahrazení celého objektu by smazalo easing a animační smyčka Chart.js
+    // by spadla ("this._fn is not a function") → další grafy by zůstaly prázdné
+    Chart.defaults.animation.duration = 300;
 
     const histCache = new Map();
     async function getHistory(r) {
@@ -1168,7 +1224,7 @@
             const self = u.username.toLowerCase() === ME.username.toLowerCase();
             const tr = document.createElement('tr');
             tr.innerHTML = `<td><strong>${esc(u.username)}</strong>${self ? ' (vy)' : ''}</td>
-                <td><select class="unified-select"${self ? ' disabled' : ''}>
+                <td><select class="unified-input table-select"${self ? ' disabled' : ''}>
                     <option value="user">Uživatel</option><option value="admin">Administrátor</option></select></td>
                 <td>${u.last_login ? fmtDateTime(u.last_login * 1000) : '–'}</td><td class="td-actions"></td>`;
             const sel = tr.querySelector('select');
@@ -1236,6 +1292,7 @@
         if (ME.role === 'admin') document.querySelectorAll('.admin-only').forEach((el) => el.classList.remove('hidden'));
 
         document.querySelectorAll('.range-picker').forEach(buildRangePicker);
+        document.querySelectorAll('input[type="date"]').forEach(czDateInput);
         initializeCustomSelects();
 
         document.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab, b)));
