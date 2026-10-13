@@ -29,7 +29,9 @@ if [ "$(hostname)" != "$name" ]; then
     else
         printf '127.0.1.1\t%s\n' "$name" >> /etc/hosts
     fi
-    systemctl try-restart avahi-daemon.service || true
+    # --no-block: this unit is ordered Before=avahi-daemon, so waiting for the
+    # restart job here would deadlock (avahi waits for us, we wait for avahi)
+    systemctl --no-block try-restart avahi-daemon.service || true
 fi
 
 mkdir -p "$DATA"

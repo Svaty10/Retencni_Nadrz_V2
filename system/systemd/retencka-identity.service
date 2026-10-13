@@ -8,6 +8,7 @@ Wants=network-pre.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+TimeoutStartSec=60
 ExecStart=/var/lib/retencka/app/current/system/bin/retencka-identity.sh
 
 [Install]
