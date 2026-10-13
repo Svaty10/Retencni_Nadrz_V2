@@ -236,7 +236,7 @@
         const weekAgo = new Date(Date.now() - 7 * 86400e3);
         custom.innerHTML = `<span>od</span><input type="date" class="unified-input" value="${isoDate(weekAgo)}" max="${isoDate(today)}">
             <span>do</span><input type="date" class="unified-input" value="${isoDate(today)}" max="${isoDate(today)}">
-            <button type="button" class="btn btn-outline btn-sm">Zobrazit</button>`;
+            <button type="button" class="btn btn-outline btn-sm range-apply">Zobrazit</button>`;
         el.appendChild(custom);
         el.appendChild(select);
         const [inFrom, inTo] = custom.querySelectorAll('input[type="date"]');
@@ -250,7 +250,7 @@
             custom.classList.toggle('hidden', select.value !== 'custom');
             if (select.value !== 'custom') reloadChart(key);
         });
-        custom.querySelector('button').addEventListener('click', () => {
+        custom.querySelector('.range-apply').addEventListener('click', () => {
             const f = new Date(inFrom.value + 'T00:00:00');
             const t = new Date(inTo.value + 'T00:00:00');
             if (isNaN(f) || isNaN(t) || t < f) { toast('Zadejte platný rozsah od–do.', true); return; }
@@ -288,19 +288,51 @@
         return data;
     }
 
+    // Dílky časové osy zarovnané na celé hodiny / půlnoc / začátek měsíce (místní čas).
+    // Chart.js by čas dělil jako obyčejná čísla – dílky na náhodných hodinách a popisky
+    // dnů s mezerami (7.10., 9.10. …).
+    const MONTHS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
+    function timeTicks(fromMs, toMs, maxN) {
+        const H = 3600e3, D = 86400e3, span = toMs - fromMs, out = [];
+        const hours = [1, 2, 3, 6, 12].find((h) => span / (h * H) <= maxN);
+        const days = [1, 2, 3, 7, 14].find((n) => span / (n * D) <= maxN);
+        if (hours) {
+            const d = new Date(fromMs);
+            d.setMinutes(0, 0, 0);
+            while (d.getTime() < fromMs || d.getHours() % hours) d.setHours(d.getHours() + 1);
+            for (; d.getTime() <= toMs; d.setHours(d.getHours() + hours)) out.push({ value: d.getTime(), unit: 'h' });
+        } else if (days) {
+            const d = new Date(fromMs);
+            d.setHours(0, 0, 0, 0);
+            if (d.getTime() < fromMs) d.setDate(d.getDate() + 1);
+            for (; d.getTime() <= toMs; d.setDate(d.getDate() + days)) out.push({ value: d.getTime(), unit: 'd' });
+        } else {
+            const months = [1, 2, 3, 6, 12].find((m) => span / (m * 30.4 * D) <= maxN) || 12;
+            const d = new Date(fromMs);
+            d.setHours(0, 0, 0, 0);
+            d.setDate(1);
+            if (d.getTime() < fromMs) d.setMonth(d.getMonth() + 1);
+            while (d.getMonth() % months) d.setMonth(d.getMonth() + 1);
+            for (; d.getTime() <= toMs; d.setMonth(d.getMonth() + months)) out.push({ value: d.getTime(), unit: 'm' });
+        }
+        return out;
+    }
+    function tickLabel(v, unit) {
+        const d = new Date(v);
+        if (unit === 'm') return d.getMonth() === 0 ? `${MONTHS[0]} ${d.getFullYear()}` : MONTHS[d.getMonth()];
+        if (unit === 'h' && (d.getHours() || d.getMinutes())) return `${d.getHours()}:${pad(d.getMinutes())}`;
+        return `${d.getDate()}. ${d.getMonth() + 1}.`;
+    }
+
     function timeScale(r) {
-        const spanMs = (r.to - r.from) * 1000;
+        const ticks = timeTicks(r.from * 1000, r.to * 1000, 8);
+        const unitOf = new Map(ticks.map((t) => [t.value, t.unit]));
         return {
             type: 'linear',
             min: r.from * 1000,
             max: r.to * 1000,
-            ticks: {
-                maxTicksLimit: 8,
-                callback: (v) => {
-                    const d = new Date(v);
-                    return spanMs <= 2 * 86400e3 ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : `${d.getDate()}.${d.getMonth() + 1}.`;
-                }
-            }
+            afterBuildTicks: (axis) => { axis.ticks = ticks.map((t) => ({ value: t.value })); },
+            ticks: { autoSkip: true, maxRotation: 0, callback: (v) => tickLabel(v, unitOf.get(v)) }
         };
     }
     const timeTooltip = { callbacks: { title: (ctx) => ctx.length ? fmtDateTime(ctx[0].parsed.x) : '' } };
