@@ -72,7 +72,6 @@ Podrobně v [docs/instalace.md](docs/instalace.md).
 | [`server/`](server/) | aplikace na Pi (Python 3.11+, **jen standardní knihovna** + spidev) |
 | [`system/`](system/) | instalace, systemd služby, Wi-Fi hotspot/portál, mDNS, aktualizace |
 | [`docs/`](docs/) | dokumentace (viz níže) |
-| `old/` | původní verze (vzor vzhledu) |
 
 ## Dokumentace
 | Dokument | O čem |

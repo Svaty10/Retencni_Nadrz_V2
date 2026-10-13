@@ -4,7 +4,7 @@ Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle 
 
 ## [1.0.0] - 2026-10-13
 
-První veřejné vydání. Nahrazuje původní prototyp (ESP32 + Flask, složka `old/`).
+První veřejné vydání. Nahrazuje původní prototyp (ESP32 + Flask).
 
 ### Čidlo (`uzel/`)
 - ATtiny1624 + CC1101 (433,92 MHz) + SHT40 + hydrostatická sonda, napájení 3× Li-FeS2 (~12 µA průměrně, výdrž 10+ let).

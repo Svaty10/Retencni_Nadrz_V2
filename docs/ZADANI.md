@@ -163,7 +163,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Historie: SQL bucketing (`GROUP BY ts / bucket`) na max. ~600 bodů.
 - Konfigurace a uživatelé v SQLite (transakce = atomické zápisy, žádné rozbité JSON po výpadku).
 
-### 2.5 Výpočty (převzato a opraveno ze `old/`)
+### 2.5 Výpočty (převzato a opraveno z původního prototypu)
 - Hladina: **2 kalibrační body** (napětí sondy → cm vodního sloupce; nový ADC je lineární, ESP32 potřeboval 3–4)
   + výška sondy nade dnem (offset), ořez na 0…max. hloubka; objem = plocha × výška.
 - **Přesnost sondy** (% z rozsahu) × rozsah = mrtvé pásmo (např. 0,5 % × 200 cm = ±1 cm). Filtr: medián ze 3
@@ -228,7 +228,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   `unit_of_measurement`, `availability` z pole `status`.
 
 ### 2.8 Dashboard
-- Vizuálně **shodný se `old/`** (dark glassmorphism, Outfit, animovaná nádrž, stat boxy, karty grafů,
+- Vizuálně **shodný s původním prototypem** (dark glassmorphism, Outfit, animovaná nádrž, stat boxy, karty grafů,
   záložky Dashboard / Nastavení / Logování / Uživatelé / Můj účet).
 - Lišta čidel: **Všechny nádrže** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
   čidlo + společný graf hladin) nebo konkrétní nádrž. Tečka = stav (zelená online, žlutá zpožděná, červená offline).

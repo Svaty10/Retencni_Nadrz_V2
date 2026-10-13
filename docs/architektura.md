@@ -185,9 +185,9 @@ Globální (`settings.SCHEMA`): poloha, Hydrawise API klíč, energetický model
 Každé čidlo (`settings.NODE_SCHEMA`): geometrie nádrže, kalibrace a přesnost sondy, střecha,
 korekce baterie a celé dopouštění včetně průtoku z řádu (`flow_rate_lpm`, v UI pod *Pokročilé*).
 
-Převod parametrů ze staré verze (`old/app.py`, Flask + ESP32):
+Převod parametrů z původního prototypu (Flask + ESP32):
 
-| Stará verze (`old/`) | Nová verze | Poznámka |
+| Původní prototyp | Nová verze | Poznámka |
 |---|---|---|
 | `tank_area_m2`, `max_depth_cm`, `sensor_offset_cm` | stejné, per čidlo | |
 | `flow_rate_lpm` | `flow_rate_lpm` (per čidlo) | + `max_refill_minutes` jako horní mez |
