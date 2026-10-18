@@ -123,6 +123,29 @@ def safe_extract(tar_path: Path, dest: Path) -> None:
             tf.extractall(dest)
 
 
+def sync_units(release: Path) -> None:
+    """Install changed / new systemd units of the release (new path and timer units
+    are enabled too), so features that need a unit also arrive by auto-update."""
+    src = release / "system" / "systemd"
+    if not src.is_dir():
+        return
+    changed, new = False, []
+    for u in sorted(src.iterdir()):
+        dst = Path("/etc/systemd/system") / u.name
+        data = u.read_bytes()
+        if dst.exists() and dst.read_bytes() == data:
+            continue
+        if not dst.exists() and u.suffix in (".path", ".timer"):
+            new.append(u.name)
+        dst.write_bytes(data)
+        os.chmod(dst, 0o644)
+        changed = True
+    if changed:
+        subprocess.run(["systemctl", "daemon-reload"], check=False)
+    for name in new:
+        subprocess.run(["systemctl", "enable", "--now", name], check=False)
+
+
 def switch(target: Path) -> None:
     tmp = APP / "current.new"
     if tmp.is_symlink() or tmp.exists():
@@ -205,6 +228,10 @@ def main() -> int:
 
     previous = CURRENT.resolve()
     switch(RELEASES / ver)
+    try:
+        sync_units(RELEASES / ver)
+    except OSError as e:
+        print(f"unit sync failed: {e}", flush=True)
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
     if healthy(ver):
         write_status(current=ver, latest=ver, message=f"Aktualizováno {cur} → {ver}")

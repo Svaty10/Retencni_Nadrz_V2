@@ -8,7 +8,11 @@
 # Volby:
 #   --overlay                 po instalaci zapnout read-only root (overlayfs);
 #                             jen pokud je /var/lib/retencka samostatný oddíl
-#   --cloudflare-token TOKEN  nainstalovat cloudflared a připojit tunel
+#   --cloudflare-token TOKEN  nainstalovat cloudflared a připojit tunel (vlastní doména)
+#   --netbird-setup-key KLÍČ  vzdálený servis přes NetBird (klíč z app.netbird.io);
+#                             přístup je po instalaci povolen 24 h, pak jen se
+#                             souhlasem zákazníka (web: Nastavení → Telegram a servis)
+#   --netbird-url URL         vlastní (self-hosted) NetBird server
 #   --no-hotspot              nespouštět hlídání Wi-Fi / záložní hotspot
 #   --timezone ZÓNA           časová zóna (výchozí Europe/Prague; bez volby se
 #                             mění jen výchozí zóna Pi OS – UTC / Europe/London)
@@ -19,15 +23,19 @@ set -euo pipefail
 
 OVERLAY=0
 CF_TOKEN=""
+NB_KEY=""
+NB_URL=""
 HOTSPOT=1
 TZONE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --overlay) OVERLAY=1 ;;
         --cloudflare-token) CF_TOKEN="${2:-}"; shift ;;
+        --netbird-setup-key) NB_KEY="${2:-}"; shift ;;
+        --netbird-url) NB_URL="${2:-}"; shift ;;
         --no-hotspot) HOTSPOT=0 ;;
         --timezone) TZONE="${2:-}"; shift ;;
-        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
         *) echo "Neznámá volba: $1"; exit 1 ;;
     esac
     shift
@@ -137,7 +145,7 @@ systemctl restart systemd-journald || true
 systemctl enable --now avahi-daemon.service >/dev/null
 systemctl enable retencka-identity.service >/dev/null
 systemctl restart retencka-identity.service
-systemctl enable --now retencka.service retencka-alias.service retencka-update.timer retencka-update.path >/dev/null
+systemctl enable --now retencka.service retencka-alias.service retencka-update.timer retencka-update.path     retencka-control.path retencka-control.timer >/dev/null
 systemctl restart retencka.service
 if [ "$HOTSPOT" -eq 1 ]; then
     systemctl enable --now NetworkManager.service retencka-netwatch.service >/dev/null
@@ -158,6 +166,30 @@ if [ -n "$CF_TOKEN" ]; then
     fi
     cloudflared service install "$CF_TOKEN" || true
     echo "V Cloudflare Zero Trust nasměrujte hostname na http://localhost:80 (NE na port 8081)."
+fi
+
+# ------------------------------------------------------------------- NetBird
+if [ -n "$NB_KEY" ]; then
+    step "NetBird (vzdálený servis)"
+    if ! command -v netbird >/dev/null; then
+        apt-get install -y -qq ca-certificates curl gnupg >/dev/null
+        install -d -m 755 /usr/share/keyrings
+        curl -fsSL https://pkgs.netbird.io/debian/public.key             | gpg --dearmor --yes --output /usr/share/keyrings/netbird-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/netbird-archive-keyring.gpg] https://pkgs.netbird.io/debian stable main"             > /etc/apt/sources.list.d/netbird.list
+        apt-get update -qq && apt-get install -y -qq netbird >/dev/null
+    fi
+    netbird service install >/dev/null 2>&1 || true
+    netbird service start >/dev/null 2>&1 || true
+    if netbird up --setup-key "$NB_KEY" ${NB_URL:+--management-url "$NB_URL"}; then
+        # access during the installation; afterwards only if the customer allows it
+        printf '{"mode": "24h", "until": %d, "by": "instalace"}
+' $(( $(date +%s) + 86400 )) > "$DATA/servis.json"
+        chown retencka:retencka "$DATA/servis.json"
+        systemctl start retencka-control.service || true
+        echo "NetBird připojen. Servisní přístup je povolen na 24 h (pak jen se souhlasem zákazníka)."
+    else
+        echo "Upozornění: NetBird se nepřipojil – zkontrolujte setup key."
+    fi
 fi
 
 # --------------------------------------------------------------- overlay FS

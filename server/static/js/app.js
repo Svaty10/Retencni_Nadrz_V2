@@ -155,6 +155,7 @@
         if (id === 'nastaveni') loadSettingsTab();
         if (id === 'logovani') loadAuditLog(1);
         if (id === 'uzivatele') loadUsers();
+        if (id === 'heslo') loadTelegramMine();
     }
 
     // ------------------------------------------------------- range pickers
@@ -862,15 +863,80 @@
         });
     }
 
+    function tgStatusText(t) {
+        if (!t || !t.configured) return 'nenastaveno';
+        return t.connected ? `připojeno · @${t.bot}` : (t.error || 'připojuji…');
+    }
+
+    function renderTelegramAdmin(t) {
+        $('tgAdminStatus').textContent = tgStatusText(t);
+        const body = $('tgChatsBody');
+        body.textContent = '';
+        const list = (t && t.chats) || [];
+        if (!list.length) body.innerHTML = '<tr><td colspan="5" class="muted">Žádný propojený chat – uživatelé se propojí v „Můj účet“.</td></tr>';
+        list.forEach((c) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${esc(c.title || c.chat_id)}</td><td>${esc(c.username)}</td>
+                <td>${c.notify ? 'zapnuta' : 'vypnuta'}</td><td>${fmtDateTime(c.created * 1000)}</td><td class="td-actions"></td>`;
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'btn btn-danger btn-sm'; b.textContent = 'Odpojit';
+            b.addEventListener('click', () => {
+                if (!confirm('Odpojit tento Telegram chat?')) return;
+                action(() => api('POST', '/api/telegram/unlink', { chat_id: c.chat_id }), 'Odpojeno.').then(loadSettingsTab);
+            });
+            tr.querySelector('.td-actions').appendChild(b);
+            body.appendChild(tr);
+        });
+    }
+
+    function renderServis(s) {
+        if (!s) return;
+        let txt;
+        if (!s.installed) txt = 'NetBird není nainstalován';
+        else if (s.mode === 'on') txt = 'zapnuto trvale';
+        else if (s.mode === '24h' && s.until) txt = 'zapnuto do ' + fmtDateTime(s.until * 1000);
+        else txt = 'vypnuto';
+        if (s.installed && s.connected) txt += ` · připojeno (${s.ip || '?'})`;
+        $('servisStatus').textContent = txt;
+        setSelect($('servisMode'), s.mode || 'off');
+    }
+
+    async function loadTelegramMine() {
+        const t = await api('GET', '/api/telegram/mine').catch(() => null);
+        if (!t) return;
+        $('tgMineInfo').textContent = t.connected ? `Upozornění a ovládání nádrží z telefonu (bot @${t.bot}).`
+            : t.configured ? `Telegram bot není připojený${t.error ? ' – ' + t.error : ''}.`
+                : 'Telegram zatím nenastavil administrátor (Nastavení → Obecné → Telegram).';
+        $('tgLinkBtn').disabled = !t.connected;
+        const body = $('tgMineBody');
+        body.textContent = '';
+        if (!t.chats.length) body.innerHTML = '<tr><td colspan="3" class="muted">Zatím nepropojeno.</td></tr>';
+        t.chats.forEach((c) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${esc(c.title || c.chat_id)}</td><td>${fmtDateTime(c.created * 1000)}</td><td class="td-actions"></td>`;
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'btn btn-danger btn-sm'; b.textContent = 'Odpojit';
+            b.addEventListener('click', () => {
+                action(() => api('POST', '/api/telegram/unlink', { chat_id: c.chat_id }), 'Odpojeno.').then(loadTelegramMine);
+            });
+            tr.querySelector('.td-actions').appendChild(b);
+            body.appendChild(tr);
+        });
+    }
+
     async function loadSettingsTab() {
-        const [st, nodes, ha, sys, bk] = await Promise.all([
+        const [st, nodes, ha, sys, bk, tg, sv] = await Promise.all([
             api('GET', '/api/settings').catch(() => null),
             api('GET', '/api/nodes').catch(() => null),
             api('GET', '/api/ha').catch(() => null),
             api('GET', '/api/system').catch(() => null),
-            api('GET', '/api/backup').catch(() => null)
+            api('GET', '/api/backup').catch(() => null),
+            api('GET', '/api/telegram').catch(() => null),
+            api('GET', '/api/servis').catch(() => null)
         ]);
         renderBackups(bk);
+        if (tg) renderTelegramAdmin(tg);
+        renderServis(sv);
         if (nodes) { nodesCache = nodes; renderNodes(nodes); applyNode(currentNodeCfg()); }
         if (st) applySettings(st.settings);
         if (ha) renderHa(ha);
@@ -929,7 +995,13 @@
                 applySettings(r.settings);
                 toast(r.changed.length ? 'Nastavení uloženo.' : 'Beze změn.');
                 pollState();
+                if (r.changed.includes('telegram_token')) setTimeout(loadSettingsTab, 4000);   // bot se připojuje
             });
+        });
+        $('servisSave').addEventListener('click', () => {
+            const mode = $('servisMode').value;
+            if (mode !== 'off' && !confirm('Povolit vzdálený servisní přístup k tomuto zařízení?')) return;
+            action(() => api('POST', '/api/servis', { mode }), 'Uloženo.').then((r) => { if (r) renderServis(r); });
         });
         $('calAddBtn').addEventListener('click', () => {
             const v = $('calActualCm').value;
@@ -1287,6 +1359,19 @@
         initializeCustomSelects(body);
     }
 
+    function bindTelegram() {
+        $('tgLinkBtn').addEventListener('click', () => {
+            action(() => api('POST', '/api/telegram/link', {})).then((r) => {
+                if (!r) return;
+                $('tgLinkBox').classList.remove('hidden');
+                $('tgLinkUrl').href = r.url || '#';
+                $('tgLinkBot').textContent = r.bot ? '@' + r.bot : '';
+                $('tgLinkCode').textContent = '/start ' + r.code;
+                setTimeout(loadTelegramMine, 15000);
+            });
+        });
+    }
+
     function bindUsers() {
         $('addUserForm').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -1336,6 +1421,7 @@
         bindRefill();
         if (ME.role === 'admin') { bindSettings(); }
         bindUsers();
+        bindTelegram();
 
         setViewAll(VIEW_ALL);
         await pollState();

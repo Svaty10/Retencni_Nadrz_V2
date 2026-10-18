@@ -1,0 +1,9 @@
+[Unit]
+Description=Retenční nádrž – kontrola servisního přístupu (vypršení 24 h, stav)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

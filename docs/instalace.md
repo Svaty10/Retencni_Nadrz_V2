@@ -79,7 +79,54 @@ odemknout jen přeprogramováním.
   GitHub Action sestaví a podepíše balík. Ručně: `tools/make-release.sh release.key`.
 - Kanál (`stable`/`beta`) a vypnutí automatiky: `/etc/default/retencka`.
 
-## 6. Vzdálený přístup – Cloudflare Tunnel
+## 6. Telegram – upozornění a ovládání z telefonu
+Zdarma, bez veřejné IP a bez otevřených portů (hub se k Telegramu jen sám připojuje).
+
+**Při instalaci (dělá technik):**
+1. V Telegramu napište **@BotFather** → `/newbot` → název (např. „Nádrž Novákovi“) a uživatelské jméno
+   končící na `bot`. BotFather pošle **token**.
+2. Web hubu → *Nastavení → Obecné → Telegram* → vložit token → *Uložit*. Stav ukáže „připojeno · @jméno_bota“.
+
+**Každý uživatel (i zákazník):** *Můj účet → Telegram → Propojit s Telegramem* → otevřít odkaz v telefonu →
+v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administrátor smí dopouštět a servisní příkazy.
+
+| Příkaz | Kdo | Co dělá |
+|---|---|---|
+| `stav` | všichni | hladina, litry, baterie, „vystačí ~N dní“, dopouštění (s tlačítky) |
+| `graf` | všichni | obrázek hladiny za 7 dní (dopouštění zeleně, déšť modře) |
+| `upozorneni zap` / `vyp` | všichni | upozornění pro tento chat |
+| `dopustit [nádrž] [%]`, `stop [nádrž]` | admin | dopouštění na dálku |
+| `diag`, `log` | admin | diagnostika (signál, ztráty, rušení, baterie, místo, verze), poslední záznamy |
+| `restart`, `reboot`, `aktualizovat` | admin | restart aplikace / zařízení, kontrola aktualizací (s potvrzením) |
+| `servis zap` / `trvale` / `vyp` | admin | vzdálený servisní přístup (NetBird, viz níže) |
+| `odhlasit` | všichni | odpojí chat |
+
+Upozornění: hladina pod nastavenou hranicí (*Nastavení → nádrž → Upozornit pod*), dopouštění spuštěno /
+dokončeno / porucha, čekání na déšť, slabá nebo vybitá baterie, čidlo neposílá data a znovu posílá.
+Administrátoři navíc dostávají restarty čidel, párování, málo místa na kartě a změny servisního přístupu.
+
+## 7. Vzdálený servis – NetBird
+Technik se může k zařízení připojit na dálku (web i SSH), aniž by zákazník cokoli instaloval.
+NetBird je zdarma do 5 uživatelů a 100 zařízení a je open source (lze provozovat i na vlastním serveru).
+
+1. Účet na [app.netbird.io](https://app.netbird.io) → *Setup Keys* → vytvořit klíč (opakovaně použitelný,
+   skupina např. `retencka`).
+2. *Access Control*: pravidlo „skupina `servis` (vaše PC/telefon) → skupina `retencka`, TCP 22 a 80“ a **žádné**
+   pravidlo `retencka → retencka` (huby se navzájem nevidí). Výchozí pravidlo „All“ smažte.
+3. Instalace hubu: `sudo ./system/install.sh --netbird-setup-key <KLÍČ>`
+   (vlastní server: navíc `--netbird-url https://…`).
+4. Po instalaci je přístup povolen **24 hodin**, pak se sám vypne. Zákazník (nebo technik s jeho souhlasem)
+   ho zapíná v *Nastavení → Telegram a vzdálený servis* (vypnuto / na 24 h / trvale) nebo příkazem
+   `servis zap` v Telegramu. Každá změna je v záznamech a administrátorům přijde zpráva.
+5. Připojení: web `http://<NetBird-IP>`, SSH `ssh <uživatel>@<NetBird-IP>` – doporučeno jen klíčem
+   (`PasswordAuthentication no` v `/etc/ssh/sshd_config`).
+
+NetBird ovládá pomocná služba `retencka-control` (s právy roota, aplikace sama žádná nemá): aplikace zapíše
+požadavek, služba zavolá `netbird up` / `netbird down` a každých 5 minut kontroluje vypršení 24 h.
+
+## 8. Vlastní doména – Cloudflare Tunnel
+Pro vlastní nasazení s doménou (adresa typu `https://nadrz.mojedomena.cz`).
+
 1. Cloudflare Zero Trust → *Networks → Tunnels* → vytvořit tunel, zkopírovat token.
 2. `sudo ./system/install.sh --cloudflare-token <TOKEN>`
 3. *Public hostname* → `http://localhost:80`. **Port 8081 (Home Assistant) do tunelu nedávejte.**
@@ -90,7 +137,7 @@ Web sám o sobě: hesla scrypt, session na serveru (HttpOnly, SameSite, Secure p
 CSRF token + kontrola Origin, zpomalování a zamykání po neúspěšných pokusech, striktní CSP,
 všechna API jen po přihlášení, audit log.
 
-## 7. Read-only systém (volitelné, maximální odolnost SD karty)
+## 9. Read-only systém (volitelné, maximální odolnost SD karty)
 Overlay root vyžaduje, aby `/var/lib/retencka` byl **samostatný oddíl** (jinak by se ztrácela
 data i aktualizace). Postup na čisté kartě (na PC s Linuxem, před prvním spuštěním):
 ```bash
@@ -103,17 +150,19 @@ Na Pi: přidat do `/etc/fstab` řádek
 `sudo ./system/install.sh --overlay`. Systémové změny pak vyžadují dočasné vypnutí overlaye
 (`sudo raspi-config` → Performance → Overlay FS).
 
-## 8. Užitečné příkazy
+## 10. Užitečné příkazy
 ```bash
 systemctl status retencka            # stav služby
 journalctl -u retencka -f            # log aplikace (jen v RAM)
 journalctl -u retencka-netwatch -f   # Wi-Fi / hotspot
+journalctl -u retencka-control       # restart / servisní přístup (NetBird)
+netbird status                       # stav NetBird
 sudo systemctl start retencka-update # ruční kontrola aktualizace
 sudo cat /boot/firmware/retencka.txt                              # heslo ze štítku
 sudo sqlite3 /var/lib/retencka/data/retencka.db "DELETE FROM users"  # tovární přístup: admin + heslo ze štítku
 ```
 
-## 9. Vývoj bez hardwaru
+## 11. Vývoj bez hardwaru
 ```bash
 cd server
 RETENCKA_DATA=/tmp/rt RETENCKA_WEB_PORT=8080 RETENCKA_HA_PORT=8081 RETENCKA_MOCK=1 python3 -m retencka

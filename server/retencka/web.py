@@ -44,6 +44,7 @@ FIELD_LABELS = {
     "rain_wait_max_below_pct": "nečekat pod prahem o", "rain_wait_max_drop_pct": "přestat čekat po poklesu o",
     "latitude": "poloha", "longitude": "poloha", "battery_capacity_mah": "kapacita baterie",
     "retention_days": "mazání starých dat", "stale_timeout_s": "limit zpoždění dat",
+    "telegram_token": "Telegram bot", "notify_low_pct": "upozornit pod",
 }
 
 
@@ -63,7 +64,8 @@ AUDIT_CATEGORIES = {
     "refill":   ["MANUAL_REFILL", "AUTO_REFILL", "REFILL_ERROR", "REFILL_FAULT", "RAIN_WAIT"],
     "sensors":  ["NODE_PAIRED", "NODE_PAIRING", "NODE_REMOVED", "NODE_UNPAIR_REQUESTED", "NODE_UNPAIRED",
                  "NODE_UNPAIR_CANCELLED", "NODE_BOOT"],
-    "system":   ["TIME_FIXED", "UPDATE_REQUESTED", "BACKUP_DOWNLOADED", "BACKUP_IMPORTED", "DISK_LOW"],
+    "system":   ["TIME_FIXED", "UPDATE_REQUESTED", "BACKUP_DOWNLOADED", "BACKUP_IMPORTED", "DISK_LOW",
+                 "TELEGRAM_LINKED", "TELEGRAM_UNLINKED", "SERVICE_ACCESS", "SERVICE_RESTART", "SERVICE_REBOOT"],
     "problems": ["LOGIN_FAILED", "SETUP_FAILED", "REFILL_ERROR", "REFILL_FAULT", "DISK_LOW"],
 }
 
@@ -949,6 +951,58 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                    *user_of(request))
         return jresp({"ok": True, **stats})
 
+    # ------------------------------------------------------------- telegram
+    def tg_status() -> dict:
+        bot = core.telegram
+        return bot.status() if bot else {"configured": False, "connected": False, "bot": None, "error": None}
+
+    @need("admin")
+    async def api_telegram(request):
+        bot = core.telegram
+        return jresp({**tg_status(), "chats": bot.chats() if bot else []})
+
+    @need()
+    async def api_telegram_mine(request):
+        bot = core.telegram
+        return jresp({**tg_status(), "chats": bot.chats(request["session"]["username"]) if bot else []})
+
+    @need()
+    async def api_telegram_link(request):
+        bot = core.telegram
+        if not bot or not tg_status()["connected"]:
+            return jerr("Telegram bot není nastavený nebo připojený – nastaví ho administrátor.")
+        return jresp({"ok": True, **bot.new_code(request["session"]["username"])})
+
+    @need()
+    async def api_telegram_unlink(request):
+        data = await read_json(request)
+        bot = core.telegram
+        try:
+            cid = int(data.get("chat_id"))
+        except (TypeError, ValueError):
+            return jerr("Neplatný chat.")
+        sess = request["session"]
+        own = bot is not None and any(c["chat_id"] == cid for c in bot.chats(sess["username"]))
+        if not own and sess["role"] != "admin":
+            return jerr("Nedostatečná oprávnění", 403)
+        if bot:
+            bot.unlink(cid)
+        core.audit("TELEGRAM_UNLINKED", "Telegram chat odpojen", *user_of(request))
+        return jresp({"ok": True})
+
+    # ----------------------------------------------- remote service access
+    @need("admin")
+    async def api_servis(request):
+        return jresp(core.servis_state())
+
+    @need("admin")
+    async def api_servis_set(request):
+        data = await read_json(request)
+        mode = str(data.get("mode") or "")
+        if mode not in ("off", "24h", "on"):
+            return jerr("Neplatná volba.")
+        return jresp({"ok": True, **core.set_servis(mode, *user_of(request))})
+
     @need("admin")
     async def api_system_update(request):
         Path(core.data_dir, "update-request").write_text(str(int(time.time())))
@@ -996,6 +1050,12 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/ha/rotate", api_ha_rotate)
     r.add_get("/api/system", api_system)
     r.add_post("/api/system/update", api_system_update)
+    r.add_get("/api/telegram", api_telegram)
+    r.add_get("/api/telegram/mine", api_telegram_mine)
+    r.add_post("/api/telegram/link", api_telegram_link)
+    r.add_post("/api/telegram/unlink", api_telegram_unlink)
+    r.add_get("/api/servis", api_servis)
+    r.add_post("/api/servis", api_servis_set)
     r.add_get("/api/backup", api_backup_list)
     r.add_get("/api/backup/download", api_backup_download)
     r.add_post("/api/backup/import", api_backup_import)

@@ -146,6 +146,17 @@ MIGRATIONS: list[str] = [
     ALTER TABLE measurements ADD COLUMN diag INTEGER;
     ALTER TABLE measurements ADD COLUMN vbat_sag_mv INTEGER;
     """,
+    # --- v7: Telegram chats linked to hub users -----------------------------
+    """
+    CREATE TABLE telegram_chats (
+        chat_id  INTEGER PRIMARY KEY,
+        username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE ON UPDATE CASCADE,
+        title    TEXT,
+        created  INTEGER NOT NULL,
+        notify   INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE INDEX idx_tg_user ON telegram_chats(username);
+    """,
 ]
 
 

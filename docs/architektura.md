@@ -73,6 +73,8 @@ zpět na 300 s po 3 klidných měřeních, max. 90 rychlých cyklů.
 | `httpserver.py` | minimální striktní HTTP/1.1 server nad asyncio (limity hlaviček, bez chunked požadavků) |
 | `web.py` | routy webu a HA API, kontrola rolí, CSRF, bezpečnostní hlavičky |
 | `auth.py` | uživatelé (scrypt), session v DB, rate limiting |
+| `telegram.py` | Telegram bot: propojení chatů s účty, příkazy, upozornění (long polling ve vlastním vlákně) |
+| `pngchart.py` | graf hladiny do PNG jen se standardní knihovnou (pro Telegram) |
 
 ### 3.2 Vlákna
 
@@ -214,6 +216,7 @@ Převod parametrů z původního prototypu (Flask + ESP32):
 | `retencka-portal.service` | captive portál pro zadání Wi-Fi (jen v režimu hotspotu) |
 | `retencka-alias.service` | mDNS alias `retencka.local` (jen první zařízení v síti) |
 | `retencka-update.timer/.path/.service` | denní / ruční aktualizace z GitHub Release, Ed25519 podpis, rollback |
+| `retencka-control.path/.timer/.service` | akce s právy roota na žádost aplikace: restart zařízení, servisní přístup NetBird (24 h / trvale / vypnuto) |
 
 Read-only root (overlayfs), data na `/var/lib/retencka`, logy v RAM, HW watchdog.
 

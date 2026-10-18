@@ -28,6 +28,7 @@ from .core import Core
 from .db import Database
 from .radio import Receiver
 from .settings import Settings
+from .telegram import TelegramBot
 from .httpserver import Server
 from .web import build_ha_app, build_web_app
 
@@ -103,6 +104,11 @@ async def main_async() -> None:
     core.radio = radio
     radio.start()
 
+    bot = TelegramBot(core)
+    core.notifier = bot.notify
+    core.telegram = bot
+    bot.start(core.loop)
+
     bind = env("RETENCKA_BIND", "0.0.0.0")
     web_port, ha_port = int(env("RETENCKA_WEB_PORT", "80")), int(env("RETENCKA_HA_PORT", "8081"))
     web_app = build_web_app(core, static_dir)
@@ -127,7 +133,7 @@ async def main_async() -> None:
 
     async def periodic():
         next_hour = next_day = 0.0
-        next_refill = 0.0
+        next_refill = next_watch = 0.0
         core.aggregate_hours(since=int(time.time()) - 48 * 3600)
         while not stop.is_set():
             now = time.time()
@@ -141,6 +147,9 @@ async def main_async() -> None:
                     next_refill = now + 30
                     await core.refill_tick()
                     core.time_tick()
+                if now >= next_watch:
+                    next_watch = now + 60
+                    core.watch_tick()
                 if now >= next_hour:
                     next_hour = now + 3600 - now % 3600 + 60
                     await asyncio.to_thread(core.aggregate_hours)
@@ -159,6 +168,7 @@ async def main_async() -> None:
     log.info("Shutting down")
     sd_notify("STOPPING=1")
     task.cancel()
+    bot.stop()
     radio.stop()
     for r in runners:
         await r.stop()

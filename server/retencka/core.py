@@ -34,7 +34,16 @@ NO_RISE_LOCK_S = 24 * 3600
 
 PAIR_TARGET_S = 15 * 60
 LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
-BACKUP_KEEP = 7                   # nightly local backups kept           # how long the hub waits for a node the user wants to pair
+BACKUP_KEEP = 7                   # nightly local backups kept
+SERVIS_24H_S = 24 * 3600
+
+# audit actions forwarded to Telegram: action -> admins only
+NOTIFY_ACTIONS = {"AUTO_REFILL": False, "MANUAL_REFILL": False, "REFILL_ERROR": False, "REFILL_FAULT": False,
+                  "RAIN_WAIT": False, "NODE_BOOT": True, "NODE_PAIRED": True, "NODE_UNPAIRED": True,
+                  "DISK_LOW": True, "SERVICE_ACCESS": True}
+NOTIFY_ICONS = {"AUTO_REFILL": "💧", "MANUAL_REFILL": "💧", "REFILL_ERROR": "⚠️", "REFILL_FAULT": "⚠️",
+                "RAIN_WAIT": "🌧", "NODE_BOOT": "🔄", "NODE_PAIRED": "📡", "NODE_UNPAIRED": "📡",
+                "DISK_LOW": "💾", "SERVICE_ACCESS": "🛠"}
 
 
 def time_synced() -> bool:
@@ -80,6 +89,11 @@ class Core:
         # bookkeeping must not interleave with a pending Hydrawise call (double start)
         self._refill_lock = asyncio.Lock()
 
+        # Telegram (set by __main__): notifier(text, admin_only)
+        self.notifier = None
+        self.telegram = None
+        self._watch: dict[int, dict] = {}          # node_id -> last notified conditions
+
         # clock correction after a late NTP sync (no RTC on the Pi)
         self._time_anchor: Optional[tuple[float, float, int]] = None   # (wall, monotonic, first id)
 
@@ -93,6 +107,82 @@ class Core:
                             (int(time.time()), user[:64], ip[:64], action, detail[:500]))
         except Exception:
             log.exception("audit write failed")
+        if action in NOTIFY_ACTIONS:
+            self.notify(f"{NOTIFY_ICONS.get(action, '')} {detail}", NOTIFY_ACTIONS[action])
+
+    def notify(self, text: str, admin_only: bool = False) -> None:
+        if self.notifier is not None:
+            try:
+                self.notifier(text, admin_only)
+            except Exception:
+                log.exception("notification failed")
+
+    def watch_tick(self) -> None:
+        """Every minute: notify state changes that have no event of their own
+        (low level, sensor silent / back, battery low / empty). The first pass only
+        records the current state, so a restart does not repeat old warnings."""
+        for n in self.nodes.all():
+            nid, name = n["node_id"], n["name"]
+            if n.get("_unpair") or nid not in self.last:
+                continue
+            st, b, lv = self.status(nid), self.battery(nid), self.level_now(nid)
+            prev = self._watch.get(nid)
+            thr = float(n.get("notify_low_pct") or 0)
+            low = False
+            if thr > 0 and lv is not None:
+                low = lv.percent < (thr + 3.0 if prev and prev["low"] else thr)   # 3 % hysteresis
+            cur = {"offline": st == "offline" and not b["off"], "bat_off": b["off"],
+                   "bat_low": b["low"] and not b["off"], "low": low}
+            self._watch[nid] = cur
+            if prev is None:
+                continue
+            if cur["low"] and not prev["low"]:
+                self.notify(f"🔻 {name}: hladina {lv.percent:.0f} % (pod {thr:.0f} %), {lv.volume_l:.0f} L")
+            if cur["offline"] and not prev["offline"]:
+                self.notify(f"❌ {name}: čidlo neposílá data – zkontrolujte baterii nebo dosah signálu")
+            if prev["offline"] and not cur["offline"] and st == "online":
+                self.notify(f"✅ {name}: čidlo znovu posílá data")
+            if cur["bat_low"] and not prev["bat_low"]:
+                self.notify(f"🪫 {name}: baterie čidla je téměř vybitá – připravte výměnu")
+            if cur["bat_off"] and not prev["bat_off"]:
+                self.notify(f"🪫 {name}: čidlo se vypnulo kvůli vybité baterii – vyměňte baterii")
+
+    # ------------------------------------------------- root helper requests
+    def control_request(self, kind: str) -> None:
+        """Ask the root helper (retencka-control / retencka-update path units)."""
+        name = {"update": "update-request", "reboot": "control-reboot", "servis": "control-servis"}[kind]
+        with open(os.path.join(self.data_dir, name), "w") as f:
+            f.write(str(int(time.time())))
+
+    def servis_state(self) -> dict:
+        """Remote service access (NetBird): wanted mode + status reported by the helper."""
+        def load(name):
+            try:
+                with open(os.path.join(self.data_dir, name)) as f:
+                    return json.load(f)
+            except (OSError, ValueError):
+                return {}
+        want, st = load("servis.json"), load("servis-status.json")
+        mode, until = want.get("mode", "off"), want.get("until")
+        if mode == "24h" and (not until or until < time.time()):
+            mode, until = "off", None
+        return {"installed": bool(st.get("installed")), "connected": bool(st.get("connected")),
+                "ip": st.get("ip"), "mode": mode, "until": until, "by": want.get("by"),
+                "checked": st.get("checked")}
+
+    def set_servis(self, mode: str, user: str, ip: str = "") -> dict:
+        if mode not in ("off", "24h", "on"):
+            raise ValueError("mode")
+        data = {"mode": mode, "until": int(time.time()) + SERVIS_24H_S if mode == "24h" else None,
+                "by": user, "ts": int(time.time())}
+        tmp = os.path.join(self.data_dir, "servis.json.tmp")
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, os.path.join(self.data_dir, "servis.json"))
+        self.control_request("servis")
+        txt = {"off": "vypnut", "24h": "zapnut na 24 hodin", "on": "zapnut trvale"}[mode]
+        self.audit("SERVICE_ACCESS", f"Vzdálený servisní přístup {txt}", user, ip)
+        return self.servis_state()
 
     def cached(self, key: str, ttl: float, fn):
         hit = self._cache.get(key)

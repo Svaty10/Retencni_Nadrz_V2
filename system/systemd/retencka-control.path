@@ -1,0 +1,9 @@
+[Unit]
+Description=Retenční nádrž – žádosti aplikace o akce s právy roota
+
+[Path]
+PathExistsGlob=/var/lib/retencka/data/control-*
+Unit=retencka-control.service
+
+[Install]
+WantedBy=multi-user.target

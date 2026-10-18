@@ -273,6 +273,18 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 
 ---
 
+### 2.9 Telegram a vzdálený servis
+- **Telegram bot** (každá instalace vlastní bot z @BotFather, token v nastavení): long polling, bez veřejné IP.
+  Chat se propojí s účtem hubu jednorázovým kódem (10 min, max. 5 špatných pokusů) a má jeho roli
+  (uživatel čte, admin ovládá a servis). Jen soukromé chaty; smazání uživatele odpojí jeho chaty.
+- Příkazy: stav, graf (PNG z vlastního kreslení, bez knihoven), upozornění zap/vyp, dopustit/stop, diag, log,
+  restart, reboot, aktualizovat, servis. Upozornění na hladinu pod hranicí (hystereze 3 %), dopouštění,
+  poruchy, čekání na déšť, baterii, výpadek čidla; administrátorům i servisní události.
+- **Vzdálený servis přes NetBird** (volitelné při instalaci): zapnuto 24 h po instalaci, pak jen se souhlasem
+  zákazníka (vypnuto / 24 h / trvale, viditelné na webu, v záznamech). Akce s právy roota (NetBird, reboot)
+  provádí pomocná služba `retencka-control` na základě souboru s požadavkem – aplikace zůstává bez práv.
+- **Cloudflare Tunnel** zůstává pro nasazení s vlastní doménou.
+
 ## 3. Systémová vrstva (Pi Zero 2 W, Raspberry Pi OS Lite)
 
 ### 3.1 Odolnost

@@ -22,6 +22,8 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "longitude":                 (14.4378, "float", -180.0, 180.0),
     # Hydrawise account key (shared by all nodes unless a node has its own)
     "hydrawise_api_key":         ("", "str", 0, 128),
+    # Telegram bot of this installation (token from @BotFather)
+    "telegram_token":            ("", "str", 0, 100),
     # battery / node energy model (same hardware for all nodes)
     "battery_capacity_mah":      (3000.0, "float", 100.0, 100000.0),
     "node_cycle_mAs":            (3.3, "float", 0.01, 100.0),
@@ -45,6 +47,7 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "probe_accuracy_pct": (0.5, "float", 0.0, 10.0),
     "probe_range_cm":     (200.0, "float", 10.0, 10000.0),
     "catchment_area_m2":  (140.0, "float", 0.0, 100000.0),
+    "notify_low_pct":     (15.0, "float", 0.0, 100.0),     # Telegram warning below this level (0 = off)
     "runoff_coef":        (0.8, "float", 0.05, 1.0),       # share of roof rain reaching the tank
     "battery_trim":       (1.0, "float", 0.8, 1.2),
     # refilling of THIS tank – provider "none" | "hydrawise" (more can be added later)
@@ -67,7 +70,7 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
 NODE_SECRET_KEYS = {"hydrawise_api_key"}
 NODE_INTERNAL_KEYS = {"real_flow_rate_lpm"}
 
-SECRET_KEYS = {"hydrawise_api_key"}
+SECRET_KEYS = {"hydrawise_api_key", "telegram_token"}
 INTERNAL_KEYS = {"ha_token"}
 MAX_NODES = 16
 

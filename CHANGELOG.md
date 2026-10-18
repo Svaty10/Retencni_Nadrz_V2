@@ -20,5 +20,11 @@ První veřejné vydání. Nahrazuje původní prototyp (ESP32 + Flask).
 - Bezpečnost: scrypt, session na serveru, CSRF, rate limiting, striktní CSP, role admin/uživatel, audit log.
 - Zálohy: noční lokální, stažení a nahrání (sloučení) přes web.
 
+### Telegram a vzdálený servis
+- Telegram bot (vlastní pro každou instalaci): upozornění, stav, graf hladiny, dopouštění na dálku,
+  servisní příkazy (diagnostika, log, restart, reboot, aktualizace) podle role propojeného účtu.
+- Vzdálený servis přes NetBird (volba instalace), přístup jen se souhlasem zákazníka (24 h / trvale / vypnuto).
+- Cloudflare Tunnel pro nasazení s vlastní doménou.
+
 ### Systém (`system/`)
 - Wi-Fi hotspot s captive portálem, mDNS `retencka.local`, podepsané aktualizace z GitHubu s automatickým návratem, HW watchdog, volitelně read-only systém.

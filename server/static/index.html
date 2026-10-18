@@ -234,6 +234,12 @@
                             <input type="number" step="0.05" min="0.05" max="1" name="runoff_coef" class="unified-input">
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Upozornit (Telegram) pod (%, 0 = ne)</label>
+                            <input type="number" step="1" min="0" max="100" name="notify_low_pct" class="unified-input">
+                        </div>
+                    </div>
 
                     <div class="adv">
                         <h3 class="mt-15">Sonda</h3>
@@ -384,6 +390,19 @@
                             <input type="password" name="hydrawise_api_key" class="unified-input" autocomplete="off">
                         </div>
                     </div>
+                    <h3>Telegram</h3>
+                    <p class="muted small">V Telegramu napište <b>@BotFather</b> zprávu <b>/newbot</b>, zvolte název
+                        (např. „Nádrž Novákovi“) a vložte sem token, který vám pošle.</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Token bota</label>
+                            <input type="password" name="telegram_token" class="unified-input" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Stav</label>
+                            <div class="unified-input readonly-box" id="tgAdminStatus">–</div>
+                        </div>
+                    </div>
                     <div class="adv">
                         <h3>Data a baterie</h3>
                         <div class="form-row">
@@ -399,6 +418,36 @@
                     </div>
                     <button type="submit" class="btn btn-primary mt-20 w-100">Uložit</button>
                 </form>
+            </div>
+
+            <!-- Telegram a servis -->
+            <div class="card">
+                <h2>Telegram a vzdálený servis</h2>
+                <h3>Propojené chaty</h3>
+                <div class="table-responsive">
+                    <table class="user-table">
+                        <thead><tr><th>Chat</th><th>Účet</th><th>Upozornění</th><th>Propojeno</th><th></th></tr></thead>
+                        <tbody id="tgChatsBody"></tbody>
+                    </table>
+                </div>
+                <h3>Servisní přístup (NetBird)</h3>
+                <p class="muted small">Umožní servisnímu technikovi připojit se k zařízení na dálku (web i správa).
+                    Zákazník ho může kdykoli vypnout.</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stav</label>
+                        <div class="unified-input readonly-box" id="servisStatus">–</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Povolit</label>
+                        <select id="servisMode" class="unified-select">
+                            <option value="off">Vypnuto</option>
+                            <option value="24h">Na 24 hodin</option>
+                            <option value="on">Trvale</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="button" id="servisSave" class="btn btn-outline">Uložit</button>
             </div>
 
             <!-- Čidla -->
@@ -563,6 +612,23 @@
 
     <!-- ======================================================= MŮJ ÚČET -->
     <div id="heslo" class="tab-content">
+        <div class="card">
+            <h2>📱 Telegram</h2>
+            <p class="muted" id="tgMineInfo">Upozornění a ovládání nádrží z telefonu.</p>
+            <div id="tgLinkBox" class="hidden">
+                <p>Otevřete odkaz v telefonu a v Telegramu klepněte na <b>Start</b>:</p>
+                <p><a id="tgLinkUrl" href="#" target="_blank" rel="noopener" class="btn btn-primary">Otevřít Telegram</a></p>
+                <p class="muted small">Nebo pošlete botovi <b id="tgLinkBot"></b> zprávu <code id="tgLinkCode"></code>
+                    (platí 10 minut).</p>
+            </div>
+            <button type="button" id="tgLinkBtn" class="btn btn-outline">Propojit s Telegramem</button>
+            <div class="table-responsive mt-15">
+                <table class="user-table">
+                    <thead><tr><th>Propojený chat</th><th>Od</th><th></th></tr></thead>
+                    <tbody id="tgMineBody"></tbody>
+                </table>
+            </div>
+        </div>
         <div class="card account-card">
             <h2>🔑 Změna hesla</h2>
             <p class="muted mb-20">Heslo musí mít alespoň 10 znaků. Po změně budou odhlášena všechna ostatní zařízení.</p>
