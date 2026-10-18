@@ -50,6 +50,9 @@
 #define FAST_DELTA_100UV        100U
 #define FAST_CALM_CYCLES        3U      /**< Calm measurements before returning to normal */
 #define FAST_MAX_CYCLES         90U     /**< Safety cap of consecutive fast cycles */
+/** Random +-JITTER_S/2 on every interval: two nodes whose RC clocks happen to run
+ *  in step would otherwise collide packet after packet for hours. */
+#define JITTER_S                16U
 
 /* ========================================================================== */
 /* Battery (3x Li-FeS2 in series)                                             */
@@ -66,6 +69,8 @@
 #define BATTERY_CUTOFF_MV       3000U
 #define CUTOFF_CONFIRM          3U
 #define CUTOFF_MIN_TEMP_X100    0       /**< no cut-off decision below 0 degC */
+/** Pairing (X25519) at 10 MHz only above this battery voltage at boot, else 5 MHz. */
+#define PAIR_10MHZ_MIN_MV       3100U
 
 /** Battery divider (high side switched): R_top / R_bot in kOhm.
  *  Measured against the internal 1.024 V reference (tinyAVR 2-series has no 1.1 V):
@@ -91,11 +96,15 @@
 /* ========================================================================== */
 /* SHT40 heater (condensation / creep at high humidity in the closed box)     */
 /* ========================================================================== */
-/** One pulse = 200 mW for 1 s (~60 mA from the LDO, ~60 mAs). Only when RH stays
- *  above HEAT_RH_X100 for HEAT_HUMID_S, at most once per HEAT_MIN_GAP_S, never on a
- *  low battery and never above HEAT_MAX_TEMP_X100 (datasheet: heater < 65 degC).
- *  Worst case 4 pulses a day = 240 mAs/day, ~+15 % of the node's daily budget.
- *  The pulse runs after the packet was sent, so no heated value is reported. */
+/** HEAT_PULSES x (110 mW for 1 s): ~33 mA from the LDO – half the peak of the
+ *  200 mW setting, gentler on a worn battery and the LDO; ~66 mAs per heating.
+ *  Only when RH stays above HEAT_RH_X100 for HEAT_HUMID_S, at most once per
+ *  HEAT_MIN_GAP_S, never on a low battery and never above HEAT_MAX_TEMP_X100
+ *  (datasheet: heater < 65 degC, duty cycle < 10 %). Worst case 4x a day =
+ *  ~270 mAs/day, ~+15 % of the node's daily budget. Runs after the packet was
+ *  sent, so no heated value is reported. */
+#define HEAT_PULSES             2U
+#define HEAT_PULSE_WAIT_MS      1150U   /**< pulse 1 s + measurement at its end */
 #define HEAT_RH_X100            9500U
 #define HEAT_HUMID_S            3600UL
 #define HEAT_MIN_GAP_S          21600UL
@@ -106,6 +115,14 @@
 /* ========================================================================== */
 /** PATABLE value: 0xC0 = +10 dBm, 0x60 = 0 dBm (433 MHz band). */
 #define RF_PA_VALUE             0xC0
+
+/** Listen before talk: ~3 ms in RX before each transmission; if the channel is
+ *  busy (another sensor, a remote control) wait a random 20-147 ms and try again,
+ *  after LBT_MAX_TRIES send anyway. */
+#define LBT_BUSY_DBM            (-90)
+#define LBT_MAX_TRIES           5U
+#define LBT_BACKOFF_MIN_MS      20U
+#define LBT_BACKOFF_SPAN_MS     128U    /**< power of two */
 
 /* ========================================================================== */
 /* Radio protocol v3 – encrypted + authenticated, CC1101 variable length mode  */

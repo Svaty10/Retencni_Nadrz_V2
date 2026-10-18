@@ -100,12 +100,15 @@ static void maybe_heat(bool sht_ok, int16_t temp, uint16_t hum, uint16_t elapsed
     if (!g.vbat_valid || g.vbat_mv < BATTERY_LOW_MV || temp >= HEAT_MAX_TEMP_X100) {
         return;
     }
-    wdt_kick();
-    if (sht40_heater_pulse()) {
-        g.since_heat_s = 0;
-        g.humid_s = 0;
-        sleep_s(2);                      /* >= 1 s in power-down while the sensor heats */
+    for (uint8_t i = 0; i < HEAT_PULSES; i++) {
+        wdt_kick();
+        if (!sht40_heater_pulse()) {
+            break;
+        }
+        power_sleep_ms(HEAT_PULSE_WAIT_MS);   /* MCU sleeps while the sensor heats */
     }
+    g.since_heat_s = 0;                  /* also after a failed attempt: retry in 6 h */
+    g.humid_s = 0;
 }
 
 /** Decide the next interval from the probe change rate. Returns true if fast. */
@@ -233,11 +236,17 @@ static void measure_and_send(void)
     }
 }
 
-/** Batteries already empty when inserted: two readings ~1-2 s apart, no frost. */
-static bool battery_dead_at_boot(void)
+/** Batteries already empty when inserted: two readings ~1-2 s apart, no frost.
+ *  *vbat = first reading (0 if it failed). */
+static bool battery_dead_at_boot(uint16_t *vbat)
 {
     uint16_t v1 = 0, v2 = 0;
-    if (!adc_measure_battery(&v1) || v1 >= BATTERY_CUTOFF_MV) {
+    *vbat = 0;
+    if (!adc_measure_battery(&v1)) {
+        return false;
+    }
+    *vbat = v1;
+    if (v1 >= BATTERY_CUTOFF_MV) {
         return false;
     }
     power_sleep_seconds(2);
@@ -259,6 +268,7 @@ int main(void)
     rtc_pit_init();
 
     g.node_id = power_node_id();
+    rng_seed(g.node_id);                       /* unique per chip -> nodes drift apart */
     g.sticky_flags = PKT_FLAG_BOOT | ((rst & RSTCTRL_WDRF_bm) ? PKT_FLAG_WDT_RESET : 0);
     g.calm_cycles = FAST_CALM_CYCLES;
     g.boot_fast_left = BOOT_FAST_CYCLES;
@@ -268,9 +278,11 @@ int main(void)
 
     wdt_kick();
     g.rf_ok = cc1101_init();                   /* also puts the radio to SLEEP */
-    if (battery_dead_at_boot()) {
-        power_off_forever();                   /* no pairing at 10 MHz on empty cells */
+    uint16_t vbat_boot;
+    if (battery_dead_at_boot(&vbat_boot)) {
+        power_off_forever();                   /* no pairing on empty cells */
     }
+    link_set_fast_clock(vbat_boot >= PAIR_10MHZ_MIN_MV);
     bool paired = link_init(g.node_id);
 
     /* ---------------- pairing window after a battery change ---------------- */
@@ -318,6 +330,7 @@ int main(void)
         if (g.cutoff) {
             power_off_forever();                 /* last packet sent – empty battery */
         }
-        sleep_s(g.interval_s);
+        /* random jitter around the interval (average unchanged) */
+        sleep_s((uint16_t)(g.interval_s - JITTER_S / 2U + (rng_next() % JITTER_S)));
     }
 }

@@ -13,6 +13,7 @@
  */
 
 #include "adc.h"
+#include "power.h"
 #include <util/delay.h>
 
 #define ADC_TIMEOUT_LOOPS     60000UL      /* >> 64 samples * ~20 us */
@@ -81,7 +82,7 @@ bool adc_measure_battery(uint16_t *vbat_mv)
     bool ok = true;
 
     PORTA.OUTSET = PIN_EN_BAT_MEASURE;           /* divider on */
-    _delay_ms(BAT_SETTLE_MS);
+    power_sleep_ms(BAT_SETTLE_MS);               /* MCU sleeps while the divider settles */
     adc_start(ADC_REFSEL_1024MV_gc, ADC_MUXPOS_AIN5_gc);
 
     uint32_t dummy;
@@ -116,7 +117,7 @@ bool adc_measure_probe(uint16_t *probe_100uv, bool *clipped)
     *clipped = false;
 
     PORTB.OUTSET = PIN_EN_5V_PROBE;              /* 5 V boost on */
-    _delay_ms(PROBE_SETTLE_MS);
+    power_sleep_ms(PROBE_SETTLE_MS);             /* MCU sleeps while the probe settles */
     adc_start(ADC_REFSEL_2500MV_gc, ADC_MUXPOS_AIN6_gc);
 
     uint32_t dummy;

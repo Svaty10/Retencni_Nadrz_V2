@@ -10,6 +10,7 @@
  */
 
 #include "cc1101.h"
+#include "power.h"
 #include <util/delay.h>
 #include <stddef.h>
 
@@ -229,6 +230,19 @@ static bool wait_packet(uint16_t start_ms, uint16_t total_ms)
     return true;
 }
 
+/** Listen briefly (radio in IDLE with the TX FIFO loaded): true if the channel is free. */
+static bool channel_clear(void)
+{
+    (void)strobe(CC1101_SRX);                    /* auto-calibrates IDLE -> RX */
+    _delay_us(2500);                             /* calibration + RSSI valid */
+    int8_t raw = (int8_t)read_status(CC1101_RSSI);
+    (void)strobe(CC1101_SIDLE);
+    _delay_us(50);                               /* SFRX is only valid in IDLE */
+    (void)strobe(CC1101_SFRX);
+    int16_t dbm = (int16_t)raw / 2 - 74;
+    return dbm < LBT_BUSY_DBM;
+}
+
 int8_t cc1101_send(const uint8_t *tx, uint8_t txlen, uint8_t *rx, uint8_t rxmax, uint16_t rx_window_ms)
 {
     int8_t result = -1;
@@ -250,6 +264,11 @@ int8_t cc1101_send(const uint8_t *tx, uint8_t txlen, uint8_t *rx, uint8_t rxmax,
     (void)strobe(CC1101_SFTX);
     write_reg(CC1101_FIFO, txlen);               /* length byte */
     write_burst(CC1101_FIFO, tx, txlen);
+    /* listen before talk (TX FIFO survives IDLE/RX); STX is issued from IDLE, so the
+     * hardware CCA never blocks it – after LBT_MAX_TRIES we send anyway */
+    for (uint8_t i = 0; i < LBT_MAX_TRIES && !channel_clear(); i++) {
+        power_sleep_ms((uint16_t)(LBT_BACKOFF_MIN_MS + (rng_next() & (LBT_BACKOFF_SPAN_MS - 1U))));
+    }
     (void)strobe(CC1101_STX);                    /* calibrates, then sends */
 
     if (!wait_packet(TX_TIMEOUT_MS, TX_TIMEOUT_MS)) {

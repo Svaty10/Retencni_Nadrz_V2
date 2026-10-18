@@ -122,11 +122,22 @@ static void entropy_fill(uint8_t out[16])
     adc_init();                                 /* restore measurement configuration */
 }
 
+static bool g_fast_ok = false;
+
+void link_set_fast_clock(bool ok)
+{
+    g_fast_ok = ok;
+}
+
 static void fast_clock(bool on)
 {
-    /* 10 MHz for the X25519 computation only (valid down to 2.7 V) */
-    ccp_write_io((void *)&CLKCTRL.MCLKCTRLB,
-                 on ? (CLKCTRL_PDIV_2X_gc | CLKCTRL_PEN_bm) : (CLKCTRL_PDIV_6X_gc | CLKCTRL_PEN_bm));
+    /* Faster clock for the X25519 computation only (same charge, shorter time).
+     * tinyAVR speed grades: 5 MHz from 1.8 V, 10 MHz from 2.7 V, 20 MHz from 4.5 V.
+     * 10 MHz (20/2) only when the battery was healthy at boot (VCC from the LDO
+     * well above 2.7 V), otherwise 5 MHz (20/4), valid down to the 1.8 V BOD.
+     * The rest of the time the MCU runs at 3.33 MHz (20/6, also the reset default). */
+    uint8_t div = !on ? CLKCTRL_PDIV_6X_gc : (g_fast_ok ? CLKCTRL_PDIV_2X_gc : CLKCTRL_PDIV_4X_gc);
+    ccp_write_io((void *)&CLKCTRL.MCLKCTRLB, div | CLKCTRL_PEN_bm);
 }
 
 static void progress(void)

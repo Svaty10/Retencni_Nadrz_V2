@@ -100,7 +100,7 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
    zamčené na smazaný klíč – obnova jen přeprogramováním přes UPDI (vymazání EEPROM).
 7. **Ochrana proti přehrání UNPAIR:** podpis zahrnuje veřejný klíč z aktuálního PAIR_REQ, který čidlo
    generuje po každém zapnutí znovu – nahraný UNPAIR z dřívějška je neplatný.
-8. Výpočet X25519 trvá na ATtiny ~9 s (CPU dočasně na 10 MHz), jednou po vložení baterie. Entropie: šum ADC
+8. Výpočet X25519 trvá na ATtiny ~9 s (CPU dočasně na 10 MHz, jen když má baterie při startu ≥ 3,1 V – 10 MHz smí až od 2,7 V; jinak 5 MHz, ~18 s), jednou po vložení baterie. Entropie: šum ADC
    (teplotní čidlo), jitter mezi 32kHz a hlavním oscilátorem, sériové číslo, pool uložený v EEPROM.
 9. **Záloha:** klíče čidel jsou jen v DB hubu (`/var/lib/retencka`). Při ztrátě SD karty bez zálohy
    zůstanou čidla zamčená (UPDI) – zálohovat DB.

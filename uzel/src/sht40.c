@@ -129,7 +129,7 @@ bool sht40_heater_pulse(void)
     bool ok;
 
     twi_enable();
-    ok = twi_write_cmd(SHT40_CMD_HEATER_200MW_1S);
+    ok = twi_write_cmd(SHT40_CMD_HEATER_110MW_1S);
     if (!ok) {
         TWI0.MCTRLB = TWI_MCMD_STOP_gc;
         twi_bus_recover();

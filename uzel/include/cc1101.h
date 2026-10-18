@@ -20,6 +20,7 @@
 #define CC1101_SFRX         0x3A
 #define CC1101_SFTX         0x3B
 #define CC1101_SNOP         0x3D
+#define CC1101_RSSI         0x34    /* status register (read with burst bit) */
 
 /* Configuration registers */
 #define CC1101_IOCFG2       0x00

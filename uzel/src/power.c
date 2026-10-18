@@ -13,11 +13,19 @@
 #include <avr/cpufunc.h>
 
 static volatile uint16_t g_pit_seconds = 0;
+static volatile bool g_rtc_cmp = false;
+static uint16_t g_rng = 0xACE1;
 
 ISR(RTC_PIT_vect)
 {
     RTC.PITINTFLAGS = RTC_PI_bm;
     g_pit_seconds++;
+}
+
+ISR(RTC_CNT_vect)
+{
+    RTC.INTFLAGS = RTC_CMP_bm | RTC_OVF_bm;
+    g_rtc_cmp = true;
 }
 
 void power_init(void)
@@ -95,6 +103,70 @@ void power_sleep_seconds(uint16_t seconds)
     }
 }
 
+void power_sleep_ms(uint16_t ms)
+{
+    uint32_t ticks = ((uint32_t)ms * 32768UL) / 1000UL;
+    if (ticks == 0) {
+        return;
+    }
+    if (ticks > 0xFFFEUL) {
+        ticks = 0xFFFEUL;
+    }
+    while (RTC.STATUS) {
+        ;
+    }
+    RTC.CTRLA = 0;                           /* counter stopped (PIT unaffected) */
+    while (RTC.STATUS) {
+        ;
+    }
+    RTC.CNT = 0;
+    RTC.PER = 0xFFFF;
+    RTC.CMP = (uint16_t)ticks;
+    while (RTC.STATUS) {
+        ;
+    }
+    RTC.INTFLAGS = RTC_CMP_bm | RTC_OVF_bm;
+    g_rtc_cmp = false;
+    RTC.INTCTRL = RTC_CMP_bm;
+    RTC.CTRLA = RTC_PRESCALER_DIV1_gc | RTC_RUNSTDBY_bm | RTC_RTCEN_bm;
+
+    /* Standby: the RTC counter runs (it does not in power-down), GPIO states stay */
+    SLPCTRL.CTRLA = SLPCTRL_SMODE_STDBY_gc | SLPCTRL_SEN_bm;
+    for (;;) {
+        cli();
+        if (g_rtc_cmp) {
+            sei();
+            break;
+        }
+        sei();                               /* SEI + SLEEP is atomic */
+        sleep_cpu();
+    }
+    RTC.INTCTRL = 0;
+    while (RTC.STATUS) {
+        ;
+    }
+    RTC.CTRLA = 0;
+    SLPCTRL.CTRLA = SLPCTRL_SMODE_PDOWN_gc | SLPCTRL_SEN_bm;
+}
+
+void rng_seed(uint16_t seed)
+{
+    g_rng ^= seed;
+    if (g_rng == 0) {
+        g_rng = 0xACE1;
+    }
+}
+
+uint16_t rng_next(void)
+{
+    uint16_t x = g_rng;
+    x ^= (uint16_t)(x << 7);
+    x ^= (uint16_t)(x >> 9);
+    x ^= (uint16_t)(x << 8);
+    g_rng = x;
+    return x;
+}
+
 void power_off_forever(void)
 {
     cli();
@@ -102,6 +174,8 @@ void power_off_forever(void)
     PORTA.OUTCLR = PIN_EN_BAT_MEASURE;
     RTC.PITINTCTRL = 0;                      /* no periodic wake-up */
     RTC.PITCTRLA = 0;
+    RTC.INTCTRL = 0;
+    RTC.CTRLA = 0;
     while (WDT.STATUS & WDT_SYNCBUSY_bm) {
         ;
     }

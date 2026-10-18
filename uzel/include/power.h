@@ -21,6 +21,14 @@ void rtc_pit_init(void);
 /** Sleep in power-down for the given number of seconds (WDT kicked every second). */
 void power_sleep_seconds(uint16_t seconds);
 
+/** Sleep (standby, RTC compare) for a short time – e.g. while the probe settles.
+ *  Up to ~2 s; the PIT keeps ticking. */
+void power_sleep_ms(uint16_t ms);
+
+/** Small PRNG (xorshift16) for jitter and back-off; seed with something unique. */
+void rng_seed(uint16_t seed);
+uint16_t rng_next(void);
+
 /** Switch off for good: wake-up sources and watchdog off, power-down forever.
  *  Only a reset (new battery = power-on reset) starts the node again. */
 void power_off_forever(void) __attribute__((noreturn));
