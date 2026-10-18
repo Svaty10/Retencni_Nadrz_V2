@@ -17,11 +17,11 @@ int main(int argc, char **argv)
     uint8_t k[32], p[300], o[32];
     if (argc == 4 && !strcmp(argv[1], "x25519")) { unhex(argv[2], k, 32); unhex(argv[3], p, 32); x25519(o, k, p); phex(o, 32); return 0; }
     if (argc == 6 && !strcmp(argv[1], "data")) {   /* data <shared hex> <node_id> <ctr> <telemetry hex> */
-        uint8_t ke[16], km[16], tl[10], pkt[21];
-        unhex(argv[2], k, 32); unhex(argv[5], tl, 10);
+        uint8_t ke[16], km[16], tl[PROTO_TELEMETRY_LEN], pkt[PROTO_DATA_LEN];
+        unhex(argv[2], k, 32); unhex(argv[5], tl, PROTO_TELEMETRY_LEN);
         proto_derive_keys(k, ke, km);
         proto_build_data(pkt, ke, km, (uint16_t)strtoul(argv[3], 0, 16), (uint32_t)strtoul(argv[4], 0, 10), tl);
-        phex(pkt, 21); return 0;
+        phex(pkt, PROTO_DATA_LEN); return 0;
     }
     if (argc == 5 && !strcmp(argv[1], "unpair")) {   /* unpair <k_mac hex> <node_id> <pub hex>: build tag via CMAC and self-check */
         uint8_t km[16], pub[32], pkt[19], msg[35];

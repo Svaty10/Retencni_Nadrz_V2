@@ -53,4 +53,4 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 a v `refill.zone_controlled_by` nádrž, která ovládá stejný ventil (pak je dopouštění u této nádrže vypnuté).
 
 ## Rádiový protokol v3
-DATA 21 B (AES-128-CTR + CMAC), PAIR_REQ 36 B / PAIR_ACK 35 B (X25519), UNPAIR 19 B (CMAC) – podrobnosti v `docs/ZADANI.md` (1.5, 1.6).
+DATA 23 B (AES-128-CTR + CMAC, včetně diagnostického bajtu a poklesu baterie pod zátěží), PAIR_REQ 36 B / PAIR_ACK 35 B (X25519), UNPAIR 19 B (CMAC) – podrobnosti v `docs/ZADANI.md` (1.5, 1.6).

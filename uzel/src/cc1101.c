@@ -230,6 +230,36 @@ static bool wait_packet(uint16_t start_ms, uint16_t total_ms)
     return true;
 }
 
+void (*cc1101_tx_hook)(void) = NULL;
+uint8_t cc1101_lbt_backoffs = 0;
+
+/** Status register read twice until stable (CC1101 errata: SPI read synchronisation). */
+static uint8_t read_status_stable(uint8_t reg)
+{
+    uint8_t a = read_status(reg);
+    for (uint8_t i = 0; i < 4; i++) {
+        uint8_t b = read_status(reg);
+        if (a == b) {
+            break;
+        }
+        a = b;
+    }
+    return a;
+}
+
+/** End of transmission: the MCU sleeps in 4 ms steps until the radio is back in IDLE
+ *  (MCSM1: TX -> IDLE) and the TX FIFO is empty (the frame really went out). */
+static bool wait_tx_done(void)
+{
+    for (uint8_t i = 0; i < TX_TIMEOUT_MS / 4U; i++) {
+        power_sleep_ms(4);
+        if ((read_status_stable(CC1101_MARCSTATE) & 0x1F) == 0x01) {
+            return (read_status_stable(CC1101_TXBYTES) & 0x7F) == 0;
+        }
+    }
+    return false;
+}
+
 /** Listen briefly (radio in IDLE with the TX FIFO loaded): true if the channel is free. */
 static bool channel_clear(void)
 {
@@ -266,12 +296,16 @@ int8_t cc1101_send(const uint8_t *tx, uint8_t txlen, uint8_t *rx, uint8_t rxmax,
     write_burst(CC1101_FIFO, tx, txlen);
     /* listen before talk (TX FIFO survives IDLE/RX); STX is issued from IDLE, so the
      * hardware CCA never blocks it – after LBT_MAX_TRIES we send anyway */
-    for (uint8_t i = 0; i < LBT_MAX_TRIES && !channel_clear(); i++) {
+    cc1101_lbt_backoffs = 0;
+    while (cc1101_lbt_backoffs < LBT_MAX_TRIES && !channel_clear()) {
+        cc1101_lbt_backoffs++;
         power_sleep_ms((uint16_t)(LBT_BACKOFF_MIN_MS + (rng_next() & (LBT_BACKOFF_SPAN_MS - 1U))));
     }
     (void)strobe(CC1101_STX);                    /* calibrates, then sends */
-
-    if (!wait_packet(TX_TIMEOUT_MS, TX_TIMEOUT_MS)) {
+    if (cc1101_tx_hook != NULL) {
+        cc1101_tx_hook();                        /* runs while the frame is on air */
+    }
+    if (!wait_tx_done()) {
         goto out;
     }
     result = 0;

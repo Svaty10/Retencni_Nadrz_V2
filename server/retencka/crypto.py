@@ -134,10 +134,10 @@ def x25519_keypair() -> tuple[bytes, bytes]:
 
 # ======================================================== protocol v3
 PKT_DATA, PKT_PAIR_REQ, PKT_PAIR_ACK, PKT_UNPAIR = 0x03, 0x04, 0x05, 0x06
-DATA_LEN, PAIR_LEN, MAC_LEN = 21, 35, 4
+DATA_LEN, PAIR_LEN, MAC_LEN = 23, 35, 4
 PAIR_REQ_LEN, UNPAIR_LEN = 36, 19
 REQ_PAIRED = 0x01                           # PAIR_REQ state bit: node holds a key
-_TELEMETRY = struct.Struct("<BHhHHB")       # flags vbat temp hum probe fw
+_TELEMETRY = struct.Struct("<BHhHHBBB")     # flags vbat temp hum probe fw diag vbat_sag(5 mV)
 
 
 def derive_keys(shared: bytes) -> Optional[tuple[bytes, bytes]]:
@@ -155,7 +155,7 @@ def _keystream(k_enc: bytes, header6: bytes) -> bytes:
 def build_data(k_enc: bytes, k_mac: bytes, node_id: int, ctr: int, telemetry: bytes) -> bytes:
     hdr = bytes([PKT_DATA]) + struct.pack("<HI", node_id, ctr)
     ks = _keystream(k_enc, hdr[1:7])
-    body = hdr + bytes(a ^ b for a, b in zip(telemetry, ks[:10]))
+    body = hdr + bytes(a ^ b for a, b in zip(telemetry, ks))
     return body + aes_cmac(k_mac, body)[:MAC_LEN]
 
 
@@ -167,19 +167,21 @@ def data_header(pkt: bytes) -> Optional[tuple[int, int]]:
 
 
 def open_data(k_enc: bytes, k_mac: bytes, pkt: bytes) -> Optional[tuple]:
-    """Verify + decrypt. Returns (flags, vbat, temp, hum, probe, fw) or None."""
+    """Verify + decrypt. Returns (flags, vbat, temp, hum, probe, fw, diag, vbat_sag) or None."""
     if len(pkt) != DATA_LEN or pkt[0] != PKT_DATA:
         return None
-    tag = aes_cmac(k_mac, pkt[:17])[:MAC_LEN]
-    if not _consteq(tag, pkt[17:21]):
+    body = DATA_LEN - MAC_LEN
+    tag = aes_cmac(k_mac, pkt[:body])[:MAC_LEN]
+    if not _consteq(tag, pkt[body:]):
         return None
     ks = _keystream(k_enc, pkt[1:7])
-    plain = bytes(a ^ b for a, b in zip(pkt[7:17], ks[:10]))
+    plain = bytes(a ^ b for a, b in zip(pkt[7:body], ks))
     return _TELEMETRY.unpack(plain)
 
 
-def build_telemetry(flags: int, vbat: int, temp: int, hum: int, probe: int, fw: int = 10) -> bytes:
-    return _TELEMETRY.pack(flags, vbat, temp, hum, probe, fw)
+def build_telemetry(flags: int, vbat: int, temp: int, hum: int, probe: int, fw: int = 10,
+                    diag: int = 0, sag: int = 0xFF) -> bytes:
+    return _TELEMETRY.pack(flags, vbat, temp, hum, probe, fw, diag, sag)
 
 
 def build_pair_ack(node_id: int, hub_pub: bytes) -> bytes:

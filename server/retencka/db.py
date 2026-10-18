@@ -141,6 +141,11 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE hourly ADD COLUMN rssi REAL;
     """,
+    # --- v6: diagnostic byte + battery drop under TX load ----------------------
+    """
+    ALTER TABLE measurements ADD COLUMN diag INTEGER;
+    ALTER TABLE measurements ADD COLUMN vbat_sag_mv INTEGER;
+    """,
 ]
 
 

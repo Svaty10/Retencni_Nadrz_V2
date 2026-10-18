@@ -17,6 +17,15 @@ FLAG_BOOT = 0x20
 FLAG_WDT_RESET = 0x40
 FLAG_FAST = 0x80
 
+# diagnostic byte (uzel/include/config.h DIAG_*)
+DIAG_LBT_MASK = 0x03          # listen-before-talk back-offs before the previous TX
+DIAG_HEATED = 0x04            # SHT40 heater ran since the previous packet
+DIAG_BOD_RESET = 0x08         # brown-out reset
+DIAG_BAT_FRESH = 0x10         # battery measured in this cycle
+DIAG_RADIO_REINIT = 0x20      # a TX failed, radio re-initialised
+SAG_UNIT_MV = 5
+SAG_UNKNOWN = 0xFF
+
 FLAG_NAMES = {
     FLAG_BAT_ERR: "Chyba měření baterie",
     FLAG_SHT_ERR: "Chyba čidla SHT40",
@@ -44,6 +53,8 @@ class Packet:
     probe_100uv: Optional[int]
     rssi_dbm: Optional[float] = None
     lqi: Optional[int] = None
+    diag: Optional[int] = None
+    vbat_sag_mv: Optional[int] = None
 
 
 def flag_list(flags: int) -> list[str]:
@@ -177,11 +188,14 @@ def battery_percent(vbat_v: float, cells: int = 3) -> float:
     return 0.0
 
 
-def battery_days_left(percent: float, cycles_per_day: float, s: dict) -> Optional[float]:
-    """Remaining runtime from an energy model (voltage trends of Li-FeS2 are useless)."""
+def battery_days_left(percent: float, cycles_per_day: float, s: dict,
+                      heats_per_day: float = 0.0) -> Optional[float]:
+    """Remaining runtime from an energy model (voltage trends of Li-FeS2 are useless).
+    Uses the real measurement rate and the real heater use of the last days."""
     nominal_mas = float(s["battery_capacity_mah"]) * 3600.0
     cap_mas = nominal_mas * percent / 100.0
     per_day = (cycles_per_day * float(s["node_cycle_mAs"])      # measure + transmit
+               + heats_per_day * float(s.get("node_heat_mAs", 66.0))   # SHT40 heater
                + float(s["node_sleep_uA"]) * 86.4               # sleep current
                + nominal_mas * 0.02 / 365.0)                     # self-discharge ~2 %/year
     if per_day <= 0:

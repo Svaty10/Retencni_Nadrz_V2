@@ -41,8 +41,10 @@ Tři části:
   ustálení sondy, ne počet vzorků. Výstup = **napětí sondy v jednotkách 0,1 mV**.
   Přepočet na cm dělá **server** (vícebodová kalibrace) → kalibrace bez přeflashování.
   Saturace ADC → flag `PROBE_CLIP`.
-- **Baterie:** 1× za hodinu (mezi tím se posílá poslední hodnota); dělič přes P-MOSFET, ustálení 20 ms,
-  ref. 1,024 V, 4 × 64 vzorků, medián.
+- **Baterie:** 1× za hodinu (mezi tím se posílá poslední hodnota); dělič přes P-MOSFET, ustálení 20 ms
+  (MCU mezitím spí), ref. 1,024 V, 4 × 64 vzorků, medián. Ve stejném cyklu druhé měření **během vysílání**
+  (~30 mA z článků) – pokles napětí odhalí opotřebované nebo studené články dřív než klidové napětí; posílá se
+  v dalších paketech (`vbat_sag`), o vypnutí rozhoduje horší z obou hodnot.
 - **SHT40:** každý cyklus (5 min), high-precision, CRC-8. **Ohřev jen při dlouhé vysoké vlhkosti:** když
   RH ≥ 95 % vydrží 1 h, jeden puls 200 mW / 1 s (≈ 60 mAs) po odeslání paketu, nejvýš 1× za 6 h, ne při
   nízké baterii a nad 60 °C. Nejhorší případ +240 mAs/den (≈ +15 % spotřeby) – na cílovou výdrž 5 let
@@ -53,7 +55,12 @@ Tři části:
 - CC1101, **433,92 MHz** (`FREQ = 0x10B071`, krystal 26 MHz), 2-FSK, 4,8 kBd, dev. 25,4 kHz,
   RX BW 101 kHz, 4 B preambule, sync 30/32, whitening, HW CRC-16, **proměnná délka** (max 61 B), +10 dBm.
 - Po probuzení ze SLEEP znovu zapsat TEST0–2 (nejsou zachovány).
-- Data bez ACK a bez opakování (ztráta 1 paketu = mezera 5 min, server ji eviduje podle čítače).
+- Data bez ACK (ztráta 1 paketu = mezera 5 min, server ji eviduje podle čítače). **Důležité pakety** (první po
+  restartu / spárování, poslední před vypnutím na vybitou baterii) jdou 2× (stejný rámec po 150–405 ms, hub
+  druhou kopii zahodí). Opakovat každý paket se nevyplatí (+50 % energie na vysílání pro pár procent ztrát).
+- **Poslech před vysíláním:** ~3 ms RX; nad −90 dBm náhodný odklad 20–147 ms, max. 5×, pak vysílá stejně.
+  **Náhodný posun intervalu ±8 s** (generátor z ID čidla) – víc čidel se nesrazí opakovaně.
+  Všechna čidla jsou na jednom kanálu (hub poslouchá jedním CC1101).
 - Odhad dosahu (citlivost ~−108 dBm, +10 dBm, rezerva 10 dB): volný prostor stovky metrů; ze šachty pod
   betonovým/plastovým víkem a přes zdi domu typicky **30–100 m**. Ověřit podle RSSI v dashboardu
   (> −95 dBm spolehlivé, < −105 dBm na hraně).
@@ -62,16 +69,20 @@ Tři části:
 
 | Rámec | Délka | Obsah |
 |---|---|---|
-| DATA (čidlo → hub) | 21 B | `0x03` · `node_id` u16 · `ctr` u32 · šifrovaná telemetrie 10 B · MAC 4 B |
+| DATA (čidlo → hub) | 23 B | `0x03` · `node_id` u16 · `ctr` u32 · šifrovaná telemetrie 12 B · MAC 4 B |
 | PAIR_REQ (čidlo → hub) | 36 B | `0x04` · `node_id` u16 · veřejný klíč X25519 čidla (32 B, nový po každém zapnutí) · stav (b0 = čidlo má klíč) |
 | PAIR_ACK (hub → čidlo) | 35 B | `0x05` · `node_id` u16 · veřejný klíč X25519 hubu (32 B) – přijme jen **nespárované** čidlo |
 | UNPAIR (hub → čidlo) | 19 B | `0x06` · `node_id` u16 · CMAC(Kmac, `0x06‖node_id‖veřejný klíč čidla`) 16 B – jediné, co přijme spárované čidlo |
 
-- **Telemetrie** (`struct '<BHhHHB'`): `flags` (b0 BAT_ERR, b1 SHT_ERR, b2 PROBE_ERR, b3 PROBE_CLIP,
-  b4 BAT_LOW < 3,3 V jen varování, b5 BOOT, b6 WDT_RESET, b7 FAST) · `vbat_mv` · `temp_x100` (−32768 = chyba)
-  · `hum_x100` (0xFFFF = chyba) · `probe_100uv` (0xFFFF = chyba) · `fw` (verze firmwaru).
+- **Telemetrie** (`struct '<BHhHHBBB'`): `flags` (b0 BAT_ERR, b1 SHT_ERR, b2 PROBE_ERR, b3 PROBE_CLIP,
+  b4 BAT_LOW < 3,3 V jen varování, b5 BOOT, b6 WDT_RESET, b7 FAST) · `vbat_mv` (v klidu) · `temp_x100` (−32768 = chyba)
+  · `hum_x100` (0xFFFF = chyba) · `probe_100uv` (0xFFFF = chyba) · `fw` (verze firmwaru)
+  · `diag` – co se stalo od minulého paketu: b0–1 počet odkladů poslechu před vysíláním (3 = 3+),
+  b2 proběhl ohřev SHT40, b3 restart poklesem napětí (BOD), b4 baterie změřena v tomto cyklu,
+  b5 vysílání selhalo a rádio se znovu inicializovalo · `vbat_sag` – pokles napětí baterie během vysílání
+  (×5 mV, 0xFF = zatím neměřeno).
 - **Šifrování:** AES-128-CTR, keystream = AES(Kenc, `node_id|ctr|0…`). **Autentizace:** AES-CMAC(Kmac,
-  bajty 0–16) zkrácený na 4 B. **Ochrana proti přehrání:** `ctr` je 32bit, za celý život čidla jen roste
+  bajty 0–18) zkrácený na 4 B. **Ochrana proti přehrání:** `ctr` je 32bit, za celý život čidla jen roste
   (v EEPROM se rezervuje po 1024, takže se nikdy neopakuje ani po resetu); hub přijme jen `ctr` > poslední.
 - **Klíče:** X25519 → sdílené S; K0 = S[0..15] ⊕ S[16..31]; Kenc = AES(K0, "RTK-ENC-KEY"),
   Kmac = AES(K0, "RTK-MAC-KEY"). Odposlech párování klíč neprozradí. Klíče v EEPROM čidla
@@ -106,7 +117,7 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
    zůstanou čidla zamčená (UPDI) – zálohovat DB.
 
 ### 1.7 Baterie
-- Pod 3,3 V flag BAT_LOW (varování, ~1 % kapacity). **Pod 3,0 V (1,0 V/článek)** potvrzeno 3 hodinovými měřeními
+- Pod 3,3 V flag BAT_LOW (varování, ~1 % kapacity). **Pod 3,0 V (1,0 V/článek, v klidu nebo při vysílání)** potvrzeno 3 hodinovými měřeními
   po sobě a ne v mrazu (studené články dočasně klesnou) čidlo pošle poslední paket a **trvale se vypne**
   (power-down bez probouzení, ~1,5 µA) – ochrana proti přepólování nejslabšího článku v sérii. Znovu ho
   spustí až nová baterie (power-on reset); se zjevně vybitými články se po vložení vůbec nespustí.

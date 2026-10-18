@@ -20,7 +20,6 @@
 #define CC1101_SFRX         0x3A
 #define CC1101_SFTX         0x3B
 #define CC1101_SNOP         0x3D
-#define CC1101_RSSI         0x34    /* status register (read with burst bit) */
 
 /* Configuration registers */
 #define CC1101_IOCFG2       0x00
@@ -65,7 +64,9 @@
 
 /* Status registers (burst bit set) */
 #define CC1101_VERSION      (0x31 | 0xC0)
+#define CC1101_RSSI         (0x34 | 0xC0)
 #define CC1101_MARCSTATE    (0x35 | 0xC0)
+#define CC1101_TXBYTES      (0x3A | 0xC0)
 #define CC1101_RXBYTES      (0x3B | 0xC0)
 
 /** Reset, detect and configure the CC1101, then put it into SLEEP. */
@@ -76,6 +77,13 @@ bool cc1101_init(void);
  * @param rx_window_ms 0 = no reply expected
  * @return -1 on error, 0 = sent (no reply), >0 = length of a CRC-valid reply in rx
  */
+/** Called once right after the transmission started (e.g. battery under load);
+ *  must finish within ~45 ms. NULL = none. */
+extern void (*cc1101_tx_hook)(void);
+
+/** Listen-before-talk back-offs of the last cc1101_send(). */
+extern uint8_t cc1101_lbt_backoffs;
+
 int8_t cc1101_send(const uint8_t *tx, uint8_t txlen, uint8_t *rx, uint8_t rxmax, uint16_t rx_window_ms);
 
 #endif /* CC1101_H_ */

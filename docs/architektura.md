@@ -92,7 +92,7 @@ sequenceDiagram
     participant R as radio vlákno
     participant C as Core (asyncio)
     participant DB as SQLite
-    N->>R: DATA 21 B (node, ctr, šifrovaná telemetrie, MAC)
+    N->>R: DATA 23 B (node, ctr, šifrovaná telemetrie, MAC)
     R->>C: call_soon_threadsafe(payload, RSSI, LQI)
     C->>C: ověření MAC klíčem čidla, ctr > poslední (anti-replay)
     C->>C: compute_level → LevelFilter → level_from_mm

@@ -107,6 +107,7 @@ class Receiver:
         self.foreign_packets = 0
         self.auth_failures = 0
         self.replays = 0
+        self.duplicates = 0                 # second copies of important packets (dropped)
         self.last_rx = time.monotonic()
         self.mode = "mock" if mock else "init"
 
@@ -369,7 +370,8 @@ class Receiver:
                 continue
             ph = (time.time() - t0) / 3600.0
             tel = crypto.build_telemetry(0x20 if ctr == 0 else 0, 4950, int(1200 + 300 * math.sin(ph / 3)),
-                                         int(8500 + 800 * math.cos(ph / 2)), int((700 + 400 * math.sin(ph)) * 10))
+                                         int(8500 + 800 * math.cos(ph / 2)), int((700 + 400 * math.sin(ph)) * 10),
+                                         diag=0x10 if ctr % 12 == 0 else 0, sag=9)
             frame = crypto.build_data(keys[0], keys[1], 0xBEEF, ctr, tel)
             ctr += 1
             try:

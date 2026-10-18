@@ -12,9 +12,12 @@
 /** Kenc/Kmac from the X25519 shared secret. Returns false for an all-zero secret. */
 bool proto_derive_keys(const uint8_t shared[32], uint8_t k_enc[16], uint8_t k_mac[16]);
 
-/** Build a 21-byte DATA packet from a 10-byte telemetry record. */
-void proto_build_data(uint8_t out[21], const uint8_t k_enc[16], const uint8_t k_mac[16],
-                      uint16_t node_id, uint32_t ctr, const uint8_t telemetry[10]);
+#define PROTO_TELEMETRY_LEN 12U
+#define PROTO_DATA_LEN      23U     /* 7 header + 12 ciphertext + 4 MAC */
+
+/** Build a 23-byte DATA packet from a 12-byte telemetry record. */
+void proto_build_data(uint8_t out[PROTO_DATA_LEN], const uint8_t k_enc[16], const uint8_t k_mac[16],
+                      uint16_t node_id, uint32_t ctr, const uint8_t telemetry[PROTO_TELEMETRY_LEN]);
 
 /**
  * Verify an UNPAIR packet: [0x06][node_id 2][CMAC(Kmac, 0x06|node_id|node_pub) 16].

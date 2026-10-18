@@ -245,19 +245,25 @@ class Core:
             if keys and self.radio:
                 self.radio.auth_failures += 1
             return                                  # unknown node or forged / damaged frame
-        if ctr <= self._last_ctr.get(nid, -1):
+        last_ctr = self._last_ctr.get(nid, -1)
+        if ctr == last_ctr:
+            if self.radio:
+                self.radio.duplicates += 1
+            return                                  # second copy of an important packet
+        if ctr < last_ctr:
             if self.radio:
                 self.radio.replays += 1
-            return                                  # replay or duplicate
+            return                                  # replay
         self._last_ctr[nid] = ctr
-        flags, vbat, temp, hum, probe, fw = fields
+        flags, vbat, temp, hum, probe, fw, diag, sag = fields
         pkt = model.Packet(
             flags=flags, node_id=nid, seq=ctr,
             vbat_mv=None if (flags & model.FLAG_BAT_ERR or vbat == model.U16_INVALID) else vbat,
             temp_x100=None if (flags & model.FLAG_SHT_ERR or temp == model.TEMP_INVALID) else temp,
             hum_x100=None if (flags & model.FLAG_SHT_ERR or hum == model.U16_INVALID) else hum,
             probe_100uv=None if (flags & model.FLAG_PROBE_ERR or probe == model.U16_INVALID) else probe,
-            rssi_dbm=rssi, lqi=lqi)
+            rssi_dbm=rssi, lqi=lqi, diag=diag,
+            vbat_sag_mv=None if sag == model.SAG_UNKNOWN else sag * model.SAG_UNIT_MV)
         self._store(pkt, fw)
 
     def _commit_pairing(self, nid: int, keys: tuple) -> None:
@@ -356,28 +362,31 @@ class Core:
                    probe_100uv=pkt.probe_100uv, level_mm=level_mm, level_raw_mm=level_raw,
                    volume_l=volume_l,
                    rssi_x2=None if pkt.rssi_dbm is None else int(round(pkt.rssi_dbm * 2)),
-                   lqi=pkt.lqi, refilling=refilling, time_ok=1 if synced else 0)
+                   lqi=pkt.lqi, refilling=refilling, time_ok=1 if synced else 0,
+                   diag=pkt.diag, vbat_sag_mv=pkt.vbat_sag_mv)
         try:
             cur = self.db.execute(
                 "INSERT INTO measurements(ts,node_id,seq,flags,vbat_mv,temp_x100,hum_x100,probe_100uv,"
-                "level_mm,level_raw_mm,volume_l,rssi_x2,lqi,refilling,time_ok) VALUES "
+                "level_mm,level_raw_mm,volume_l,rssi_x2,lqi,refilling,time_ok,diag,vbat_sag_mv) VALUES "
                 "(:ts,:node_id,:seq,:flags,:vbat_mv,:temp_x100,:hum_x100,:probe_100uv,"
-                ":level_mm,:level_raw_mm,:volume_l,:rssi_x2,:lqi,:refilling,:time_ok)", row)
+                ":level_mm,:level_raw_mm,:volume_l,:rssi_x2,:lqi,:refilling,:time_ok,:diag,:vbat_sag_mv)", row)
             if not synced and self._time_anchor is None:
                 self._time_anchor = (time.time(), time.monotonic(), cur.lastrowid)
         except Exception:
             log.exception("measurement insert failed")
         row["fw"] = fw
         if last:                           # keep previous values when a sensor reported an error
-            for k in ("level_mm", "level_raw_mm", "volume_l", "probe_100uv", "temp_x100", "hum_x100", "vbat_mv"):
+            for k in ("level_mm", "level_raw_mm", "volume_l", "probe_100uv", "temp_x100", "hum_x100", "vbat_mv",
+                      "vbat_sag_mv"):
                 if row[k] is None:
                     row[f"{k}_stale"] = True
                     row[k] = last.get(k)
         self.last[nid] = row
         self.invalidate()
         if pkt.flags & model.FLAG_BOOT:
-            self.audit("NODE_BOOT", f"Čidlo {node['name']} ({nid:04X}) hlásí restart" +
-                       (" (watchdog)" if pkt.flags & model.FLAG_WDT_RESET else ""))
+            why = (" (watchdog)" if pkt.flags & model.FLAG_WDT_RESET else
+                   " (pokles napětí – zkontrolujte baterii)" if (pkt.diag or 0) & model.DIAG_BOD_RESET else "")
+            self.audit("NODE_BOOT", f"Čidlo {node['name']} ({nid:04X}) hlásí restart" + why)
         asyncio.ensure_future(self._refill_on_measurement(nid))
 
     # ============================================================ live state
@@ -415,12 +424,17 @@ class Core:
         v = last["vbat_mv"] / 1000.0 * float(node["battery_trim"])
         pct = model.battery_percent(v)
         cpd = self.cached(f"cpd:{nid}", 3600, lambda: self._cycles_per_day(nid))
-        days = model.battery_days_left(pct, cpd, self.settings.all()) if cpd else None
+        heats = self.cached(f"heat:{nid}", 3600, lambda: self._heats_per_day(nid))
+        days = model.battery_days_left(pct, cpd, self.settings.all(), heats) if cpd else None
         low = pct < model.BATTERY_LOW_PCT or bool(last["flags"] & model.FLAG_BAT_LOW)
-        # the node sends a last packet below the cut-off and switches itself off
-        off = last["vbat_mv"] < model.BATTERY_CUTOFF_MV and self.status(nid) != "online"
+        sag = last.get("vbat_sag_mv")
+        # the node switches itself off below the cut-off (at rest or under TX load)
+        # after sending a last packet
+        worst_mv = last["vbat_mv"] - (sag or 0)
+        off = worst_mv < model.BATTERY_CUTOFF_MV and self.status(nid) != "online"
         return {"voltage": round(v, 3), "percent": round(pct, 1), "low": low or off,
-                "days_left": 0 if off else (None if days is None else round(days)), "off": off}
+                "days_left": 0 if off else (None if days is None else round(days)), "off": off,
+                "sag_mv": sag, "heats_per_day": round(heats, 2)}
 
     def _cycles_per_day(self, nid: int) -> float:
         since = int(time.time()) - 7 * 86400
@@ -431,20 +445,36 @@ class Core:
         span_days = max(1 / 24, (time.time() - row["first"]) / 86400)
         return max(1.0, row["n"] / span_days)
 
+    def _heats_per_day(self, nid: int) -> float:
+        """SHT40 heater use over the last 7 days (from the diagnostic byte)."""
+        since = int(time.time()) - 7 * 86400
+        row = self.db.one("SELECT SUM((diag & ?) != 0) h, MIN(ts) first FROM measurements "
+                          "WHERE node_id=? AND ts >= ? AND diag IS NOT NULL", (model.DIAG_HEATED, nid, since))
+        if not row or not row["first"]:
+            return 0.0
+        return (row["h"] or 0) / max(1.0, (time.time() - row["first"]) / 86400)
+
     def link_quality(self, nid: int) -> dict:
         def calc():
-            rows = self.db.query("SELECT seq, flags FROM measurements WHERE node_id=? AND ts >= ? ORDER BY id",
-                                 (nid, int(time.time()) - 86400))
-            lost, prev = 0, None
+            rows = self.db.query("SELECT seq, flags, diag FROM measurements WHERE node_id=? AND ts >= ? "
+                                 "ORDER BY id", (nid, int(time.time()) - 86400))
+            lost, prev, diag_n, busy, reinit = 0, None, 0, 0, 0
             for r in rows:
                 if prev is not None and not r["flags"] & model.FLAG_BOOT:
                     gap = r["seq"] - prev - 1
                     if 0 <= gap < 1000:
                         lost += gap
                 prev = r["seq"]
+                if r["diag"] is not None:
+                    diag_n += 1
+                    busy += 1 if r["diag"] & model.DIAG_LBT_MASK else 0
+                    reinit += 1 if r["diag"] & model.DIAG_RADIO_REINIT else 0
             got = len(rows)
             return {"received_24h": got, "lost_24h": lost,
-                    "loss_pct": round(100.0 * lost / (got + lost), 1) if got + lost else None}
+                    "loss_pct": round(100.0 * lost / (got + lost), 1) if got + lost else None,
+                    # share of transmissions that had to wait for a busy channel
+                    "busy_pct": round(100.0 * busy / diag_n, 1) if diag_n else None,
+                    "radio_reinit_24h": reinit}
         return self.cached(f"link:{nid}", 120, calc)
 
     def node_summaries(self) -> list[dict]:

@@ -23,8 +23,8 @@ bool proto_derive_keys(const uint8_t shared[32], uint8_t k_enc[16], uint8_t k_ma
     return true;
 }
 
-void proto_build_data(uint8_t p[21], const uint8_t k_enc[16], const uint8_t k_mac[16],
-                      uint16_t node_id, uint32_t ctr, const uint8_t telemetry[10])
+void proto_build_data(uint8_t p[PROTO_DATA_LEN], const uint8_t k_enc[16], const uint8_t k_mac[16],
+                      uint16_t node_id, uint32_t ctr, const uint8_t telemetry[PROTO_TELEMETRY_LEN])
 {
     uint8_t blk[16], ks[16], tag[16];
 
@@ -39,11 +39,11 @@ void proto_build_data(uint8_t p[21], const uint8_t k_enc[16], const uint8_t k_ma
     memset(blk, 0, 16);
     memcpy(blk, &p[1], 6);                  /* nonce = node_id | ctr | 0.. */
     aes128_encrypt(k_enc, blk, ks);
-    for (uint8_t i = 0; i < 10; i++) {
+    for (uint8_t i = 0; i < PROTO_TELEMETRY_LEN; i++) {
         p[7 + i] = telemetry[i] ^ ks[i];
     }
-    aes_cmac(k_mac, p, 17, tag);
-    memcpy(&p[17], tag, 4);
+    aes_cmac(k_mac, p, 7 + PROTO_TELEMETRY_LEN, tag);
+    memcpy(&p[7 + PROTO_TELEMETRY_LEN], tag, 4);
 }
 
 bool proto_check_unpair(const uint8_t *pkt, uint8_t len, const uint8_t k_mac[16],

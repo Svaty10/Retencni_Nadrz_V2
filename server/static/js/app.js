@@ -611,7 +611,7 @@
 
         const b = s.battery || {};
         $('txtBat').textContent = num(b.percent, 0, ' %');
-        $('txtBatV').textContent = num(b.voltage, 2, ' V');
+        $('txtBatV').textContent = num(b.voltage, 2, ' V') + (b.sag_mv ? ` · při vysílání −${num(b.sag_mv, 0)} mV` : '');
         $('batBox').classList.toggle('battery-low', !!b.low);
         const days = b.days_left;
         $('txtBatEst').textContent = b.off ? 'Čidlo vypnuto – vyměňte baterii'
@@ -629,8 +629,9 @@
 
         const n = s.node || {};
         $('txtRssi').textContent = n.rssi == null ? '–' : `${num(n.rssi, 0)} dBm`;
-        $('txtLoss').textContent = n.loss_pct == null ? '–' : `ztráty 24 h: ${num(n.loss_pct, 1)} %`;
-        $('linkBox').classList.toggle('warn', n.rssi != null && (n.rssi < -100 || (n.loss_pct || 0) > 10));
+        $('txtLoss').textContent = n.loss_pct == null ? '–' : `ztráty 24 h: ${num(n.loss_pct, 1)} %`
+            + (n.busy_pct ? ` · rušení ${num(n.busy_pct, 0)} %` : '');
+        $('linkBox').classList.toggle('warn', n.rssi != null && (n.rssi < -100 || (n.loss_pct || 0) > 10 || (n.busy_pct || 0) > 20));
 
         const rf = s.refill || {};
         refillEndsAt = rf.active ? rf.ends_at : null;

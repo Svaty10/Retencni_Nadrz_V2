@@ -34,6 +34,7 @@
 #include "sht40.h"
 #include "cc1101.h"
 #include "link.h"
+#include <stddef.h>
 
 #define BOOT_FAST_CYCLES    10U     /* 10 x 60 s right after power-up */
 
@@ -55,9 +56,17 @@ typedef struct {
     uint8_t  boot_fast_left;
     uint16_t interval_s;
 
+    /* battery under TX load (measured hourly during the transmission) */
+    uint16_t vbat_load_mv;
+    bool     load_ok;
+    uint8_t  sag;                   /* rest - load [SAG_UNIT_MV], sent in the next packets */
+
     /* battery end of life */
     uint8_t  low_count;             /* hourly readings below BATTERY_CUTOFF_MV in a row */
     bool     cutoff;
+
+    /* diagnostics for the next packet (DIAG_*) */
+    uint8_t  diag;
 
     /* SHT40 heater */
     uint32_t humid_s;               /* how long RH has been above HEAT_RH_X100 */
@@ -105,6 +114,7 @@ static void maybe_heat(bool sht_ok, int16_t temp, uint16_t hum, uint16_t elapsed
         if (!sht40_heater_pulse()) {
             break;
         }
+        g.diag |= DIAG_HEATED;
         power_sleep_ms(HEAT_PULSE_WAIT_MS);   /* MCU sleeps while the sensor heats */
     }
     g.since_heat_s = 0;                  /* also after a failed attempt: retry in 6 h */
@@ -153,11 +163,20 @@ static bool update_interval(bool probe_ok, uint16_t probe)
     return fast;
 }
 
+/** Battery under load: runs while the frame is on air (~30 mA from the cells). */
+static void tx_battery_hook(void)
+{
+    uint16_t v = 0;
+    g.load_ok = adc_measure_battery(&v);
+    g.vbat_load_mv = v;
+}
+
 /** Measure everything and send one encrypted DATA packet. */
 static void measure_and_send(void)
 {
     telemetry_t t = {0};
     t.fw = FW_VERSION;
+    bool bat_now = false;
 
     wdt_kick();
     /* ---------------- battery (hourly, inside this wake-up) ---------------- */
@@ -168,13 +187,7 @@ static void measure_and_send(void)
             g.vbat_mv = v;
         }
         g.since_bat_s = 0;
-        if (g.vbat_valid && g.vbat_mv < BATTERY_CUTOFF_MV) {
-            if (g.low_count < 255U) {
-                g.low_count++;
-            }
-        } else {
-            g.low_count = 0;
-        }
+        bat_now = g.vbat_valid;
     }
     if (g.vbat_valid) {
         t.vbat_mv = g.vbat_mv;
@@ -214,19 +227,53 @@ static void measure_and_send(void)
 
     /* ---------------- interval decision & transmit ---------------- */
     uint16_t elapsed_s = g.interval_s;       /* time since the previous measurement */
-    if (g.low_count >= CUTOFF_CONFIRM && (!sht_ok || temp >= CUTOFF_MIN_TEMP_X100)) {
-        g.cutoff = true;                     /* this is the last packet */
-    }
     if (update_interval(probe_ok && !clipped, probe)) {
         t.flags |= PKT_FLAG_FAST;
     }
     t.flags |= g.sticky_flags;
+    t.diag = (uint8_t)(g.diag | (bat_now ? DIAG_BAT_FRESH : 0U));
+    t.vbat_sag = g.sag;
+    bool important = (t.flags & PKT_FLAG_BOOT) || g.cutoff;
+    g.load_ok = false;
     if (radio_ready()) {
         wdt_kick();
-        if (link_send_data(&t)) {
+        cc1101_tx_hook = bat_now ? tx_battery_hook : NULL;   /* battery under TX load */
+        bool sent = link_send_data(&t);
+        cc1101_tx_hook = NULL;
+        if (sent) {
             g.sticky_flags = 0;              /* delivered to the air at least once */
+            g.diag = (cc1101_lbt_backoffs > 3U) ? 3U : cc1101_lbt_backoffs;
+            if (important) {
+                power_sleep_ms((uint16_t)(REPEAT_GAP_MIN_MS + (rng_next() & (REPEAT_GAP_SPAN_MS - 1U))));
+                wdt_kick();
+                (void)link_resend_last();
+            }
         } else {
             g.rf_ok = false;                 /* force a full re-init next time */
+            g.diag |= DIAG_RADIO_REINIT;
+        }
+    }
+
+    /* ---------------- battery end of life (hourly, the worse of rest / TX load) ---- */
+    if (bat_now) {
+        uint16_t worst = g.vbat_mv;
+        if (g.load_ok) {
+            uint16_t drop = (g.vbat_mv > g.vbat_load_mv) ? (uint16_t)(g.vbat_mv - g.vbat_load_mv) : 0U;
+            drop = (uint16_t)((drop + SAG_UNIT_MV / 2U) / SAG_UNIT_MV);
+            g.sag = (drop > 254U) ? 254U : (uint8_t)drop;
+            if (g.vbat_load_mv < worst) {
+                worst = g.vbat_load_mv;
+            }
+        }
+        if (worst < BATTERY_CUTOFF_MV) {
+            if (g.low_count < 255U) {
+                g.low_count++;
+            }
+        } else {
+            g.low_count = 0;
+        }
+        if (g.low_count >= CUTOFF_CONFIRM && (!sht_ok || temp >= CUTOFF_MIN_TEMP_X100)) {
+            g.cutoff = true;                 /* the next packet is the last one */
         }
     }
 
@@ -275,6 +322,10 @@ int main(void)
     g.interval_s = INTERVAL_FAST_S;
     g.since_bat_s = BATTERY_PERIOD_S;          /* measure in the first cycle */
     g.since_heat_s = HEAT_MIN_GAP_S;           /* heater allowed right away if needed */
+    g.sag = PKT_SAG_UNKNOWN;
+    if (rst & RSTCTRL_BORF_bm) {
+        g.diag |= DIAG_BOD_RESET;
+    }
 
     wdt_kick();
     g.rf_ok = cc1101_init();                   /* also puts the radio to SLEEP */
@@ -295,6 +346,7 @@ int main(void)
                 measure_and_send();              /* keep reporting with the old keys */
                 since_data = 0;
                 if (g.cutoff) {
+                    measure_and_send();          /* last packet (sent twice) */
                     power_off_forever();
                 }
             }
@@ -328,7 +380,8 @@ int main(void)
         }
         measure_and_send();
         if (g.cutoff) {
-            power_off_forever();                 /* last packet sent – empty battery */
+            measure_and_send();                  /* last packet (sent twice), then off */
+            power_off_forever();
         }
         /* random jitter around the interval (average unchanged) */
         sleep_s((uint16_t)(g.interval_s - JITTER_S / 2U + (rng_next() % JITTER_S)));

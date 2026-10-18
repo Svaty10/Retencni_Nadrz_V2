@@ -31,10 +31,11 @@ class VectorTest(unittest.TestCase):
         self.assertEqual(C.x25519(a, C.x25519_base(b)), C.x25519(b, C.x25519_base(a)))
 
     def test_firmware_packet(self):
-        # produced by uzel/tools/crypto_selftest.c: data 11..11 BEEF 5 00112233445566778899
+        # produced by uzel/tools/crypto_selftest.c: data 11..11 BEEF 5 00112233445566778899aabb
         ke, km = C.derive_keys(bytes([0x11] * 32))
-        pkt = C.build_data(ke, km, 0xBEEF, 5, bytes.fromhex("00112233445566778899"))
-        self.assertEqual(pkt.hex(), "03efbe0500000073df7627fc3818aaf2a910eb79b2")
+        pkt = C.build_data(ke, km, 0xBEEF, 5, bytes.fromhex("00112233445566778899aabb"))
+        self.assertEqual(pkt.hex(), "03efbe0500000073df7627fc3818aaf2a9267a8fa161e0")
+        self.assertEqual(C.open_data(ke, km, pkt)[6:], (0xAA, 0xBB))           # diag, vbat_sag
 
     def test_unpair(self):
         # produced by uzel/tools/crypto_selftest.c: unpair 0011..eeff BEEF abab..ab
@@ -51,12 +52,13 @@ class VectorTest(unittest.TestCase):
         ke, km = os.urandom(16), os.urandom(16)
         tel = C.build_telemetry(0x20, 4950, -150, 8000, 12400)
         pkt = C.build_data(ke, km, 0x1234, 77, tel)
-        self.assertEqual(C.open_data(ke, km, pkt), (0x20, 4950, -150, 8000, 12400, 10))
-        for i in range(21):
+        self.assertEqual(C.open_data(ke, km, pkt), (0x20, 4950, -150, 8000, 12400, 10, 0, 0xFF))
+        self.assertEqual(len(pkt), C.DATA_LEN)
+        for i in range(len(pkt)):
             bad = bytearray(pkt)
             bad[i] ^= 0x01
             self.assertIsNone(C.open_data(ke, km, bytes(bad)), i)
-        self.assertIsNone(C.open_data(os.urandom(16), km, pkt[:20] + b"x"))
+        self.assertIsNone(C.open_data(os.urandom(16), km, pkt[:-1] + b"x"))
         self.assertIsNone(C.derive_keys(bytes(32)))
 
 

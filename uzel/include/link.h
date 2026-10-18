@@ -33,6 +33,9 @@ link_pair_t link_pair_attempt(void);
 /** Encrypt, authenticate and send one telemetry record. */
 bool link_send_data(const telemetry_t *t);
 
+/** Send the last DATA frame again (same counter – the hub keeps only one copy). */
+bool link_resend_last(void);
+
 /** Allow 10 MHz for X25519 (battery healthy, VCC > 2.7 V); otherwise 5 MHz is used. */
 void link_set_fast_clock(bool ok);
 

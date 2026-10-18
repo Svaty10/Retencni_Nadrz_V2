@@ -242,9 +242,14 @@ link_pair_t link_pair_attempt(void)
     return LINK_PAIR_PAIRED;
 }
 
+static uint8_t g_last[PKT_DATA_LEN];
+static bool g_last_ok = false;
+
 bool link_send_data(const telemetry_t *t)
 {
-    uint8_t p[PKT_DATA_LEN];
+    uint8_t *p = g_last;
+    _Static_assert(PKT_DATA_LEN == PROTO_DATA_LEN && sizeof(telemetry_t) == PROTO_TELEMETRY_LEN,
+                   "config.h and proto.h disagree on the DATA layout");
     if (!link_paired()) {
         return false;
     }
@@ -255,6 +260,15 @@ bool link_send_data(const telemetry_t *t)
     uint32_t ctr = g_ctr++;
 
     proto_build_data(p, g_st.k_enc, g_st.k_mac, g_node_id, ctr, (const uint8_t *)t);
+    g_last_ok = true;
 
-    return cc1101_send(p, sizeof(p), NULL, 0, 0) >= 0;
+    return cc1101_send(p, PKT_DATA_LEN, NULL, 0, 0) >= 0;
+}
+
+bool link_resend_last(void)
+{
+    if (!g_last_ok) {
+        return false;
+    }
+    return cc1101_send(g_last, PKT_DATA_LEN, NULL, 0, 0) >= 0;
 }

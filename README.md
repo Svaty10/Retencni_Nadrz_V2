@@ -18,7 +18,7 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
  ┌──────────── šachta ───────────┐          ┌──────── dům ─────────────────────────────┐
  │ ATtiny1624 + SHT40 + sonda    │  433 MHz │ Pi Zero 2 W + CC1101                      │
  │ 3× Li-FeS2, ~12 µA průměr     │ ───────► │  :80   web (login, grafy)  ◄── Cloudflare │
- │ 21 B šifr. / 5 min (1 min při │          │  :8081 Home Assistant (LAN, token)        │
+ │ 23 B šifr. / 5 min (1 min při │          │  :8081 Home Assistant (LAN, token)        │
  │ rychlé změně hladiny)         │          │  Wi-Fi hotspot + portál, mDNS, OTA         │
  └───────────────────────────────┘          └──────────────────────────────────────────┘
 ```

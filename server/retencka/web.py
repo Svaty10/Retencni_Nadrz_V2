@@ -566,7 +566,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                       "resets": getattr(radio, "resets", 0), "crc_errors": getattr(radio, "crc_errors", 0),
                       "foreign": getattr(radio, "foreign_packets", 0),
                       "auth_failures": getattr(radio, "auth_failures", 0),
-                      "replays": getattr(radio, "replays", 0)}})
+                      "replays": getattr(radio, "replays", 0),
+                      "duplicates": getattr(radio, "duplicates", 0)}})
 
     def parse_node_id(raw: Any) -> int:
         txt = str(raw or "").strip().upper().replace("0X", "")

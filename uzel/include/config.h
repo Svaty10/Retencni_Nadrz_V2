@@ -128,9 +128,9 @@
 /* Radio protocol v3 – encrypted + authenticated, CC1101 variable length mode  */
 /* (length byte, whitening and CRC-16 added in hardware). Little endian.      */
 /*                                                                            */
-/* DATA     21 B  [0x03][node_id 2][ctr 4][ciphertext 10][mac 4]              */
-/*                plaintext = telemetry_t (10 B), keystream = AES(Kenc,       */
-/*                node_id|ctr|0..), mac = CMAC(Kmac, bytes 0..16)[0..3]       */
+/* DATA     23 B  [0x03][node_id 2][ctr 4][ciphertext 12][mac 4]              */
+/*                plaintext = telemetry_t (12 B), keystream = AES(Kenc,       */
+/*                node_id|ctr|0..), mac = CMAC(Kmac, bytes 0..18)[0..3]       */
 /* PAIR_REQ 36 B  [0x04][node_id 2][node X25519 public key 32][state 1]      */
 /*                state bit0 = node holds a key (paired)          (cleartext) */
 /* PAIR_ACK 35 B  [0x05][node_id 2][hub  X25519 public key 32]   (hub -> node)*/
@@ -144,7 +144,7 @@
 #define PKT_PAIR_REQ            0x04
 #define PKT_PAIR_ACK            0x05
 #define PKT_UNPAIR              0x06
-#define PKT_DATA_LEN            21U
+#define PKT_DATA_LEN            23U
 #define PKT_PAIR_LEN            35U     /**< PAIR_ACK */
 #define PKT_PAIR_REQ_LEN        36U
 #define PKT_UNPAIR_LEN          19U
@@ -171,16 +171,33 @@
 #define PKT_TEMP_INVALID        INT16_MIN
 #define PKT_U16_INVALID         0xFFFFU
 
-/** Encrypted part of a DATA packet (Python: '<BHhHHB'). */
+/* Diagnostic byte (telemetry_t.diag) – what happened since the previous packet */
+#define DIAG_LBT_MASK           0x03    /**< LBT back-offs before the previous TX (3 = 3 or more) */
+#define DIAG_HEATED             0x04    /**< SHT40 heater ran since the previous packet */
+#define DIAG_BOD_RESET          0x08    /**< last reset was a brown-out (sent once) */
+#define DIAG_BAT_FRESH          0x10    /**< battery measured in this cycle */
+#define DIAG_RADIO_REINIT       0x20    /**< a TX failed, the radio was re-initialised */
+#define PKT_SAG_UNKNOWN         0xFFU   /**< vbat_sag not measured yet */
+#define SAG_UNIT_MV             5U      /**< vbat_sag unit */
+
+/** Important packets (first after a reset / pairing, last before the cut-off) are
+ *  sent twice, the copy after a random 150-405 ms (same frame, the hub drops it
+ *  if the first one arrived). */
+#define REPEAT_GAP_MIN_MS       150U
+#define REPEAT_GAP_SPAN_MS      256U    /**< power of two */
+
+/** Encrypted part of a DATA packet (Python: '<BHhHHBBB'). */
 typedef struct __attribute__((packed)) {
     uint8_t  flags;        /**< PKT_FLAG_* */
-    uint16_t vbat_mv;      /**< Battery voltage [mV] */
+    uint16_t vbat_mv;      /**< Battery voltage at rest [mV] (measured hourly) */
     int16_t  temp_x100;    /**< Temperature [0.01 degC] */
     uint16_t hum_x100;     /**< Relative humidity [0.01 %] */
     uint16_t probe_100uv;  /**< Probe output voltage [0.1 mV] */
     uint8_t  fw;           /**< FW_VERSION */
+    uint8_t  diag;         /**< DIAG_* */
+    uint8_t  vbat_sag;     /**< Battery drop during TX [SAG_UNIT_MV] (last hourly measurement) */
 } telemetry_t;
 
-_Static_assert(sizeof(telemetry_t) == 10, "telemetry must be 10 bytes");
+_Static_assert(sizeof(telemetry_t) == 12, "telemetry must be 12 bytes");
 
 #endif /* CONFIG_H_ */

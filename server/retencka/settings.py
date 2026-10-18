@@ -26,6 +26,7 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "battery_capacity_mah":      (3000.0, "float", 100.0, 100000.0),
     "node_cycle_mAs":            (3.3, "float", 0.01, 100.0),
     "node_sleep_uA":             (1.5, "float", 0.0, 1000.0),
+    "node_heat_mAs":             (66.0, "float", 0.0, 1000.0),   # one heating = 2 x 110 mW / 1 s
     # system
     "stale_timeout_s":           (1800, "int", 300, 86400),
     # raw 5-min measurements older than this are deleted (0 = keep forever);
