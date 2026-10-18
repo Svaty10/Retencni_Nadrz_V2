@@ -411,14 +411,16 @@ class Core:
     def battery(self, nid: Optional[int]) -> dict:
         last, node = self.last.get(nid), self.nodes.get(nid)
         if not last or not node or last.get("vbat_mv") is None:
-            return {"voltage": None, "percent": None, "low": False, "days_left": None}
+            return {"voltage": None, "percent": None, "low": False, "days_left": None, "off": False}
         v = last["vbat_mv"] / 1000.0 * float(node["battery_trim"])
         pct = model.battery_percent(v)
         cpd = self.cached(f"cpd:{nid}", 3600, lambda: self._cycles_per_day(nid))
         days = model.battery_days_left(pct, cpd, self.settings.all()) if cpd else None
         low = pct < model.BATTERY_LOW_PCT or bool(last["flags"] & model.FLAG_BAT_LOW)
-        return {"voltage": round(v, 3), "percent": round(pct, 1), "low": low,
-                "days_left": None if days is None else round(days)}
+        # the node sends a last packet below the cut-off and switches itself off
+        off = last["vbat_mv"] < model.BATTERY_CUTOFF_MV and self.status(nid) != "online"
+        return {"voltage": round(v, 3), "percent": round(pct, 1), "low": low or off,
+                "days_left": 0 if off else (None if days is None else round(days)), "off": off}
 
     def _cycles_per_day(self, nid: int) -> float:
         since = int(time.time()) - 7 * 86400

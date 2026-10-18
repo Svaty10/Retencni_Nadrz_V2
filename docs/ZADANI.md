@@ -43,7 +43,10 @@ Tři části:
   Saturace ADC → flag `PROBE_CLIP`.
 - **Baterie:** 1× za hodinu (mezi tím se posílá poslední hodnota); dělič přes P-MOSFET, ustálení 20 ms,
   ref. 1,024 V, 4 × 64 vzorků, medián.
-- **SHT40:** každý cyklus (5 min), high-precision, CRC-8. Bez ohřevu – čidlo je v uzavřené krabičce se sondou.
+- **SHT40:** každý cyklus (5 min), high-precision, CRC-8. **Ohřev jen při dlouhé vysoké vlhkosti:** když
+  RH ≥ 95 % vydrží 1 h, jeden puls 200 mW / 1 s (≈ 60 mAs) po odeslání paketu, nejvýš 1× za 6 h, ne při
+  nízké baterii a nad 60 °C. Nejhorší případ +240 mAs/den (≈ +15 % spotřeby) – na cílovou výdrž 5 let
+  je rezerva velká.
 - ADC driver musí odpovídat **tinyAVR řady 2** (`ADC0.CTRLC.REFSEL`, `COMMAND.MODE`, 32bit `RESULT`).
 
 ### 1.4 Rádio
@@ -103,7 +106,11 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
    zůstanou čidla zamčená (UPDI) – zálohovat DB.
 
 ### 1.7 Baterie
-- Čidlo se **nikdy samo nevypíná** (elektronika funguje do ~1,8 V); pod 3,3 V nastaví flag BAT_LOW = jen varování.
+- Pod 3,3 V flag BAT_LOW (varování, ~1 % kapacity). **Pod 3,0 V (1,0 V/článek)** potvrzeno 3 hodinovými měřeními
+  po sobě a ne v mrazu (studené články dočasně klesnou) čidlo pošle poslední paket a **trvale se vypne**
+  (power-down bez probouzení, ~1,5 µA) – ochrana proti přepólování nejslabšího článku v sérii. Znovu ho
+  spustí až nová baterie (power-on reset); se zjevně vybitými články se po vložení vůbec nespustí.
+  BOD fuse 1,8 V jen jako poslední pojistka MCU. Hub po posledním paketu ukáže „Čidlo vypnuto – vyměňte baterii“.
 - Server: křivka Li-FeS2 → 0 % při 3,0 V (1,0 V/čl.), ~1 % při 3,3 V; pod 5 % varování „vybitá baterie“.
 
 ### 1.7 Otevřené HW otázky (ověřit na schématu)

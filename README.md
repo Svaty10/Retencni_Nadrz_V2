@@ -27,7 +27,7 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 
 **Čidlo**
 - Měření hladiny (hydrostatická sonda), teploty a vlhkosti v šachtě; baterie 1× za hodinu.
-- Výdrž na 3× AA Li-FeS2 omezuje hlavně samovybíjení (10+ let); při nízké baterii jen varuje, nikdy se nevypne.
+- Výdrž na 3× AA Li-FeS2 omezuje hlavně samovybíjení (10+ let); při nízké baterii varuje a na konci životnosti článků (1,0 V/článek) se samo vypne, aby se článek nepřepóloval.
 - Šifrované a podepsané pakety (AES-128-CTR + CMAC, klíč z párování X25519), ochrana proti přehrání.
 - **Čidlo patří svému hubu** – cizí hub ho nepřevezme; odpárovat jde jen z hubu + vložením baterie.
 

@@ -124,6 +124,20 @@ static bool sht40_transaction(uint8_t cmd, uint8_t wait_ms, uint8_t *buf)
     return (sht40_calc_crc(&buf[0], 2) == buf[2]) && (sht40_calc_crc(&buf[3], 2) == buf[5]);
 }
 
+bool sht40_heater_pulse(void)
+{
+    bool ok;
+
+    twi_enable();
+    ok = twi_write_cmd(SHT40_CMD_HEATER_200MW_1S);
+    if (!ok) {
+        TWI0.MCTRLB = TWI_MCMD_STOP_gc;
+        twi_bus_recover();
+    }
+    twi_disable();
+    return ok;          /* the measurement taken at the end of the pulse is not read */
+}
+
 bool sht40_read_measurements(int16_t *temp_x100, uint16_t *hum_x100)
 {
     uint8_t rx[6];

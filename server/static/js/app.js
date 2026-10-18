@@ -614,7 +614,8 @@
         $('txtBatV').textContent = num(b.voltage, 2, ' V');
         $('batBox').classList.toggle('battery-low', !!b.low);
         const days = b.days_left;
-        $('txtBatEst').textContent = days == null ? 'Nedostatek dat' : (days > 3650 ? '> 10 let' : days > 730 ? `${num(days / 365, 1)} roku` : `${num(days, 0)} dní`);
+        $('txtBatEst').textContent = b.off ? 'Čidlo vypnuto – vyměňte baterii'
+            : days == null ? 'Nedostatek dat' : (days > 3650 ? '> 10 let' : days > 730 ? `${num(days / 365, 1)} roku` : `${num(days, 0)} dní`);
 
         $('txtConsToday').textContent = num(s.consumption_today, 0, ' L');
         $('txtCons7d').textContent = num(s.consumption_7d, 0, ' L');

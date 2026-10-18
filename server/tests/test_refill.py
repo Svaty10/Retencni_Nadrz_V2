@@ -139,5 +139,24 @@ class WeatherTest(unittest.TestCase):
         self.assertEqual(until, hour + 7200)
 
 
+class BatteryOffTest(unittest.TestCase):
+    """Below 3.0 V the node sends a last packet and switches off – shown as such."""
+
+    def test_off_after_last_packet(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            db = Database(os.path.join(tmp, "t.db"))
+            core = Core(db, Settings(db), tmp)
+            core.nodes.add(0x3333, "T")
+            now = int(time.time())
+            core.last[0x3333] = {"ts": now, "vbat_mv": 2950, "flags": model.FLAG_BAT_LOW}
+            self.assertFalse(core.battery(0x3333)["off"])        # still reporting
+            core.last[0x3333]["ts"] = now - 3600
+            b = core.battery(0x3333)
+            self.assertTrue(b["off"] and b["low"])
+            self.assertEqual(b["days_left"], 0)
+            core.last[0x3333]["vbat_mv"] = 3400                  # just offline, battery fine
+            self.assertFalse(core.battery(0x3333)["off"])
+
+
 if __name__ == "__main__":
     unittest.main()

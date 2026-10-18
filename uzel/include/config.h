@@ -54,10 +54,18 @@
 /* ========================================================================== */
 /* Battery (3x Li-FeS2 in series)                                             */
 /* ========================================================================== */
-/** Below this the packet carries PKT_FLAG_BAT_LOW (warning only). The node never
- *  switches itself off – the electronics work down to ~1.8 V, so it simply keeps
- *  running until the cells can no longer deliver the transmit current. */
+/** Below this the packet carries PKT_FLAG_BAT_LOW (warning, ~1 % left). */
 #define BATTERY_LOW_MV          3300U
+
+/** End of life: 1.0 V per cell. Below this (CUTOFF_CONFIRM hourly readings in a
+ *  row, not in frost – cold cells sag temporarily) the node sends its last packet
+ *  and switches itself off for good (power-down without wake-up sources, ~1.5 uA
+ *  incl. the LDO) – only a new battery (power-on reset) starts it again. Draining
+ *  a series pack further could drive the weakest cell into reversal. The BOD fuse
+ *  (1.8 V) stays only as the last resort for the MCU. */
+#define BATTERY_CUTOFF_MV       3000U
+#define CUTOFF_CONFIRM          3U
+#define CUTOFF_MIN_TEMP_X100    0       /**< no cut-off decision below 0 degC */
 
 /** Battery divider (high side switched): R_top / R_bot in kOhm.
  *  Measured against the internal 1.024 V reference (tinyAVR 2-series has no 1.1 V):
@@ -79,6 +87,19 @@
 #define PROBE_BURSTS            16U     /**< Bursts spread over ~70 ms (wave / mains noise filtering) */
 #define PROBE_BURST_GAP_MS      3U
 #define PROBE_TRIM_KEEP         8U      /**< Middle bursts averaged (trimmed mean) */
+
+/* ========================================================================== */
+/* SHT40 heater (condensation / creep at high humidity in the closed box)     */
+/* ========================================================================== */
+/** One pulse = 200 mW for 1 s (~60 mA from the LDO, ~60 mAs). Only when RH stays
+ *  above HEAT_RH_X100 for HEAT_HUMID_S, at most once per HEAT_MIN_GAP_S, never on a
+ *  low battery and never above HEAT_MAX_TEMP_X100 (datasheet: heater < 65 degC).
+ *  Worst case 4 pulses a day = 240 mAs/day, ~+15 % of the node's daily budget.
+ *  The pulse runs after the packet was sent, so no heated value is reported. */
+#define HEAT_RH_X100            9500U
+#define HEAT_HUMID_S            3600UL
+#define HEAT_MIN_GAP_S          21600UL
+#define HEAT_MAX_TEMP_X100      6000
 
 /* ========================================================================== */
 /* Radio                                                                      */

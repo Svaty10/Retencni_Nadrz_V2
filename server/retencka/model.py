@@ -161,6 +161,7 @@ _LIFES2_CELL = [
     (1.78, 100.0),
 ]
 BATTERY_LOW_PCT = 5.0
+BATTERY_CUTOFF_MV = 3000          # node switches itself off below this (uzel/include/config.h)
 
 
 def battery_percent(vbat_v: float, cells: int = 3) -> float:

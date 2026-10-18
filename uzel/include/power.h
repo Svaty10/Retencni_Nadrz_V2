@@ -21,6 +21,10 @@ void rtc_pit_init(void);
 /** Sleep in power-down for the given number of seconds (WDT kicked every second). */
 void power_sleep_seconds(uint16_t seconds);
 
+/** Switch off for good: wake-up sources and watchdog off, power-down forever.
+ *  Only a reset (new battery = power-on reset) starts the node again. */
+void power_off_forever(void) __attribute__((noreturn));
+
 /** Read and clear RSTCTRL.RSTFR. Returns the raw flags (RSTCTRL_*RF_bm). */
 uint8_t power_take_reset_flags(void);
 

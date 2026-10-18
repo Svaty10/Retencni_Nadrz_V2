@@ -19,7 +19,13 @@
  *    it keeps offering pairing – every minute for the first day, then every 5 min –
  *    until some hub pairs it.
  *
- * A low battery is only reported (PKT_FLAG_BAT_LOW); the node never stops itself.
+ * Battery: below BATTERY_LOW_MV the packets carry PKT_FLAG_BAT_LOW; below
+ * BATTERY_CUTOFF_MV (1.0 V/cell, confirmed over several hours, not in frost) the
+ * node sends a last packet and switches itself off for good (cell reversal
+ * protection) – a new battery starts it again.
+ *
+ * SHT40 heater: a short pulse after the packet when the box stays near 100 % RH
+ * (condensation / sensor creep), rate- and battery-limited (see config.h).
  */
 
 #include "config.h"
@@ -48,6 +54,14 @@ typedef struct {
     uint8_t  fast_run;
     uint8_t  boot_fast_left;
     uint16_t interval_s;
+
+    /* battery end of life */
+    uint8_t  low_count;             /* hourly readings below BATTERY_CUTOFF_MV in a row */
+    bool     cutoff;
+
+    /* SHT40 heater */
+    uint32_t humid_s;               /* how long RH has been above HEAT_RH_X100 */
+    uint32_t since_heat_s;
 } node_state_t;
 
 static node_state_t g;
@@ -69,6 +83,29 @@ static void sleep_s(uint16_t s)
 {
     power_sleep_seconds(s);
     g.since_bat_s += s;
+    g.since_heat_s += s;
+}
+
+/** Heater pulse when the box has been saturated for a long time (rate-limited). */
+static void maybe_heat(bool sht_ok, int16_t temp, uint16_t hum, uint16_t elapsed_s)
+{
+    if (!sht_ok || hum < HEAT_RH_X100) {
+        g.humid_s = 0;
+        return;
+    }
+    g.humid_s += elapsed_s;
+    if (g.humid_s < HEAT_HUMID_S || g.since_heat_s < HEAT_MIN_GAP_S) {
+        return;
+    }
+    if (!g.vbat_valid || g.vbat_mv < BATTERY_LOW_MV || temp >= HEAT_MAX_TEMP_X100) {
+        return;
+    }
+    wdt_kick();
+    if (sht40_heater_pulse()) {
+        g.since_heat_s = 0;
+        g.humid_s = 0;
+        sleep_s(2);                      /* >= 1 s in power-down while the sensor heats */
+    }
 }
 
 /** Decide the next interval from the probe change rate. Returns true if fast. */
@@ -128,6 +165,13 @@ static void measure_and_send(void)
             g.vbat_mv = v;
         }
         g.since_bat_s = 0;
+        if (g.vbat_valid && g.vbat_mv < BATTERY_CUTOFF_MV) {
+            if (g.low_count < 255U) {
+                g.low_count++;
+            }
+        } else {
+            g.low_count = 0;
+        }
     }
     if (g.vbat_valid) {
         t.vbat_mv = g.vbat_mv;
@@ -156,7 +200,8 @@ static void measure_and_send(void)
     wdt_kick();
     int16_t temp = PKT_TEMP_INVALID;
     uint16_t hum = PKT_U16_INVALID;
-    if (!sht40_read_measurements(&temp, &hum)) {
+    bool sht_ok = sht40_read_measurements(&temp, &hum);
+    if (!sht_ok) {
         t.flags |= PKT_FLAG_SHT_ERR;
         temp = PKT_TEMP_INVALID;
         hum = PKT_U16_INVALID;
@@ -165,6 +210,10 @@ static void measure_and_send(void)
     t.hum_x100 = hum;
 
     /* ---------------- interval decision & transmit ---------------- */
+    uint16_t elapsed_s = g.interval_s;       /* time since the previous measurement */
+    if (g.low_count >= CUTOFF_CONFIRM && (!sht_ok || temp >= CUTOFF_MIN_TEMP_X100)) {
+        g.cutoff = true;                     /* this is the last packet */
+    }
     if (update_interval(probe_ok && !clipped, probe)) {
         t.flags |= PKT_FLAG_FAST;
     }
@@ -177,6 +226,27 @@ static void measure_and_send(void)
             g.rf_ok = false;                 /* force a full re-init next time */
         }
     }
+
+    /* ---------------- SHT40 heater (after the packet, never on the last one) ---- */
+    if (!g.cutoff) {
+        maybe_heat(sht_ok, temp, hum, elapsed_s);
+    }
+}
+
+/** Batteries already empty when inserted: two readings ~1-2 s apart, no frost. */
+static bool battery_dead_at_boot(void)
+{
+    uint16_t v1 = 0, v2 = 0;
+    if (!adc_measure_battery(&v1) || v1 >= BATTERY_CUTOFF_MV) {
+        return false;
+    }
+    power_sleep_seconds(2);
+    if (!adc_measure_battery(&v2) || v2 >= BATTERY_CUTOFF_MV) {
+        return false;
+    }
+    int16_t temp = 0;
+    uint16_t hum = 0;
+    return !sht40_read_measurements(&temp, &hum) || temp >= CUTOFF_MIN_TEMP_X100;
 }
 
 int main(void)
@@ -194,9 +264,13 @@ int main(void)
     g.boot_fast_left = BOOT_FAST_CYCLES;
     g.interval_s = INTERVAL_FAST_S;
     g.since_bat_s = BATTERY_PERIOD_S;          /* measure in the first cycle */
+    g.since_heat_s = HEAT_MIN_GAP_S;           /* heater allowed right away if needed */
 
     wdt_kick();
-    g.rf_ok = cc1101_init();
+    g.rf_ok = cc1101_init();                   /* also puts the radio to SLEEP */
+    if (battery_dead_at_boot()) {
+        power_off_forever();                   /* no pairing at 10 MHz on empty cells */
+    }
     bool paired = link_init(g.node_id);
 
     /* ---------------- pairing window after a battery change ---------------- */
@@ -208,6 +282,9 @@ int main(void)
             if (link_paired() && since_data >= INTERVAL_FAST_S) {
                 measure_and_send();              /* keep reporting with the old keys */
                 since_data = 0;
+                if (g.cutoff) {
+                    power_off_forever();
+                }
             }
             if (radio_ready()) {
                 link_pair_t r = link_pair_attempt();
@@ -238,6 +315,9 @@ int main(void)
             continue;
         }
         measure_and_send();
+        if (g.cutoff) {
+            power_off_forever();                 /* last packet sent – empty battery */
+        }
         sleep_s(g.interval_s);
     }
 }

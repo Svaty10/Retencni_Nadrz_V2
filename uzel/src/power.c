@@ -95,6 +95,23 @@ void power_sleep_seconds(uint16_t seconds)
     }
 }
 
+void power_off_forever(void)
+{
+    cli();
+    PORTB.OUTCLR = PIN_EN_5V_PROBE;          /* all switched loads off */
+    PORTA.OUTCLR = PIN_EN_BAT_MEASURE;
+    RTC.PITINTCTRL = 0;                      /* no periodic wake-up */
+    RTC.PITCTRLA = 0;
+    while (WDT.STATUS & WDT_SYNCBUSY_bm) {
+        ;
+    }
+    ccp_write_io((void *)&WDT.CTRLA, 0);     /* watchdog off (not locked by fuse) */
+    SLPCTRL.CTRLA = SLPCTRL_SMODE_PDOWN_gc | SLPCTRL_SEN_bm;
+    for (;;) {
+        sleep_cpu();                         /* interrupts disabled: only a reset wakes us */
+    }
+}
+
 uint8_t power_take_reset_flags(void)
 {
     uint8_t f = RSTCTRL.RSTFR;

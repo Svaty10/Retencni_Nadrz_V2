@@ -11,6 +11,7 @@
 #define SHT40_I2C_ADDR              0x44
 #define SHT40_CMD_MEASURE_HIGH_PREC 0xFD
 #define SHT40_CMD_SOFT_RESET        0x94
+#define SHT40_CMD_HEATER_200MW_1S   0x39    /**< heater 200 mW for 1 s (+ measurement at its end) */
 
 /**
  * @brief High-precision measurement.
@@ -19,6 +20,13 @@
  * @return false on bus error, timeout or CRC mismatch.
  */
 bool sht40_read_measurements(int16_t *temp_x100, uint16_t *hum_x100);
+
+/**
+ * @brief Start one heater pulse (200 mW, 1 s) and return immediately.
+ *        The sensor is busy for ~1.1 s – do not use it during that time.
+ * @return false if the sensor did not acknowledge the command.
+ */
+bool sht40_heater_pulse(void);
 
 uint8_t sht40_calc_crc(const uint8_t *data, uint8_t len);
 
