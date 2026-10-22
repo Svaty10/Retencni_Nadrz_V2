@@ -39,8 +39,20 @@ Piny 0 a 1 jsou popsané z pohledu hlavního čipu, proto je zapojení „obrác
  GND ──────────────────────────────── GND  (pin 14)
 ```
 
-Arduino má logiku 5 V a čidlo 3,3 V. Odpor 4,7 kΩ (spolu s 1 kΩ na desce Arduina) omezí proud do vstupu
-na zlomek miliampéru – pro nahrávání v pořádku. Pro sériové programování mnoha kusů použijte programátor 3,3 V.
+Arduino má logiku 5 V a čidlo 3,3 V. Napětí nad napájením čidla teče přes ochranné diody pinu do jeho
+3,3V větve – odpor 4,7 kΩ (spolu s 1 kΩ na desce Arduina) to omezí na ~0,2 mA, což napájená větev
+(baterie v čidle!) bez problému pohltí. **Nikdy bez odporu a nikdy bez baterií v čidle.**
+Pin 3,3 V Arduina je jen napájecí výstup (logiku nemění) – na čidlo ho nepřipojujte.
+
+**Nejšetrnější varianta – Schottkyho dioda místo odporu** (1N5817, 1N5819, BAT85, BAT43 …):
+
+```
+ D0 (RX←) ───|◄───────────┬──────── UPDI     (proužek = katoda směrem k Arduinu)
+ D1 (TX→) ────────────────┘
+```
+
+Dioda linku jen stahuje k nule, klidovou úroveň drží čidlo svým pull-upem na 3,3 V – 5 V z Arduina se
+do čidla vůbec nedostane.
 
 ### b) USB-UART převodník 3,3 V / UPDI Friend
 ```
