@@ -207,9 +207,19 @@ class Receiver:
         self.mode = "gdo0" if self._gpio else "polling"
         log.info("CC1101 v0x%02X configured, listening (%s)", ver, self.mode)
 
-    def _verify(self) -> bool:
+    def _mismatches(self) -> list[str]:
+        """Registers that do not read back as configured (read twice: a one-off SPI
+        glitch is not a chip reset)."""
         cfg = dict(CONFIG)
-        return all(self._r(r) == cfg[r] for r in VERIFY_REGS)
+        bad = []
+        for r in VERIFY_REGS:
+            v = self._r(r)
+            if v != cfg[r] and self._r(r) != cfg[r]:
+                bad.append(f"0x{r:02X}={v:#04x} (má být {cfg[r]:#04x})")
+        return bad
+
+    def _verify(self) -> bool:
+        return not self._mismatches()
 
     def _enter_rx(self) -> None:
         self._strobe(SIDLE)
@@ -296,8 +306,9 @@ class Receiver:
 
     def _health_check(self) -> None:
         state = self._r(MARCSTATE) & 0x1F
-        if not self._verify():
-            raise RadioError("register mismatch (chip reset or brown-out?)")
+        bad = self._mismatches()
+        if bad:
+            raise RadioError(f"register mismatch (chip reset or brown-out?) state=0x{state:02X} " + ", ".join(bad))
         if state == MARC_RXOVF:
             self._enter_rx()
         elif state == MARC_IDLE and (self._r(RXBYTES) & 0x7F) == 0:
