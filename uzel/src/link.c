@@ -90,11 +90,8 @@ static void entropy_fill(uint8_t out[16])
             buf[i] = (uint8_t)ADC0.RESULT;
         }
         ADC0.CTRLA = 0;
-        /* clock jitter: CPU loop count per RTC tick (RTC counter at 32.768 kHz) */
-        while (RTC.STATUS & RTC_CTRLABUSY_bm) {
-            ;
-        }
-        RTC.CTRLA = RTC_RTCEN_bm;
+        /* clock jitter: CPU loop count per RTC tick (RTC counter runs all the time
+         * at 32.768 kHz, see rtc_pit_init – never switched off here) */
         for (uint8_t i = 0; i < 16; i++) {
             uint16_t c0 = RTC.CNT, n = 0;
             while (RTC.CNT == c0 && ++n) {
@@ -107,10 +104,6 @@ static void entropy_fill(uint8_t out[16])
             }
             buf[32 + i] = (uint8_t)n;
         }
-        while (RTC.STATUS & RTC_CTRLABUSY_bm) {
-            ;
-        }
-        RTC.CTRLA = 0;
         /* pool = CMAC(pool, pool || samples) */
         uint8_t tmp[16];
         aes_cmac(mac, buf, sizeof(buf), tmp);

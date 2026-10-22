@@ -11,6 +11,7 @@
 #include <avr/sleep.h>
 #include <avr/wdt.h>
 #include <avr/cpufunc.h>
+#include <util/delay.h>
 
 static volatile uint16_t g_pit_seconds = 0;
 static volatile bool g_rtc_cmp = false;
@@ -72,9 +73,28 @@ void wdt_kick(void)
     wdt_reset();
 }
 
+/** Wait until the given RTC.STATUS sync bits clear; false after ~40 ms (never hang). */
+static bool rtc_sync(uint8_t mask)
+{
+    for (uint16_t i = 0; i < 20000U; i++) {
+        if (!(RTC.STATUS & mask)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void rtc_pit_init(void)
 {
+    /* The RTC counter is enabled ONCE and never switched off again: on tinyAVR,
+     * disabling the RTC can stop the PIT too, and a CTRLA write left
+     * unsynchronised before power-down made the next wait hang (WDT resets). */
     RTC.CLKSEL = RTC_CLKSEL_INT32K_gc;
+    (void)rtc_sync(0xFF);
+    RTC.PER = 0xFFFF;                                      /* free-running 0..65535 */
+    (void)rtc_sync(RTC_PERBUSY_bm);
+    RTC.CTRLA = RTC_PRESCALER_DIV1_gc | RTC_RUNSTDBY_bm | RTC_RTCEN_bm;
+    (void)rtc_sync(RTC_CTRLABUSY_bm);
     while (RTC.PITSTATUS & RTC_CTRLBUSY_bm) {
         ;
     }
@@ -112,23 +132,20 @@ void power_sleep_ms(uint16_t ms)
     if (ticks > 0xFFFEUL) {
         ticks = 0xFFFEUL;
     }
-    while (RTC.STATUS) {
-        ;
+    if (ticks < 8U) {
+        ticks = 8U;                          /* compare must lie safely ahead of CNT */
     }
-    RTC.CTRLA = 0;                           /* counter stopped (PIT unaffected) */
-    while (RTC.STATUS) {
-        ;
+    /* The counter runs all the time (rtc_pit_init): compare = now + ticks. */
+    if (!rtc_sync(RTC_CMPBUSY_bm)) {
+        goto busy_wait;
     }
-    RTC.CNT = 0;
-    RTC.PER = 0xFFFF;
-    RTC.CMP = (uint16_t)ticks;
-    while (RTC.STATUS) {
-        ;
+    RTC.CMP = (uint16_t)(RTC.CNT + (uint16_t)ticks);
+    if (!rtc_sync(RTC_CMPBUSY_bm)) {
+        goto busy_wait;
     }
     RTC.INTFLAGS = RTC_CMP_bm | RTC_OVF_bm;
     g_rtc_cmp = false;
     RTC.INTCTRL = RTC_CMP_bm;
-    RTC.CTRLA = RTC_PRESCALER_DIV1_gc | RTC_RUNSTDBY_bm | RTC_RTCEN_bm;
 
     /* Standby: the RTC counter runs (it does not in power-down), GPIO states stay.
      * Safety net: the 1 s PIT also wakes us – kick the watchdog every time and give
@@ -149,11 +166,16 @@ void power_sleep_ms(uint16_t ms)
         wdt_kick();
     }
     RTC.INTCTRL = 0;
-    while (RTC.STATUS) {
-        ;
-    }
-    RTC.CTRLA = 0;
     SLPCTRL.CTRLA = SLPCTRL_SMODE_PDOWN_gc | SLPCTRL_SEN_bm;
+    return;
+
+busy_wait:                                   /* RTC not answering: plain delay, WDT kept alive */
+    for (uint16_t i = 0; i < ms; i++) {
+        _delay_ms(1);
+        if ((i & 0x3FU) == 0U) {
+            wdt_kick();
+        }
+    }
 }
 
 void rng_seed(uint16_t seed)
