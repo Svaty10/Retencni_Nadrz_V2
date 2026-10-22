@@ -37,3 +37,6 @@ Desktop.ini
 
 # Generated demo data (server/tools/seed_demo.py --backup)
 demo/
+
+# hotový programátor jtag2updi pro Arduino (nahrává 0-priprav-arduino.cmd)
+!uzel/tools/jtag2updi/*.hex
