@@ -8,7 +8,7 @@ CC1101 napájejte **jen z 3,3 V** (pin 1 nebo 17), nikdy z 5 V.
 | 1 | VCC | 1 / 17 | 3V3 | 3,3 V |
 | 2 | GND | 6 / 9 / 14 / 20 / 25 | GND | |
 | 3 | CSN | 24 | GPIO 8 (CE0) | `/dev/spidev0.0` |
-| 4 | SCLK | 23 | GPIO 11 | SPI0, 1 MHz |
+| 4 | SCLK | 23 | GPIO 11 | SPI0, 5 MHz |
 | 5 | SI (MOSI) | 19 | GPIO 10 | |
 | 6 | SO (MISO) | 21 | GPIO 9 | |
 | 7 | GDO0 | 22 | GPIO 25 | konec paketu (hrana) – volitelné, bez něj server polluje |
@@ -30,10 +30,3 @@ Tipy pro dosah:
 - Kvalitu spojení ukazuje dashboard (RSSI a ztráty paketů za 24 h). Pod −100 dBm je spojení na hraně.
 
 SPI zapíná instalační skript sám (`dtparam=spi=on`); ověření: `ls /dev/spidev0.*`.
-
-## Spolehlivost spojení
-- Dráty mezi Pi a CC1101 co nejkratší (do ~10 cm). **SCLK nevést těsně vedle MISO** ve svazku nebo plochém
-  kabelu – hodinový signál se do něj indukuje. Pomůže vodiče od sebe oddělit nebo mezi ně dát zem (GND).
-- Rychlost SPI je 1 MHz (`RETENCKA_SPI_HZ` v `/etc/default/retencka`); rádio přenáší jen pár bajtů, víc netřeba.
-- Typický projev špatného spojení v logu (`journalctl -u retencka`): `register mismatch … 0x02=0x07 (má být 0x06)`
-  – přečtené hodnoty mají navíc „rozmazané“ jedničky do vedlejšího bitu.

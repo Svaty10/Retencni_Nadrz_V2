@@ -98,7 +98,7 @@ async def main_async() -> None:
 
     radio = Receiver(core.on_frame, core.responder,
                      bus=int(env("RETENCKA_SPI_BUS", "0")), dev=int(env("RETENCKA_SPI_DEV", "0")),
-                     speed_hz=int(env("RETENCKA_SPI_HZ", "1000000")),
+                     speed_hz=int(env("RETENCKA_SPI_HZ", "5000000")),
                      gdo0_gpio=int(env("RETENCKA_GDO0_GPIO", "25")),
                      mock=env("RETENCKA_MOCK", "0") == "1")
     core.radio = radio
