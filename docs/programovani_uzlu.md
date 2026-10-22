@@ -99,7 +99,7 @@ Aktualizace firmwaru později = `3-aktualizace-firmwaru.cmd`. Párování zůsta
 |---|---|
 | `Nenalezen žádný USB sériový port` | Arduino není připojené, nebo chybí ovladač CH340 (stáhnout z webu výrobce WCH) |
 | `Připojeno víc USB portů` | odpojte ostatní USB zařízení se sériovým portem (např. jiné Arduino) |
-| **„Arduino nevrací signál“** | chyba v zapojení Arduina: drát RESET–GND, D0 (přes odpor) a D1 spojené v jednom bodě, dráty opravdu na D0/D1 (na Nanu RX0/TX1). Funguje i bez připojeného čidla – takhle si zapojení Arduina ověříte samostatně. |
+| **„Signál se nevrací“** | odpojte drát UPDI od čidla a test zopakujte. Pak „Arduino OK“ → čidlo drží linku: **nemá napájení** (bod 3) nebo je drát na jiném pinu než UPDI. Pořád nic → zapojení Arduina: RESET–GND, D0 (přes odpor) a D1 spojené v jednom bodě, dráty opravdu na D0/D1 (na Nanu RX0/TX1), kontakty v nepájivém poli. |
 | **„Čip v čidle neodpovídá“** | Arduino je v pořádku, chyba je u čidla: napájení (bod 3), UPDI na pin 10, GND; zkuste `.
 ahraj.ps1 -Test -Baud 57600` |
 | `could not open port` | zavřete Arduino IDE (sériový monitor drží port) |

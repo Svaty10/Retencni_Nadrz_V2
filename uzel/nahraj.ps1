@@ -107,10 +107,11 @@ function Invoke-Avrdude([string[]]$extra) {
     $p = Get-Port                 # first: no download when no programmer is connected
     Write-Host "2/3 Kontroluji zapojení programátoru…"
     if ($Programmer -eq "serialupdi" -and -not (Test-Echo $p)) {
-        throw ("Arduino nevrací signál – chyba je v zapojení ARDUINA (ne čidla):`n" +
-               "  • drát RESET – GND na Arduinu (drží jeho čip v resetu),`n" +
-               "  • D0 přes odpor a D1 musí být spojené v jednom bodě (UPDI),`n" +
-               "  • dráty opravdu na D0 a D1 (u Nana piny RX0 a TX1).")
+        throw ("Signál se nevrací. Zkuste odpojit drát UPDI od čidla a test spustit znovu:`n" +
+               "  • pak 'Arduino OK' -> linku drží čidlo: nemá napájení (baterie / 3,3 V z Uno)`n" +
+               "    nebo je drát na jiném pinu než UPDI (pin 10 ATtiny1624),`n" +
+               "  • pořád nic -> zapojení Arduina: drát RESET – GND, D0 (přes odpor) a D1 spojené`n" +
+               "    v jednom bodě, dráty opravdu na D0 a D1 (u Nana RX0 a TX1), kontakty v nepájivém poli.")
     }
     Write-Host "    Arduino OK. 3/3 Komunikuji s čipem v čidle…"
     $avrdude = Get-Avrdude
