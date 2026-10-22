@@ -11,7 +11,24 @@ Nemusíte nic instalovat ani nic psát do příkazové řádky – stačí dvojk
 - 4–5 drátů (dupont),
 - **napájení čidla** – vyberte jednu možnost v bodě 3.
 
-## 2. Zapojení signálu (vždy stejné)
+## 2. Zapojení signálu
+
+Jsou dvě možnosti. **Klony Arduina s čipem CH340 (nejběžnější) potřebují variantu B** – mají kontrolky TX/RX
+napevno na pinech 0/1 a ty signál na UPDI nepustí. Nevíte-li, zkuste A; skript při neúspěchu poradí.
+
+### B) Arduino jako programátor jtag2updi – pin 6 (pro klony s CH340)
+1. **Jednou** nahrajte do Arduina program programátoru: Arduino jen v USB, **žádné dráty ani kondenzátor**
+   na Arduinu, dvojklik na **`0-priprav-arduino.cmd`**. (Přepíše program, který v Arduinu byl.)
+2. Zapojení:
+
+```
+ Arduino                                  Čidlo
+ pin 6 ──────[ 4,7 kΩ ]────────────────── UPDI   (pin 10 čipu ATtiny1624)
+ GND ──────────────────────────────────── GND    (pin 14)
+ (RESET nezapojovat, kondenzátor není potřeba)
+```
+
+### A) Arduino jako převodník – piny 0 a 1 (originální Uno s čipem 16U2, převodníky)
 
 ```
  Arduino                                  Čidlo
@@ -100,6 +117,8 @@ Aktualizace firmwaru později = `3-aktualizace-firmwaru.cmd`. Párování zůsta
 | `Nenalezen žádný USB sériový port` | Arduino není připojené, nebo chybí ovladač CH340 (stáhnout z webu výrobce WCH) |
 | `Připojeno víc USB portů` | odpojte ostatní USB zařízení se sériovým portem (např. jiné Arduino) |
 | **„Signál se nevrací“** | odpojte drát UPDI od čidla a test zopakujte. Pak „Arduino OK“ → čidlo drží linku: **nemá napájení** (bod 3) nebo je drát na jiném pinu než UPDI. Pořád nic → zapojení Arduina: RESET–GND, D0 (přes odpor) a D1 spojené v jednom bodě, dráty opravdu na D0/D1 (na Nanu RX0/TX1), kontakty v nepájivém poli. |
+| **„Arduino neodpovídá ani jako převodník, ani jako jtag2updi“** | klon s CH340: spusťte `0-priprav-arduino.cmd` (bez drátů na Arduinu) a zapojte pin 6 podle varianty B |
+| **„Arduino (jtag2updi) je v pořádku, ale čip neodpovídá“** | drát z pinu 6 přes odpor na UPDI (pin 10), GND, napájení čidla; na Arduinu nesmí být drát RESET–GND |
 | **„Čip v čidle neodpovídá“** | Arduino je v pořádku, chyba je u čidla: napájení (bod 3), UPDI na pin 10, GND; zkuste `.
 ahraj.ps1 -Test -Baud 57600` |
 | `could not open port` | zavřete Arduino IDE (sériový monitor drží port) |
@@ -116,7 +135,8 @@ ahraj.ps1 -Test -Baud 57600` |
   Zablokované skripty: `powershell -ExecutionPolicy Bypass -File .\nahraj.ps1 -Test`.
 - Jiný programátor: USB-UART převodník 3,3 V (TX přes 4,7 kΩ na UPDI, RX přímo na UPDI, GND) nebo
   [Adafruit UPDI Friend](https://www.adafruit.com/product/5879) (přepínač na 3 V).
-- Kdyby SerialUPDI nespolupracoval: na Arduino Nano nahrajte [jtag2updi](https://github.com/ElTangas/jtag2updi),
-  UPDI přes 4,7 kΩ na pin **D6**, mezi RESET a GND kondenzátor 10 µF; nahrání `.\nahraj.ps1 -Programmer jtag2updi`.
+- Programátor (piny 0/1 = SerialUPDI, nebo pin 6 = jtag2updi) skript pozná sám; ručně `-Programmer serialupdi`
+  / `-Programmer jtag2updi`. Program jtag2updi pro Uno/Nano je v `uzel\tools\jtag2updi` (zdroj, licence MIT,
+  parametry sestavení v README tam) – sestavený tak, že se sám zotaví i bez restartu Arduina.
 - ⚠️ Hodnotu SYSCFG0 (`fuse5`) neměňte – jiné nastavení by vypnulo UPDI a čip by šel naprogramovat jen
   vysokonapěťovým programátorem.

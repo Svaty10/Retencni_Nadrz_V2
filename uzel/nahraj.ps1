@@ -13,14 +13,19 @@
   .\nahraj.ps1             # aktualizace firmwaru (klíče párování zůstanou)
   .\nahraj.ps1 -Port COM5  # port zadaný ručně (když je připojeno víc zařízení)
   .\nahraj.ps1 -Build      # firmware přeložit z této složky (potřebuje avr-gcc v PATH nebo C:\avr)
+  .\nahraj.ps1 -PripravArduino   # z Arduina Uno/Nano udělá programátor jtag2updi (pin 6)
+
+  Programátor se pozná sám: Arduino/převodník na pinech 0/1 (SerialUPDI), nebo Arduino
+  s jtag2updi (pin 6). Ručně: -Programmer serialupdi | jtag2updi.
 #>
 param(
     [string]$Port = "",
     [switch]$Fuses,
     [switch]$Test,
     [switch]$Build,
+    [switch]$PripravArduino,
     [int]$Baud = 115200,
-    [string]$Programmer = "serialupdi",
+    [string]$Programmer = "auto",
     [string]$ToolsDir = "C:\avr"
 )
 $ErrorActionPreference = "Stop"
@@ -45,7 +50,9 @@ function Find-Tool([string]$name) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
     foreach ($dir in @($ToolsDir, $Cache)) {
-        $f = Get-ChildItem -Path $dir -Recurse -Filter "$name.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+        # Windows PowerShell 5.1: -Recurse on a missing folder searches the whole parent drive
+        if (-not (Test-Path -LiteralPath $dir -PathType Container)) { continue }
+        $f = Get-ChildItem -LiteralPath $dir -Recurse -Filter "$name.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($f) { return $f.FullName }
     }
     return $null
@@ -106,23 +113,66 @@ function Invoke-Avrdude([string[]]$extra) {
     Write-Host "1/3 Hledám programátor…"
     $p = Get-Port                 # first: no download when no programmer is connected
     Write-Host "2/3 Kontroluji zapojení programátoru…"
-    if ($Programmer -eq "serialupdi" -and -not (Test-Echo $p)) {
+    $prog = $Programmer
+    if ($prog -eq "auto") {
+        # SerialUPDI (pins 0/1) echoes every byte; an Arduino with jtag2updi does not
+        if (Test-Echo $p) { $prog = "serialupdi"; Write-Host "    Arduino/převodník na pinech 0/1 (SerialUPDI)." }
+        else { $prog = "jtag2updi"; Write-Host "    Zkouším Arduino s jtag2updi (pin 6)…" }
+    } elseif ($prog -eq "serialupdi" -and -not (Test-Echo $p)) {
         throw ("Signál se nevrací. Zkuste odpojit drát UPDI od čidla a test spustit znovu:`n" +
                "  • pak 'Arduino OK' -> linku drží čidlo: nemá napájení (baterie / 3,3 V z Uno)`n" +
                "    nebo je drát na jiném pinu než UPDI (pin 10 ATtiny1624),`n" +
                "  • pořád nic -> zapojení Arduina: drát RESET – GND, D0 (přes odpor) a D1 spojené`n" +
-               "    v jednom bodě, dráty opravdu na D0 a D1 (u Nana RX0 a TX1), kontakty v nepájivém poli.")
+               "    v jednom bodě. Klony s CH340 to často neumí – použijte 0-priprav-arduino.cmd.")
     }
-    Write-Host "    Arduino OK. 3/3 Komunikuji s čipem v čidle…"
+    Write-Host "3/3 Komunikuji s čipem v čidle…"
     $avrdude = Get-Avrdude
-    $avrArgs = @("-c", $Programmer, "-p", "t1624", "-P", $p, "-b", "$Baud") + $extra
-    & $avrdude @avrArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw ("Čip v čidle neodpovídá – Arduino je zapojené dobře, chyba je na straně ČIDLA:`n" +
-               "  • napájení čidla (baterie, nebo 3,3 V z Arduina Uno – ne obojí),`n" +
-               "  • UPDI drát opravdu na UPDI (pin 10 ATtiny1624) a GND na GND,`n" +
-               "  • zkuste pomaleji: .\nahraj.ps1 -Test -Baud 57600")
+    $avrArgs = @("-c", $prog, "-p", "t1624", "-P", $p, "-b", "$Baud") + $extra
+    # show avrdude output and keep it for the diagnosis (stderr must not stop the script)
+    $ErrorActionPreference = "Continue"
+    $out = & $avrdude @avrArgs 2>&1 | ForEach-Object {
+        $line = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { "$_" }
+        if ($line -and $line -notmatch "^System\.Management\.Automation") { Write-Host $line; $line }
     }
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    if ($rc -eq 0) { return }
+    $text = $out -join "`n"
+    # jtag2updi answered (RSP_... status) = programmer fine, only the target is silent
+    if ($prog -eq "jtag2updi" -and $text -notmatch "RSP_|FW version") {
+        throw ("Arduino neodpovídá ani jako převodník (piny 0/1), ani jako programátor jtag2updi (pin 6).`n" +
+               "  • klon Uno/Nano s CH340: jednou spusťte 0-priprav-arduino.cmd (bez drátů na Arduinu),`n" +
+               "    pak zapojte pin 6 přes 4,7 kΩ na UPDI,`n" +
+               "  • nebo zapojení přes piny 0/1: drát RESET – GND, D0 přes odpor a D1 spojené na UPDI.")
+    }
+    if ($prog -eq "jtag2updi") {
+        throw ("Arduino (jtag2updi) je v pořádku, ale čip v čidle neodpovídá:`n" +
+               "  • drát z pinu 6 Arduina přes 4,7 kΩ na UPDI (pin 10 ATtiny1624), GND na GND,`n" +
+               "  • napájení čidla (baterie, nebo 3,3 V z Arduina Uno – ne obojí),`n" +
+               "  • drát RESET – GND na Arduinu NESMÍ být zapojený (jtag2updi by neběželo).")
+    }
+    throw ("Čip v čidle neodpovídá – Arduino je zapojené dobře, chyba je na straně ČIDLA:`n" +
+           "  • napájení čidla (baterie, nebo 3,3 V z Arduina Uno – ne obojí),`n" +
+           "  • UPDI drát opravdu na UPDI (pin 10 ATtiny1624) a GND na GND,`n" +
+           "  • zkuste pomaleji: .\nahraj.ps1 -Test -Baud 57600")
+}
+
+function Install-Jtag2updi {
+    Write-Host "Nahrávám do Arduina program jtag2updi (z Arduina bude programátor na pinu 6)…"
+    Write-Host "Na Arduinu nesmí být zapojené žádné dráty (hlavně ne RESET – GND)."
+    $p = Get-Port
+    $avrdude = Get-Avrdude
+    $hex = "tools\jtag2updi\jtag2updi-uno.hex"
+    foreach ($b in @(115200, 57600)) {               # Optiboot (Uno) / old bootloader (Nano)
+        & $avrdude -c arduino -p m328p -P $p -b $b -U "flash:w:${hex}:i"
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host ""
+            Write-Host "Hotovo – Arduino je teď programátor jtag2updi." -ForegroundColor Green
+            Write-Host "Zapojení: pin 6 → 4,7 kΩ → UPDI čidla, GND → GND, napájení čidla; RESET–GND NEzapojovat."
+            return
+        }
+    }
+    throw "Nahrání do Arduina selhalo – je to Uno/Nano (ATmega328P)? Zavřete Arduino IDE a odpojte dráty z Arduina."
 }
 
 function Get-Firmware {
@@ -155,6 +205,11 @@ function Get-Firmware {
     if ($want -is [byte[]]) { $want = [Text.Encoding]::ASCII.GetString($want) }
     if ((Get-Sha256 $hex) -ne $want.Trim().ToLower()) { Remove-Item $hex; throw "Firmware nemá správný kontrolní součet – přerušeno." }
     return $hex
+}
+
+if ($PripravArduino) {
+    Install-Jtag2updi
+    return
 }
 
 if ($Test) {
