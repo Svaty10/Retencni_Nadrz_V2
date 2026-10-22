@@ -41,8 +41,20 @@ Piny 0 a 1 jsou popsané z pohledu hlavního čipu, proto je zapojení „obrác
 
 Arduino má logiku 5 V a čidlo 3,3 V. Napětí nad napájením čidla teče přes ochranné diody pinu do jeho
 3,3V větve – odpor 4,7 kΩ (spolu s 1 kΩ na desce Arduina) to omezí na ~0,2 mA, což napájená větev
-(baterie v čidle!) bez problému pohltí. **Nikdy bez odporu a nikdy bez baterií v čidle.**
-Pin 3,3 V Arduina je jen napájecí výstup (logiku nemění) – na čidlo ho nepřipojujte.
+(baterie v čidle!) bez problému pohltí. **Nikdy bez odporu a nikdy bez napájení čidla.**
+
+**Napájení čidla z Arduina místo baterií** – jen **Arduino Uno** (pin 3,3 V dá ~150 mA). U klonů Nano s CH340
+je pin 3,3 V jen pomocné napětí převodníku (pár mA) – nepoužívat.
+
+```
+ Uno 3.3V ──────────── + vstup baterie čidla   (baterie VYTAŽENÉ – nikdy oba zdroje najednou)
+ Uno GND  ──────────── GND / − baterie
+```
+
+- Připojte na **vstup baterie**, ne až na 3,3V větev za regulátorem (zpětné napájení LDO).
+- Po nahrání čidlo hned vysílá (párování, ~30 mA ve špičkách) – Uno to utáhne.
+- Čidlo uvidí „baterii“ 3,3 V a hlásí slabou baterii – při programování nevadí.
+- Pin 3,3 V nemění logiku Arduina: D0 dál dává 5 V, odpor nebo dioda zůstává.
 
 **Nejšetrnější varianta – Schottkyho dioda místo odporu** (1N5817, 1N5819, BAT85, BAT43 …):
 
