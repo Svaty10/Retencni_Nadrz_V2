@@ -68,9 +68,11 @@ static bool twi_wait(uint8_t flag)
     return !(TWI0.MSTATUS & (TWI_ARBLOST_bm | TWI_BUSERR_bm));
 }
 
+static uint8_t g_addr = SHT40_I2C_ADDR_A;     /* switched to _B if only that one answers */
+
 static bool twi_write_cmd(uint8_t cmd)
 {
-    TWI0.MADDR = (uint8_t)(SHT40_I2C_ADDR << 1);
+    TWI0.MADDR = (uint8_t)(g_addr << 1);
     if (!twi_wait(TWI_WIF_bm) || (TWI0.MSTATUS & TWI_RXACK_bm)) {
         return false;
     }
@@ -84,7 +86,7 @@ static bool twi_write_cmd(uint8_t cmd)
 
 static bool twi_read6(uint8_t *buf)
 {
-    TWI0.MADDR = (uint8_t)((SHT40_I2C_ADDR << 1) | 0x01);
+    TWI0.MADDR = (uint8_t)((g_addr << 1) | 0x01);
     for (uint8_t i = 0; i < 6; i++) {
         if (!twi_wait(TWI_RIF_bm)) {
             return false;
@@ -142,7 +144,11 @@ bool sht40_read_measurements(int16_t *temp_x100, uint16_t *hum_x100)
 {
     uint8_t rx[6];
     if (!sht40_transaction(SHT40_CMD_MEASURE_HIGH_PREC, 10, rx)) {
-        return false;
+        /* no answer: try the other variant's address once */
+        g_addr = (g_addr == SHT40_I2C_ADDR_A) ? SHT40_I2C_ADDR_B : SHT40_I2C_ADDR_A;
+        if (!sht40_transaction(SHT40_CMD_MEASURE_HIGH_PREC, 10, rx)) {
+            return false;
+        }
     }
 
     uint16_t raw_t = ((uint16_t)rx[0] << 8) | rx[1];

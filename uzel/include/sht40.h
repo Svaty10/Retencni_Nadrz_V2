@@ -8,7 +8,10 @@
 
 #include "config.h"
 
-#define SHT40_I2C_ADDR              0x44
+/* I2C address depends on the variant: SHT40-AD1B = 0x44, SHT40-BD1B = 0x45.
+ * The driver tries both and keeps the one that answers. */
+#define SHT40_I2C_ADDR_A            0x44
+#define SHT40_I2C_ADDR_B            0x45
 #define SHT40_CMD_MEASURE_HIGH_PREC 0xFD
 #define SHT40_CMD_SOFT_RESET        0x94
 #define SHT40_CMD_HEATER_110MW_1S   0x2F    /**< heater 110 mW for 1 s (+ measurement at its end) */

@@ -130,16 +130,23 @@ void power_sleep_ms(uint16_t ms)
     RTC.INTCTRL = RTC_CMP_bm;
     RTC.CTRLA = RTC_PRESCALER_DIV1_gc | RTC_RUNSTDBY_bm | RTC_RTCEN_bm;
 
-    /* Standby: the RTC counter runs (it does not in power-down), GPIO states stay */
+    /* Standby: the RTC counter runs (it does not in power-down), GPIO states stay.
+     * Safety net: the 1 s PIT also wakes us – kick the watchdog every time and give
+     * up after (ms/1000 + 2) PIT ticks, so a missed compare can never hang the node. */
     SLPCTRL.CTRLA = SLPCTRL_SMODE_STDBY_gc | SLPCTRL_SEN_bm;
+    cli();
+    uint16_t pit_start = g_pit_seconds;
+    sei();
+    uint16_t pit_max = (uint16_t)(ms / 1000U + 2U);
     for (;;) {
         cli();
-        if (g_rtc_cmp) {
+        if (g_rtc_cmp || (uint16_t)(g_pit_seconds - pit_start) > pit_max) {
             sei();
             break;
         }
         sei();                               /* SEI + SLEEP is atomic */
         sleep_cpu();
+        wdt_kick();
     }
     RTC.INTCTRL = 0;
     while (RTC.STATUS) {
