@@ -86,7 +86,7 @@ class Receiver:
     def __init__(self, on_frame: Callable[[bytes, float, int], None],
                  responder: Optional[Callable[[bytes], Optional[bytes]]] = None,
                  bus: int = 0, dev: int = 0,
-                 speed_hz: int = 5_000_000, gdo0_gpio: int = 25, mock: bool = False):
+                 speed_hz: int = 1_000_000, gdo0_gpio: int = 25, mock: bool = False):
         self.on_frame = on_frame            # (payload, rssi_dbm, lqi) – called in this thread
         self.responder = responder          # payload -> reply frame or None (pairing)
         self.bus, self.dev, self.speed = bus, dev, speed_hz

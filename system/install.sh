@@ -108,6 +108,8 @@ if [ -n "$TZONE" ] || [ -z "$CUR_TZ" ] || [ "$CUR_TZ" = "Etc/UTC" ] || [ "$CUR_T
 fi
 echo "Časová zóna: $(timedatectl show -p Timezone --value 2>/dev/null || echo '?')"
 [ -f /etc/default/retencka ] || install -m 644 "$SRC/system/config/default-retencka" /etc/default/retencka
+# původní výchozí 5 MHz na SPI dělalo chyby čtení CC1101 při běžných drátech -> 1 MHz
+sed -i 's/^RETENCKA_SPI_HZ=5000000$/RETENCKA_SPI_HZ=1000000/' /etc/default/retencka
 install -d -m 755 /etc/retencka
 if [ -f "$SRC/system/keys/release.pub" ]; then
     install -m 644 "$SRC/system/keys/release.pub" /etc/retencka/release.pub
