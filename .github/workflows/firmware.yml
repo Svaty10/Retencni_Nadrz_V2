@@ -1,0 +1,42 @@
+# Při každé změně firmwaru čidla (uzel/**) ho přeloží a vystaví jako hotový soubor
+# v předběžném vydání "uzel-latest": retencka-uzel.hex (+ .sha256).
+# uzel/nahraj.ps1 si ho odtud stáhne – na nahrání není potřeba překladač.
+name: firmware
+on:
+  push:
+    branches: [main]
+    paths: ["uzel/**", ".github/workflows/firmware.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      AVR_GCC_URL: https://github.com/ZakKemble/avr-gcc-build/releases/download/v16.1.0-1/avr-gcc-16.1.0-x64-linux.tar.bz2
+      AVR_GCC_SHA256: 8621ecc6514df50202b58b23b0f8f72f0e535ec35ee40426194e9a15c57692f6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Překladač avr-gcc (ověřený kontrolní součet)
+        run: |
+          curl -fsSL -o /tmp/avr-gcc.tar.bz2 "$AVR_GCC_URL"
+          echo "$AVR_GCC_SHA256  /tmp/avr-gcc.tar.bz2" | sha256sum -c -
+          mkdir -p /opt/avr && tar -xjf /tmp/avr-gcc.tar.bz2 -C /opt/avr --strip-components=1
+          echo "/opt/avr/bin" >> "$GITHUB_PATH"
+      - name: Překlad (-Werror) a test kryptografie
+        working-directory: uzel
+        run: |
+          make
+          make test
+      - name: Vydání uzel-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp uzel/build/firmware.hex retencka-uzel.hex
+          sha256sum retencka-uzel.hex | cut -d' ' -f1 > retencka-uzel.hex.sha256
+          FW=$(sed -n 's/^#define FW_VERSION *\([0-9]*\)U.*/\1/p' uzel/include/config.h)
+          NOTES="Firmware čidla $((FW / 10)).$((FW % 10)) z commitu ${GITHUB_SHA::7}. Nahrání: docs/programovani_uzlu.md"
+          gh release view uzel-latest >/dev/null 2>&1 || \
+            gh release create uzel-latest --prerelease --title "Firmware čidla (poslední)" --notes "$NOTES"
+          gh release edit uzel-latest --notes "$NOTES"
+          gh release upload uzel-latest retencka-uzel.hex retencka-uzel.hex.sha256 --clobber

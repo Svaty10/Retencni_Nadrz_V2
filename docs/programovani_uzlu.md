@@ -1,46 +1,32 @@
 # Programování čidla (ATtiny1624 přes UPDI)
 
-ATtiny1624 se programuje jedním vodičem **UPDI** (pin PA0). Programátor stačí obyčejný USB-UART převodník
-nebo Arduino Uno / Nano a jeden odpor – metoda **SerialUPDI**, kterou umí `avrdude` přímo.
+ATtiny1624 se programuje jedním vodičem **UPDI** (pin PA0). Jako programátor stačí **Arduino Uno / Nano**
+a jeden odpor, nebo USB-UART převodník – metoda **SerialUPDI**, kterou umí nástroj `avrdude`.
 
 ## 1. Co budete potřebovat
 
-| | Doporučeno | Jde i takhle |
+| | Stačí | Pohodlnější (do budoucna) |
 |---|---|---|
-| Programátor | USB-UART převodník **3,3 V** (CP2102, CH340 s přepínačem 3V3, FT232) | Arduino **Uno** nebo **Nano** (s čipem 16U2 / CH340 / FT232) |
-| Odpor | 4,7 kΩ (funguje 1–4,7 kΩ) | – |
-| Napájení čidla | jeho vlastní baterie (3× Li-FeS2) | laboratorní zdroj 3,6–5 V na svorky baterie |
-| Kabely | 3 dráty (dupont) | – |
+| Programátor | Arduino **Uno** nebo **Nano** (převodník 16U2 / CH340 / FT232 na desce) | [Adafruit UPDI Friend](https://www.adafruit.com/product/5879) (~7 $, přepínač 3 V/5 V, odpor uvnitř) nebo USB-UART 3,3 V |
+| Odpor | 4,7 kΩ (funguje 1–4,7 kΩ) | – (UPDI Friend ho má) |
+| Napájení čidla | jeho vlastní baterie | – |
+| Kabely | 3–4 dráty (dupont) | programovací konektor / klips na desce čidla |
 
-Arduino s vlastním USB v hlavním čipu (Leonardo, Micro, Nano Every, Uno R4) tímto způsobem **nefunguje**.
+Arduino s USB přímo v hlavním čipu (Leonardo, Micro, Nano Every, Uno R4) tímto způsobem **nefunguje**.
 
-## 2. Programy (Windows)
+## 2. Programy
+**Nic instalovat nemusíte.** Skript `uzel\nahraj.ps1` si při prvním spuštění sám stáhne nástroj **avrdude**
+a hotový **firmware** z GitHubu (vydání *uzel-latest*, sestavuje se automaticky při každé změně firmwaru),
+oboje ověří kontrolním součtem SHA-256 a programátor (COM port) najde sám.
 
-1. **Překladač avr-gcc:** [github.com/ZakKemble/avr-gcc-build/releases](https://github.com/ZakKemble/avr-gcc-build/releases)
-   → `avr-gcc-…-x64-windows.zip` → rozbalit do `C:\avr\`.
-2. **avrdude** (nahrávání): [github.com/avrdudes/avrdude/releases](https://github.com/avrdudes/avrdude/releases)
-   → `avrdude-v…-windows-x64.zip` → rozbalit do `C:\avr\`.
-3. Ovladač převodníku, pokud ho Windows nenajde sám: CH340 (WCH), CP2102 (Silicon Labs).
-4. Port zjistíte ve *Správce zařízení → Porty (COM a LPT)* – např. `COM5`.
-
-Skript `uzel\nahraj.ps1` si oba nástroje najde v `C:\avr` sám (nebo v PATH). `make` není potřeba.
+Jen pokud Windows nepozná převodník na Arduinu (klony Nano s čipem CH340), nainstalujte ovladač CH340.
 
 ## 3. Zapojení
 
 **Nikdy nepropojujte napájení programátoru (5V / 3V3 / VCC) s čidlem.** CC1101 a SHT40 snesou max. 3,6 V.
 Čidlo napájejte jeho bateriemi; s programátorem má společnou jen **zem**.
 
-### a) USB-UART převodník (doporučeno)
-
-```
- Převodník (3,3 V)                    Čidlo
- TX  ──────[ 4,7 kΩ ]──────┬──────── UPDI (PA0, pin 10 ATtiny1624)
- RX  ──────────────────────┘
- GND ──────────────────────────────── GND  (pin 14)
-```
-
-### b) Arduino Uno / Nano jako převodník
-
+### a) Arduino Uno / Nano
 Hlavní čip Arduina se drží v resetu a USB převodník na desce pak slouží jako „USB-UART“.
 Piny 0 a 1 jsou popsané z pohledu hlavního čipu, proto je zapojení „obráceně“:
 
@@ -48,32 +34,43 @@ Piny 0 a 1 jsou popsané z pohledu hlavního čipu, proto je zapojení „obrác
  Arduino                              Čidlo
  RESET ──┐
  GND  ───┴─── (drát RESET–GND drží hlavní čip v resetu)
- D0 (RX←) ──[ 4,7 kΩ ]─────┬──────── UPDI (PA0, pin 10)
+ D0 (RX←) ──[ 4,7 kΩ ]─────┬──────── UPDI (PA0, pin 10 ATtiny1624)
  D1 (TX→) ─────────────────┘
  GND ──────────────────────────────── GND  (pin 14)
 ```
 
 Arduino má logiku 5 V a čidlo 3,3 V. Odpor 4,7 kΩ (spolu s 1 kΩ na desce Arduina) omezí proud do vstupu
-na zlomek miliampéru, takže je to pro občasné nahrání v pořádku. Pro sériové programování víc kusů
-použijte převodník 3,3 V.
+na zlomek miliampéru – pro nahrávání v pořádku. Pro sériové programování mnoha kusů použijte programátor 3,3 V.
+
+### b) USB-UART převodník 3,3 V / UPDI Friend
+```
+ TX  ──────[ 4,7 kΩ ]──────┬──────── UPDI
+ RX  ──────────────────────┘
+ GND ──────────────────────────────── GND
+```
+(UPDI Friend: přepínač na **3 V**, jeho výstup UPDI rovnou na UPDI čidla, GND na GND.)
 
 ### Kde je UPDI na čidle
 Na desce hledejte programovací plošky / konektor **UPDI – GND (– VCC)**. Pokud tam nejsou, UPDI je
 **pin 10** ATtiny1624 (SOIC-14), GND **pin 14**, VDD **pin 1**.
 
 ## 4. Nahrání
-
-V PowerShellu ve složce `uzel` (při prvním spuštění skriptů může být potřeba
-`powershell -ExecutionPolicy Bypass -File .\nahraj.ps1 …`):
+1. Zapojte podle bodu 3, Arduino připojte USB kabelem k PC, do čidla vložte baterie.
+2. Ve složce `uzel` klikněte pravým tlačítkem na `nahraj.ps1` → **Spustit v prostředí PowerShell**
+   (= aktualizace firmwaru), nebo v PowerShellu ve složce `uzel`:
 
 ```powershell
-cd C:\Users\<vy>\…\Retencni_Nadrz_V2\uzel
-.\nahraj.ps1 -Port COM5 -Test      # 1) spojení: musí vypsat signaturu 1E 94 2A
-.\nahraj.ps1 -Port COM5 -Fuses     # 2) nový čip: fuses + firmware (jednou)
-.\nahraj.ps1 -Port COM5            #    pozdější aktualizace: jen firmware
+.\nahraj.ps1 -Test      # 1) spojení: musí vypsat signaturu 1E 94 2A
+.\nahraj.ps1 -Fuses     # 2) nový čip: fuses + firmware (jednou na čip)
+.\nahraj.ps1            #    pozdější aktualizace: jen firmware
 ```
 
-Fuses (zapisují se jen s `-Fuses`, stačí jednou na čip):
+- Když Windows spuštění skriptu zablokuje: `powershell -ExecutionPolicy Bypass -File .\nahraj.ps1 -Test`
+- Víc připojených USB zařízení se sériovým portem: přidejte `-Port COM5`.
+- Vlastní překlad místo staženého firmwaru: `-Build` (potřebuje
+  [avr-gcc](https://github.com/ZakKemble/avr-gcc-build/releases) rozbalený v `C:\avr`).
+
+Fuses (zapisují se jen s `-Fuses`):
 
 | Fuse | Hodnota | Význam |
 |---|---|---|
@@ -89,20 +86,21 @@ Fuses (zapisují se jen s `-Fuses`, stačí jednou na čip):
 2. Hub: *Nastavení → Čidla → Přidat čidlo*; ID porovnejte se štítkem (první čidlo se spáruje samo).
 3. Na štítek čidla napište jeho **ID** (ukáže ho hub při párování).
 
-Aktualizace firmwaru později: stačí `.\nahraj.ps1 -Port COM5`. Klíče párování jsou v EEPROM a zůstanou,
+Aktualizace firmwaru později: stačí spustit `nahraj.ps1`. Klíče párování jsou v EEPROM a zůstanou,
 čidlo pokračuje se stejným hubem.
 
 ## 6. Když to nejde
 
 | Hláška / stav | Co zkusit |
 |---|---|
-| `UPDI initialisation failed`, `no response` | prohoďte TX/RX (u Arduina D0/D1), zkontrolujte odpor a společnou GND, čidlo musí mít baterie |
-| | nižší rychlost: `.\nahraj.ps1 -Port COM5 -Baud 57600 -Test` |
-| `could not open port` | špatné číslo COM, port drží jiný program (Arduino IDE, sériový monitor) |
-| Arduino: nic | drát RESET–GND, a u Nano s CH340 ovladač CH340 |
+| `Nenalezen žádný USB sériový port` | Arduino není připojené nebo chybí ovladač (CH340) |
+| `Připojeno víc USB portů` | přidejte `-Port COMx` (číslo je v hlášce nebo ve Správci zařízení) |
+| `UPDI initialisation failed`, `no response` | prohoďte D0/D1 (TX/RX), zkontrolujte odpor, drát RESET–GND, společnou GND a baterie v čidle |
+| | nižší rychlost: `.\nahraj.ps1 -Baud 57600 -Test` |
+| `could not open port` | port drží jiný program (Arduino IDE, sériový monitor) |
 | `Device signature … expected 1E 94 2A` | jiný čip nebo špatný kontakt na UPDI |
-| `Nenalezen avr-gcc / avrdude` | rozbalte zipy do `C:\avr` (stačí libovolné podsložky) |
+| `… nemá správný kontrolní součet` | stažení se poškodilo – spusťte znovu |
 
 Alternativa, kdyby SerialUPDI nespolupracoval: na Arduino Nano nahrajte projekt
 [jtag2updi](https://github.com/ElTangas/jtag2updi), UPDI připojte přes 4,7 kΩ na pin **D6**
-a mezi RESET a GND dejte kondenzátor 10 µF. Nahrání: `.\nahraj.ps1 -Port COM5 -Programmer jtag2updi`.
+a mezi RESET a GND dejte kondenzátor 10 µF. Nahrání: `.\nahraj.ps1 -Programmer jtag2updi`.
