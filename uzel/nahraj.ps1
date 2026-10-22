@@ -25,6 +25,12 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+# any error: one clear red message instead of a PowerShell stack trace
+trap {
+    Write-Host ""
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 1
+}
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Set-Location $PSScriptRoot
 
@@ -74,13 +80,47 @@ function Get-Port {
     throw "Připojeno víc USB portů ($list) – zadejte jeden, např. .\nahraj.ps1 -Port COM5"
 }
 
+function Test-Echo([string]$p) {
+    # SerialUPDI: TX and RX meet on the UPDI wire, so every byte sent must come back
+    # even without the sensor. No echo = the programmer side is wired wrong.
+    $sp = New-Object System.IO.Ports.SerialPort $p, $Baud, ([System.IO.Ports.Parity]::Even), 8, ([System.IO.Ports.StopBits]::Two)
+    $sp.ReadTimeout = 500
+    try {
+        $sp.Open()
+        Start-Sleep -Milliseconds 300            # some boards reset when the port opens
+        $sp.DiscardInBuffer()
+        $out = [byte[]](0x55, 0xAA, 0x0F)
+        $sp.Write($out, 0, $out.Length)
+        $got = New-Object byte[] 3
+        $n = 0
+        try { while ($n -lt 3) { $n += $sp.Read($got, $n, 3 - $n) } } catch [System.TimeoutException] { }
+        return ($n -eq 3 -and $got[0] -eq 0x55 -and $got[1] -eq 0xAA -and $got[2] -eq 0x0F)
+    } catch [System.UnauthorizedAccessException] {
+        throw "Port $p je obsazený jiným programem – zavřete Arduino IDE / sériový monitor."
+    } finally {
+        if ($sp.IsOpen) { $sp.Close() }
+    }
+}
+
 function Invoke-Avrdude([string[]]$extra) {
+    Write-Host "1/3 Hledám programátor…"
     $p = Get-Port                 # first: no download when no programmer is connected
+    Write-Host "2/3 Kontroluji zapojení programátoru…"
+    if ($Programmer -eq "serialupdi" -and -not (Test-Echo $p)) {
+        throw ("Arduino nevrací signál – chyba je v zapojení ARDUINA (ne čidla):`n" +
+               "  • drát RESET – GND na Arduinu (drží jeho čip v resetu),`n" +
+               "  • D0 přes odpor a D1 musí být spojené v jednom bodě (UPDI),`n" +
+               "  • dráty opravdu na D0 a D1 (u Nana piny RX0 a TX1).")
+    }
+    Write-Host "    Arduino OK. 3/3 Komunikuji s čipem v čidle…"
     $avrdude = Get-Avrdude
     $avrArgs = @("-c", $Programmer, "-p", "t1624", "-P", $p, "-b", "$Baud") + $extra
     & $avrdude @avrArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "Nahrání selhalo – zkontrolujte zapojení (TX přes odpor, RX přímo, GND, u Arduina RESET–GND), port a baterie v čidle."
+        throw ("Čip v čidle neodpovídá – Arduino je zapojené dobře, chyba je na straně ČIDLA:`n" +
+               "  • napájení čidla (baterie, nebo 3,3 V z Arduina Uno – ne obojí),`n" +
+               "  • UPDI drát opravdu na UPDI (pin 10 ATtiny1624) a GND na GND,`n" +
+               "  • zkuste pomaleji: .\nahraj.ps1 -Test -Baud 57600")
     }
 }
 
