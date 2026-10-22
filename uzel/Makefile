@@ -61,14 +61,14 @@ size: $(BUILD_DIR)/firmware.elf
 	$(SIZE) $<
 
 flash: $(BUILD_DIR)/firmware.hex
-	$(AVRDUDE) -c $(PROGRAMMER) -p $(MCU) -P $(PORT) -b $(BAUD) -U flash:w:$<:i
+	$(AVRDUDE) -c $(PROGRAMMER) -p t1624 -P $(PORT) -b $(BAUD) -U flash:w:$<:i
 
 # fuse1 BODCFG  = 0x04 : BOD enabled in active mode, disabled in sleep, level 1.8 V
 #                        (last resort only – the firmware switches off at 3.0 V battery)
 # fuse2 OSCCFG  = 0x02 : 20 MHz internal oscillator (divided to 3.333 MHz at run time)
 # fuse5 SYSCFG0 = 0xC5 : no CRC check, PA0 = UPDI, EEPROM KEPT on chip erase (pairing keys survive a firmware update)
 fuses:
-	$(AVRDUDE) -c $(PROGRAMMER) -p $(MCU) -P $(PORT) -b $(BAUD) \
+	$(AVRDUDE) -c $(PROGRAMMER) -p t1624 -P $(PORT) -b $(BAUD) \
 		-U fuse1:w:0x04:m -U fuse2:w:0x02:m -U fuse5:w:0xC5:m
 
 # crypto self-test on the host (needs a native C compiler)

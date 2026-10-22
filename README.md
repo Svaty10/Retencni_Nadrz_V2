@@ -79,6 +79,8 @@ Podrobně v [docs/instalace.md](docs/instalace.md).
 | [Zadání a návrh](docs/ZADANI.md) | kompletní specifikace: měření, protokol, párování, server, bezpečnost |
 | [Instalace a provoz](docs/instalace.md) | instalace, uvedení do provozu, baterie, odpárování, záloha a obnova, problémy |
 | [Zapojení](docs/zapojeni_rpi.md) | CC1101 ↔ Raspberry Pi |
+| [Programování čidla](docs/programovani_uzlu.md) | nahrání firmwaru přes UPDI (USB-UART nebo Arduino), fuses, řešení problémů |
+| [Architektura](docs/architektura.md) | jak je systém poskládaný, výpočty, řízení dopouštění |
 | [API](docs/api.md) | REST API webu a Home Assistantu, rádiový protokol |
 | [Home Assistant](docs/home_assistant.yaml) | vzorová konfigurace (aktuální YAML vygeneruje web) |
 | [Changelog](CHANGELOG.md) | historie verzí |
