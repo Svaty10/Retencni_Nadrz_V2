@@ -9,196 +9,267 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+    <meta name="color-scheme" content="light dark">
     <title>Retenční Nádrž</title>
     <link rel="icon" href="/favicon.ico" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+<!-- Ikony: jednou definované čárové symboly (stroke = currentColor), používá se <use href="#i-…"> -->
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <defs>
+        <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5c-3 3.6-6 7.3-6 10.5a6 6 0 0 0 12 0c0-3.2-3-6.9-6-10.5z"/></symbol>
+        <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 14.6V5.5a2 2 0 0 0-4 0v9.1a4 4 0 1 0 4 0z"/><path d="M12 9v7"/></symbol>
+        <symbol id="i-battery" viewBox="0 0 24 24"><rect x="3" y="7.5" width="16" height="9" rx="1.5"/><path d="M21.5 10.5v3M6.5 10.5v3M9.5 10.5v3"/></symbol>
+        <symbol id="i-signal" viewBox="0 0 24 24"><path d="M5 19v-2.5M9.5 19v-6M14 19V9.5M18.5 19V5.5"/></symbol>
+        <symbol id="i-rain" viewBox="0 0 24 24"><path d="M7.5 15.5a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.5 1.6 3.3 3.3 0 0 1-.6 6.4"/><path d="M9 18.5l-.8 1.8M12.8 18.5l-.8 1.8M16.6 18.5l-.8 1.8"/></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.2M12 17.2v.1"/></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="3.8"/><path d="M10.8 12.8 19 4.5M15.5 8l2.3 2.3M13.3 10.2l1.8 1.8"/></symbol>
+        <symbol id="i-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+        <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4.5H5.5v15H10"/><path d="M14.5 8l4 4-4 4M18.5 12H9.5"/></symbol>
+        <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5"/></symbol>
+        <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.2"/><path d="M3 19c1-3 3.2-4.5 6-4.5s5 1.5 6 4.5"/><path d="M15.5 6a3 3 0 0 1 0 6M17.5 14.8c1.7.6 2.9 2 3.5 4.2"/></symbol>
+        <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9.5M18.5 7H20M4 17h3.5M12.5 17H20"/><circle cx="16" cy="7" r="2.3"/><circle cx="10" cy="17" r="2.3"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/></symbol>
+        <symbol id="i-ruler" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 8v3M11 8v4M15 8v3"/></symbol>
+        <symbol id="i-antenna" viewBox="0 0 24 24"><path d="M12 12v8"/><circle cx="12" cy="10" r="1.6"/><path d="M8.6 6.6a4.8 4.8 0 0 0 0 6.8M15.4 6.6a4.8 4.8 0 0 1 0 6.8M6 4a8.5 8.5 0 0 0 0 12M18 4a8.5 8.5 0 0 1 0 12"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+        <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/></symbol>
+        <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4" rx="1"/><path d="M5 8.5v11h14v-11M10 12.5h4"/></symbol>
+        <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14" rx="1.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9" rx="1.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+        <symbol id="i-restart" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19.2 4.5V8h-3.5"/></symbol>
+        <symbol id="i-bars" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 16.5v-5M11 16.5V7M15.5 16.5v-7M20 16.5V5"/></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15l5.5-5.5"/></symbol>
+        <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/></symbol>
+    </defs>
+</svg>
+
 <div class="app-container">
     <header class="app-header">
-        <div class="logo">💧 Retenční Nádrž</div>
-        <div class="header-actions">
-            <span class="status-pill" id="statusPill">Načítám…</span>
-            <span class="user-badge" id="userBadge"></span>
-            <button class="btn btn-outline" id="logoutBtn" type="button">Odhlásit</button>
+        <div class="brand">
+            <svg class="ico brand-mark" aria-hidden="true"><use href="#i-drop"/></svg>
+            <span class="brand-name">Retenční nádrž</span>
+            <span class="status-pill" id="statusPill" role="status">Načítám…</span>
+        </div>
+        <div class="account">
+            <button class="account-btn" id="accountBtn" type="button" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="accountMenu" aria-label="Účet a nastavení">
+                <span class="avatar" id="avatarInitial" aria-hidden="true">?</span>
+                <svg class="ico ico-sm" aria-hidden="true"><use href="#i-chevron"/></svg>
+            </button>
+            <div class="menu hidden" id="accountMenu" role="menu" aria-labelledby="accountBtn">
+                <div class="menu-head">
+                    <span class="avatar avatar-lg" id="menuInitial" aria-hidden="true">?</span>
+                    <div class="menu-who">
+                        <strong id="userBadge"></strong>
+                        <span id="userRole"></span>
+                    </div>
+                </div>
+                <div class="menu-sep" role="separator"></div>
+                <button class="menu-item tab-btn" data-tab="heslo" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>Můj účet</button>
+                <button class="menu-item tab-btn admin-only hidden" data-tab="nastaveni" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-sliders"/></svg>Nastavení</button>
+                <button class="menu-item tab-btn admin-only hidden" data-tab="uzivatele" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-users"/></svg>Správa uživatelů</button>
+                <button class="menu-item tab-btn admin-only hidden" data-tab="logovani" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-list"/></svg>Logování</button>
+                <div class="menu-sep" role="separator"></div>
+                <button class="menu-item" id="logoutBtn" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg>Odhlásit</button>
+                <div class="menu-foot" id="menuVersion"></div>
+            </div>
         </div>
     </header>
 
-    <nav class="tab-nav" id="tabNav">
-        <button class="tab-btn active" data-tab="dashboard" type="button">Dashboard</button>
-        <button class="tab-btn admin-only hidden" data-tab="nastaveni" type="button">Nastavení</button>
-        <button class="tab-btn admin-only hidden" data-tab="logovani" type="button">Logování</button>
-        <button class="tab-btn admin-only hidden" data-tab="uzivatele" type="button">Správa uživatelů</button>
-        <button class="tab-btn" data-tab="heslo" type="button">Můj účet</button>
+    <nav class="main-nav" id="tabNav" aria-label="Hlavní navigace">
+        <button class="tab-btn nav-tab active" data-tab="dashboard" type="button">Dashboard</button>
+        <div id="nodeBar" class="node-bar hidden" role="tablist" aria-label="Čidla"></div>
     </nav>
 
-    <div id="nodeBar" class="node-bar hidden" role="tablist" aria-label="Čidla"></div>
-
-    <div id="banner" class="banner hidden"></div>
+    <div id="banner" class="banner hidden" role="alert"></div>
 
     <!-- ======================================================= DASHBOARD -->
     <div id="dashboard" class="tab-content active">
         <!-- Přehled všech nádrží (volba „Všechny“ v liště čidel) -->
         <div id="overview" class="hidden">
             <div class="overview-grid" id="overviewGrid"></div>
-            <div class="card chart-card mt-25">
+            <section class="card chart-card span-2 mt-20">
                 <div class="card-head">
-                    <h3>Hladina všech nádrží</h3>
+                    <h2>Hladina všech nádrží</h2>
                     <div class="range-picker" data-chart="all" data-default="7d" data-kind="time"></div>
                 </div>
                 <div class="chart-container"><canvas id="allChart"></canvas></div>
-            </div>
+            </section>
         </div>
 
-        <div class="grid" id="nodeDash">
-            <div class="card tank-card">
-                <h3>Stav Nádrže</h3>
-                <div class="tank-wrapper">
-                    <div class="tank-glass">
-                        <div class="water-level" id="waterLevel"></div>
-                        <div class="tank-text">
-                            <h2 id="txtPercent">– %</h2>
-                            <p id="txtLiters">– L</p>
+        <div id="nodeDash">
+            <div class="dash-top">
+                <!-- Hlavní blok: nádrž -->
+                <section class="card tank-card" aria-labelledby="tankTitle">
+                    <div class="tank-main">
+                        <div class="tank-figures">
+                            <h2 class="card-label" id="tankTitle">Stav nádrže</h2>
+                            <div class="level-big" id="txtPercent">– %</div>
+                            <div class="level-litres" id="txtLiters">– L</div>
+                            <dl class="tank-meta">
+                                <div><dt>Výška hladiny</dt><dd id="txtLevelCm">–</dd></div>
+                                <div><dt>Poslední aktualizace</dt><dd id="txtUpdated">–</dd></div>
+                            </dl>
+                        </div>
+                        <div class="gauge" aria-hidden="true">
+                            <div class="water-level" id="waterLevel"></div>
+                            <span class="gauge-tick t25"></span><span class="gauge-tick t50"></span><span class="gauge-tick t75"></span>
                         </div>
                     </div>
-                </div>
-                <div class="stats-row">
-                    <div class="stat-item"><span>Výška hladiny</span><strong id="txtLevelCm">–</strong></div>
-                </div>
-                <div class="stats-row">
-                    <div class="stat-item"><span>Poslední aktualizace</span><strong id="txtUpdated">–</strong></div>
-                </div>
-            </div>
 
-            <div class="card info-cards">
-                <h3>Přehled</h3>
-                <div class="stats-grid">
-                    <div class="stat-box"><label>Teplota</label><div class="val" id="txtTemp">–</div></div>
-                    <div class="stat-box"><label>Vlhkost</label><div class="val" id="txtHum">–</div></div>
-                    <div class="stat-box" id="batBox">
-                        <label>Baterie</label>
-                        <div class="val" id="txtBat">–</div>
-                        <div class="sub-val" id="txtBatV">–</div>
+                    <div class="refill-block" id="refillBox">
+                        <div class="refill-state">
+                            <svg class="ico" aria-hidden="true"><use href="#i-drop"/></svg>
+                            <div>
+                                <div class="refill-title">Dopouštění: <strong id="txtRefillStatus">–</strong></div>
+                                <div class="muted small" id="txtRefillTime">–</div>
+                            </div>
+                        </div>
+                        <div class="refill-actions admin-only hidden" id="refillActions">
+                            <div class="input-unit refill-input">
+                                <input type="number" id="manualPctInput" placeholder="Cílová hladina" min="1" max="100"
+                                       aria-label="Cílová hladina (%)" inputmode="decimal">
+                                <span class="unit">%</span>
+                            </div>
+                            <button class="btn btn-primary" id="refillStartBtn" type="button">Dopustit</button>
+                            <button class="btn btn-danger" id="refillStopBtn" type="button">Zastavit / zrušit</button>
+                            <button class="btn btn-outline hidden" id="refillResumeBtn" type="button">Obnovit automatiku</button>
+                        </div>
                     </div>
-                    <div class="stat-box"><label>Výdrž baterie</label><div class="val" id="txtBatEst">–</div></div>
-                    <div class="stat-box"><label>Spotřeba dnes</label><div class="val" id="txtConsToday">–</div></div>
-                    <div class="stat-box"><label>Spotřeba za 7 dní</label><div class="val" id="txtCons7d">–</div></div>
-                    <div class="stat-box"><label>Srážky (2 dny)</label><div class="val" id="txtRain">–</div></div>
-                    <div class="stat-box" id="outlookBox">
-                        <label>Výhled</label>
-                        <div class="val" id="txtOutlook">–</div>
-                        <div class="sub-val" id="txtOutlookSub">–</div>
+                </section>
+
+                <!-- Doplňkové hodnoty ve skupinách -->
+                <section class="card facts-card" aria-label="Přehled">
+                    <div class="fact-group">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg>Klima v šachtě</h3>
+                        <dl class="facts">
+                            <div class="fact"><dt>Teplota</dt><dd id="txtTemp">–</dd></div>
+                            <div class="fact"><dt>Vlhkost</dt><dd id="txtHum">–</dd></div>
+                        </dl>
                     </div>
-                    <div class="stat-box" id="refillBox">
-                        <label>Stav dopouštění</label>
-                        <div class="val" id="txtRefillStatus">–</div>
-                        <div class="sub-val" id="txtRefillTime">–</div>
+                    <div class="fact-group" id="batBox">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie</h3>
+                        <dl class="facts">
+                            <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
+                            <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
+                        </dl>
                     </div>
-                    <div class="stat-box" id="linkBox">
-                        <label>Signál čidla</label>
-                        <div class="val" id="txtRssi">–</div>
-                        <div class="sub-val" id="txtLoss">–</div>
+                    <div class="fact-group">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Spotřeba</h3>
+                        <dl class="facts">
+                            <div class="fact"><dt>Dnes</dt><dd id="txtConsToday">–</dd></div>
+                            <div class="fact"><dt>Za 7 dní</dt><dd id="txtCons7d">–</dd></div>
+                        </dl>
                     </div>
-                </div>
-
-                <div class="action-buttons admin-only hidden" id="refillActions">
-                    <input type="number" id="manualPctInput" placeholder="Cílová hladina (%)" min="1" max="100" class="unified-input">
-                    <button class="btn btn-primary" id="refillStartBtn" type="button">Dopustit</button>
-                    <button class="btn btn-danger" id="refillStopBtn" type="button">Zastavit / zrušit</button>
-                    <button class="btn btn-outline hidden" id="refillResumeBtn" type="button">Obnovit automatiku</button>
-                </div>
+                    <div class="fact-group" id="outlookBox">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled</h3>
+                        <dl class="facts">
+                            <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
+                            <div class="fact"><dt>Srážky (2 dny)</dt><dd id="txtRain">–</dd></div>
+                        </dl>
+                    </div>
+                    <div class="fact-group" id="linkBox">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-signal"/></svg>Signál čidla</h3>
+                        <dl class="facts">
+                            <div class="fact"><dt>Síla</dt><dd><span id="txtRssi">–</span><small id="txtLoss">–</small></dd></div>
+                        </dl>
+                    </div>
+                </section>
             </div>
 
-            <!-- 1. Hladina -->
-            <div class="card chart-card">
-                <div class="card-head">
-                    <h3>Hladina vody</h3>
-                    <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
-                </div>
-                <div class="chart-container"><canvas id="historyChart"></canvas></div>
-                <div class="chart-legend-extra">
-                    <span><i class="lg lg-refill"></i>dopouštění</span>
-                    <span><i class="lg lg-rain"></i>přítok z deště</span>
-                </div>
-            </div>
+            <div class="chart-grid">
+                <section class="card chart-card span-2">
+                    <div class="card-head">
+                        <h2>Hladina vody</h2>
+                        <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
+                    </div>
+                    <div class="chart-container chart-tall"><canvas id="historyChart"></canvas></div>
+                    <div class="chart-legend-extra">
+                        <span><i class="lg lg-refill"></i>dopouštění</span>
+                        <span><i class="lg lg-rain"></i>přítok z deště</span>
+                    </div>
+                </section>
 
-            <!-- 2. Spotřeba -->
-            <div class="card chart-card">
-                <div class="card-head">
-                    <h3>Spotřeba vody</h3>
-                    <div class="range-picker" data-chart="consumption" data-default="7d" data-kind="days"></div>
-                </div>
-                <div class="chart-container"><canvas id="consumptionChart"></canvas></div>
-            </div>
+                <section class="card chart-card">
+                    <div class="card-head">
+                        <h2>Spotřeba vody</h2>
+                        <div class="range-picker" data-chart="consumption" data-default="7d" data-kind="days"></div>
+                    </div>
+                    <div class="chart-container"><canvas id="consumptionChart"></canvas></div>
+                </section>
 
-            <!-- 2b. Dopouštění -->
-            <div class="card chart-card">
-                <div class="card-head">
-                    <h3>Dopouštění vody z řadu</h3>
-                    <div class="range-picker" data-chart="refill" data-default="7d" data-kind="days"></div>
-                </div>
-                <div class="chart-container"><canvas id="refillChart"></canvas></div>
-            </div>
+                <section class="card chart-card">
+                    <div class="card-head">
+                        <h2>Dopouštění z řadu</h2>
+                        <div class="range-picker" data-chart="refill" data-default="7d" data-kind="days"></div>
+                    </div>
+                    <div class="chart-container"><canvas id="refillChart"></canvas></div>
+                </section>
 
-            <!-- 3. Klima -->
-            <div class="card chart-card">
-                <div class="card-head">
-                    <h3>Klima v šachtě</h3>
-                    <div class="range-picker" data-chart="klima" data-default="7d" data-kind="time"></div>
-                </div>
-                <div class="chart-container"><canvas id="klimaChart"></canvas></div>
-            </div>
+                <section class="card chart-card">
+                    <div class="card-head">
+                        <h2>Klima v šachtě</h2>
+                        <div class="range-picker" data-chart="klima" data-default="7d" data-kind="time"></div>
+                    </div>
+                    <div class="chart-container"><canvas id="klimaChart"></canvas></div>
+                </section>
 
-            <!-- 4. Počasí -->
-            <div class="card chart-card">
-                <div class="card-head">
-                    <h3>Předpověď počasí</h3>
-                    <span class="hint">Výhled na 7 dní</span>
-                </div>
-                <div class="chart-container"><canvas id="weatherChart"></canvas></div>
-            </div>
+                <section class="card chart-card">
+                    <div class="card-head">
+                        <h2>Předpověď počasí</h2>
+                        <span class="hint">Výhled na 7 dní</span>
+                    </div>
+                    <div class="chart-container"><canvas id="weatherChart"></canvas></div>
+                </section>
 
-            <!-- 5. Baterie -->
-            <div class="card chart-card">
-                <div class="card-head">
-                    <h3>Baterie a Signál</h3>
-                    <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
-                </div>
-                <div class="chart-container"><canvas id="batteryChart"></canvas></div>
+                <section class="card chart-card span-2">
+                    <div class="card-head">
+                        <h2>Baterie a signál</h2>
+                        <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
+                    </div>
+                    <div class="chart-container"><canvas id="batteryChart"></canvas></div>
+                </section>
             </div>
         </div>
     </div>
 
     <!-- ======================================================= NASTAVENÍ -->
     <div id="nastaveni" class="tab-content">
-        <div class="settings-mode">
-            <span class="muted">Zobrazeno: <strong id="advLabel">základní nastavení</strong></span>
-            <label class="switch" title="Pokročilé nastavení">
-                <input type="checkbox" id="advToggle">
-                <span class="slider"></span>
+        <div class="page-head">
+            <h1>Nastavení</h1>
+            <label class="toggle settings-mode">
+                <span class="toggle-text">Pokročilé <span class="muted small">(zobrazeno: <span id="advLabel">základní nastavení</span>)</span></span>
+                <span class="switch"><input type="checkbox" id="advToggle"><span class="slider"></span></span>
             </label>
-            <span>Pokročilé</span>
         </div>
         <div class="stack">
             <!-- Nádrž -->
-            <div class="card">
+            <section class="card">
                 <h2>Nádrž – <span id="calNodeName">–</span></h2>
 
-                <div class="live-data-box mb-25">
-                    <h3>Aktuální hodnoty</h3>
-                    <div class="stats-grid">
-                        <div class="stat-box"><label>Napětí sondy</label><div class="val" id="liveProbeMv">–</div></div>
-                        <div class="stat-box"><label>Voda nad sondou</label><div class="val" id="liveColumn">–</div></div>
-                        <div class="stat-box"><label>Hladina ode dna</label><div class="val" id="liveLevel">–</div></div>
-                        <div class="stat-box"><label>Interval měření</label><div class="val" id="liveInterval">–</div></div>
-                    </div>
-                </div>
+                <dl class="live-grid">
+                    <div><dt>Napětí sondy</dt><dd id="liveProbeMv">–</dd></div>
+                    <div><dt>Voda nad sondou</dt><dd id="liveColumn">–</dd></div>
+                    <div><dt>Hladina ode dna</dt><dd id="liveLevel">–</dd></div>
+                    <div><dt>Interval měření</dt><dd id="liveInterval">–</dd></div>
+                </dl>
 
                 <div class="config-form">
                     <h3>Kalibrace</h3>
                     <p class="muted small">Změřte hladinu ode dna a zadejte ji. Nejlépe jednou při nízké a jednou při vysoké hladině.</p>
                     <div class="inline-actions">
-                        <input type="number" step="0.1" id="calActualCm" class="unified-input" placeholder="Skutečná hladina (cm)">
+                        <div class="input-unit">
+                            <input type="number" step="0.1" id="calActualCm" placeholder="Skutečná hladina" aria-label="Skutečná hladina (cm)">
+                            <span class="unit">cm</span>
+                        </div>
                         <button class="btn btn-primary" id="calAddBtn" type="button">Uložit</button>
                     </div>
                 </div>
@@ -217,18 +288,18 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Hloubka nádrže (cm)</label>
-                            <input type="number" step="0.1" name="max_depth_cm" class="unified-input" required>
+                            <label>Hloubka nádrže</label>
+                            <div class="input-unit"><input type="number" step="0.1" name="max_depth_cm" required><span class="unit">cm</span></div>
                         </div>
                         <div class="form-group">
-                            <label>Plocha dna (m²)</label>
-                            <input type="number" step="0.01" name="tank_area_m2" class="unified-input" required>
+                            <label>Plocha dna</label>
+                            <div class="input-unit"><input type="number" step="0.01" name="tank_area_m2" required><span class="unit">m²</span></div>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Plocha střechy (m²)</label>
-                            <input type="number" step="1" name="catchment_area_m2" class="unified-input">
+                            <label>Plocha střechy</label>
+                            <div class="input-unit"><input type="number" step="1" name="catchment_area_m2"><span class="unit">m²</span></div>
                         </div>
                         <div class="form-group adv">
                             <label>Odtokový součinitel střechy</label>
@@ -237,40 +308,49 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Upozornit (Telegram) pod (%, 0 = ne)</label>
-                            <input type="number" step="1" min="0" max="100" name="notify_low_pct" class="unified-input">
+                            <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span></label>
+                            <div class="input-unit"><input type="number" step="1" min="0" max="100" name="notify_low_pct"><span class="unit">%</span></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Baterie v čidle (3× AA)</label>
+                            <select name="battery_type" class="unified-select">
+                                <option value="lifes2">Lithiové Li-FeS2 (Energizer Ultimate Lithium)</option>
+                                <option value="alkaline">Alkalické</option>
+                            </select>
                         </div>
                     </div>
 
                     <div class="adv">
-                        <h3 class="mt-15">Sonda</h3>
+                        <h3>Sonda</h3>
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Výška sondy nade dnem (cm)</label>
-                                <input type="number" step="0.1" name="sensor_offset_cm" class="unified-input" required>
+                                <label>Výška sondy nade dnem</label>
+                                <div class="input-unit"><input type="number" step="0.1" name="sensor_offset_cm" required><span class="unit">cm</span></div>
                             </div>
                             <div class="form-group">
-                                <label>Přesnost sondy (% rozsahu)</label>
-                                <input type="number" step="0.01" name="probe_accuracy_pct" class="unified-input" required>
+                                <label>Přesnost sondy</label>
+                                <div class="input-unit"><input type="number" step="0.01" name="probe_accuracy_pct" required><span class="unit">% rozsahu</span></div>
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Rozsah sondy (cm)</label>
-                                <input type="number" step="1" name="probe_range_cm" class="unified-input" required>
+                                <label>Rozsah sondy</label>
+                                <div class="input-unit"><input type="number" step="1" name="probe_range_cm" required><span class="unit">cm</span></div>
                             </div>
                             <div class="form-group">
                                 <label>Vyhlazení šumu</label>
                                 <div class="readonly-val" id="deadbandInfo">–</div>
                             </div>
                         </div>
-                        <table class="cal-table">
-                            <thead><tr><th>Bod</th><th>Napětí (mV)</th><th>Voda nad sondou (cm)</th></tr></thead>
-                            <tbody id="calPoints"></tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="cal-table">
+                                <thead><tr><th>Bod</th><th>Napětí (mV)</th><th>Voda nad sondou (cm)</th></tr></thead>
+                                <tbody id="calPoints"></tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    <h3 class="mt-15">Dopouštění</h3>
+                    <h3>Dopouštění</h3>
                     <div class="alert-warning hidden" id="zoneNote"></div>
                     <div class="form-row">
                         <div class="form-group">
@@ -285,60 +365,54 @@
                             <input type="text" name="hydrawise_relay_id" class="unified-input" autocomplete="off">
                         </div>
                     </div>
+                    <div class="form-row toggles">
+                        <label class="toggle">
+                            <span class="toggle-text">Automatické dopouštění</span>
+                            <span class="switch"><input type="checkbox" name="auto_refill_enabled"><span class="slider"></span></span>
+                        </label>
+                        <label class="toggle">
+                            <span class="toggle-text">Čekat na předpovězený déšť</span>
+                            <span class="switch"><input type="checkbox" name="rain_wait_enabled"><span class="slider"></span></span>
+                        </label>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Automatické dopouštění</label>
-                            <select name="auto_refill_enabled" class="unified-select">
-                                <option value="false">Vypnuto</option>
-                                <option value="true">Zapnuto</option>
-                            </select>
+                            <label>Dopouštět pod</label>
+                            <div class="input-unit"><input type="number" step="1" name="refill_threshold_pct"><span class="unit">%</span></div>
                         </div>
                         <div class="form-group">
-                            <label>Čekat na předpovězený déšť</label>
-                            <select name="rain_wait_enabled" class="unified-select">
-                                <option value="true">Ano</option>
-                                <option value="false">Ne</option>
-                            </select>
+                            <label>Dopustit na</label>
+                            <div class="input-unit"><input type="number" step="1" name="auto_refill_target_pct"><span class="unit">%</span></div>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Dopouštět pod (%)</label>
-                            <input type="number" step="1" name="refill_threshold_pct" class="unified-input">
+                            <label>Nečekat na déšť pod prahem o víc než</label>
+                            <div class="input-unit"><input type="number" step="1" name="rain_wait_max_below_pct"><span class="unit">%</span></div>
                         </div>
                         <div class="form-group">
-                            <label>Dopustit na (%)</label>
-                            <input type="number" step="1" name="auto_refill_target_pct" class="unified-input">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Nečekat na déšť pod prahem o víc než (%)</label>
-                            <input type="number" step="1" name="rain_wait_max_below_pct" class="unified-input">
-                        </div>
-                        <div class="form-group">
-                            <label>Přestat čekat po poklesu o (%)</label>
-                            <input type="number" step="1" name="rain_wait_max_drop_pct" class="unified-input">
+                            <label>Přestat čekat po poklesu o</label>
+                            <div class="input-unit"><input type="number" step="1" name="rain_wait_max_drop_pct"><span class="unit">%</span></div>
                         </div>
                     </div>
                     <div class="form-row adv">
                         <div class="form-group">
-                            <label>Výhled deště (h)</label>
-                            <input type="number" step="1" min="1" max="72" name="rain_wait_hours" class="unified-input">
+                            <label>Výhled deště</label>
+                            <div class="input-unit"><input type="number" step="1" min="1" max="72" name="rain_wait_hours"><span class="unit">h</span></div>
                         </div>
                         <div class="form-group">
-                            <label>Nejvýš dopustit na (%)</label>
-                            <input type="number" step="1" min="0" max="100" name="max_refill_pct" class="unified-input">
+                            <label>Nejvýš dopustit na</label>
+                            <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct"><span class="unit">%</span></div>
                         </div>
                     </div>
                     <div class="form-row adv">
                         <div class="form-group">
-                            <label>Průtok (L/min) <small id="realFlowHint"></small></label>
-                            <input type="number" step="0.1" name="flow_rate_lpm" class="unified-input">
+                            <label>Průtok <small class="muted" id="realFlowHint"></small></label>
+                            <div class="input-unit"><input type="number" step="0.1" name="flow_rate_lpm"><span class="unit">L/min</span></div>
                         </div>
                         <div class="form-group">
-                            <label>Nejdelší dopouštění (min)</label>
-                            <input type="number" step="1" name="max_refill_minutes" class="unified-input">
+                            <label>Nejdelší dopouštění</label>
+                            <div class="input-unit"><input type="number" step="1" name="max_refill_minutes"><span class="unit">min</span></div>
                         </div>
                     </div>
                     <div class="form-row adv">
@@ -348,7 +422,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary mt-20 w-100">Uložit</button>
+                    <div class="form-actions"><button type="submit" class="btn btn-primary">Uložit</button></div>
                 </form>
 
                 <div class="config-form adv">
@@ -362,26 +436,29 @@
                 <div class="config-form adv">
                     <h3>Kalibrace baterie</h3>
                     <div class="inline-actions">
-                        <input type="number" step="0.001" id="batActualV" class="unified-input" placeholder="Změřené napětí (V)">
+                        <div class="input-unit">
+                            <input type="number" step="0.001" id="batActualV" placeholder="Změřené napětí" aria-label="Změřené napětí (V)">
+                            <span class="unit">V</span>
+                        </div>
                         <button class="btn btn-primary" id="batCalBtn" type="button">Uložit</button>
                     </div>
                     <p class="muted small mt-15">Korekce: <strong id="batTrim">–</strong></p>
                 </div>
-            </div>
+            </section>
 
             <!-- Obecné -->
-            <div class="card">
+            <section class="card">
                 <h2>Obecné</h2>
                 <form id="sysForm" class="config-form">
                     <h3>Poloha (předpověď počasí)</h3>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Zeměpisná šířka</label>
-                            <input type="number" step="0.0001" name="latitude" class="unified-input">
+                            <div class="input-unit"><input type="number" step="0.0001" name="latitude"><span class="unit">°</span></div>
                         </div>
                         <div class="form-group">
                             <label>Zeměpisná délka</label>
-                            <input type="number" step="0.0001" name="longitude" class="unified-input">
+                            <div class="input-unit"><input type="number" step="0.0001" name="longitude"><span class="unit">°</span></div>
                         </div>
                     </div>
                     <h3>Hydrawise</h3>
@@ -401,28 +478,32 @@
                         </div>
                         <div class="form-group">
                             <label>Stav</label>
-                            <div class="unified-input readonly-box" id="tgAdminStatus">–</div>
+                            <div class="readonly-box" id="tgAdminStatus">–</div>
                         </div>
                     </div>
                     <div class="adv">
                         <h3>Data a baterie</h3>
-                        <div class="form-row">
+                        <div class="form-row three">
                             <div class="form-group">
-                                <label>Kapacita baterie (mAh)</label>
-                                <input type="number" step="1" name="battery_capacity_mah" class="unified-input">
+                                <label>Kapacita lithiové baterie</label>
+                                <div class="input-unit"><input type="number" step="1" name="battery_capacity_mah"><span class="unit">mAh</span></div>
                             </div>
                             <div class="form-group">
-                                <label>Mazat podrobná data starší než (dní, 0 = nikdy)</label>
-                                <input type="number" step="1" min="0" name="retention_days" class="unified-input">
+                                <label>Kapacita alkalické baterie</label>
+                                <div class="input-unit"><input type="number" step="1" name="battery_capacity_alk_mah"><span class="unit">mAh</span></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Mazat podrobná data starší než <span class="muted">(0 = nikdy)</span></label>
+                                <div class="input-unit"><input type="number" step="1" min="0" name="retention_days"><span class="unit">dní</span></div>
                             </div>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary mt-20 w-100">Uložit</button>
+                    <div class="form-actions"><button type="submit" class="btn btn-primary">Uložit</button></div>
                 </form>
-            </div>
+            </section>
 
             <!-- Telegram a servis -->
-            <div class="card">
+            <section class="card">
                 <h2>Telegram a vzdálený servis</h2>
                 <h3>Propojené chaty</h3>
                 <div class="table-responsive">
@@ -437,10 +518,10 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Stav</label>
-                        <div class="unified-input readonly-box" id="servisStatus">–</div>
+                        <div class="readonly-box" id="servisStatus">–</div>
                     </div>
                     <div class="form-group">
-                        <label>Povolit</label>
+                        <label for="servisMode">Povolit</label>
                         <select id="servisMode" class="unified-select">
                             <option value="off">Vypnuto</option>
                             <option value="24h">Na 24 hodin</option>
@@ -448,11 +529,11 @@
                         </select>
                     </div>
                 </div>
-                <button type="button" id="servisSave" class="btn btn-outline">Uložit</button>
-            </div>
+                <div class="form-actions"><button type="button" id="servisSave" class="btn btn-outline">Uložit</button></div>
+            </section>
 
             <!-- Čidla -->
-            <div class="card">
+            <section class="card">
                 <h2>Čidla</h2>
                 <div class="table-responsive">
                     <table class="user-table">
@@ -475,13 +556,13 @@
                         </table>
                     </div>
                     <form id="addNodeForm" class="inline-actions">
-                        <input type="text" id="newNodeId" class="unified-input" placeholder="ID ze štítku" maxlength="6" required autocomplete="off">
-                        <input type="text" id="newNodeName" class="unified-input" placeholder="Název" maxlength="40">
+                        <input type="text" id="newNodeId" class="unified-input" placeholder="ID ze štítku" maxlength="6" required autocomplete="off" aria-label="ID ze štítku">
+                        <input type="text" id="newNodeName" class="unified-input" placeholder="Název" maxlength="40" aria-label="Název">
                         <button class="btn btn-primary" type="submit">Čekat na čidlo</button>
                     </form>
                 </div>
                 <div class="adv">
-                    <h3 class="mt-25">Čidla v dosahu</h3>
+                    <h3>Čidla v dosahu</h3>
                     <div class="table-responsive">
                         <table class="user-table">
                             <thead><tr><th>ID</th><th>Signál</th><th>Naposledy</th><th>Paketů</th><th>Typ</th></tr></thead>
@@ -490,10 +571,10 @@
                     </div>
                     <dl class="kv mt-20" id="radioInfo"></dl>
                 </div>
-            </div>
+            </section>
 
             <!-- Záloha -->
-            <div class="card">
+            <section class="card">
                 <h2>Záloha</h2>
                 <div class="backup-actions">
                     <a class="btn btn-primary" id="backupBtn" href="/api/backup/download" download>Stáhnout zálohu</a>
@@ -511,13 +592,13 @@
                         </table>
                     </div>
                 </div>
-            </div>
+            </section>
 
             <!-- Home Assistant -->
-            <div class="card">
+            <section class="card">
                 <h2>Home Assistant</h2>
-                <div class="token-row mb-20">
-                    <input type="password" id="haToken" class="unified-input" readonly>
+                <div class="token-row">
+                    <input type="password" id="haToken" class="unified-input" readonly aria-label="Token">
                     <button class="btn btn-outline" id="haShow" type="button">Zobrazit</button>
                     <button class="btn btn-outline" id="haCopy" type="button">Kopírovat YAML</button>
                     <button class="btn btn-danger" id="haRotate" type="button">Nový token</button>
@@ -526,39 +607,40 @@
                     <summary>Konfigurace (YAML)</summary>
                     <pre class="yaml" id="haYaml"></pre>
                 </details>
-            </div>
+            </section>
 
             <!-- Systém -->
-            <div class="card">
+            <section class="card">
                 <h2>Systém</h2>
                 <dl class="kv" id="sysInfo"></dl>
-                <button class="btn btn-primary mt-20" id="updateBtn" type="button">Zkontrolovat aktualizace</button>
-            </div>
+                <div class="form-actions"><button class="btn btn-outline" id="updateBtn" type="button">Zkontrolovat aktualizace</button></div>
+            </section>
         </div>
     </div>
 
     <!-- ======================================================= LOGOVÁNÍ -->
     <div id="logovani" class="tab-content">
+        <div class="page-head"><h1>Logování</h1></div>
         <div class="stack">
-            <div class="card">
+            <section class="card">
                 <h2>Záznamy</h2>
-                <div class="log-chips" id="logChips">
+                <div class="log-chips" id="logChips" role="group" aria-label="Kategorie">
                     <button type="button" class="chip active" data-cat="">Vše</button>
-                    <button type="button" class="chip" data-cat="refill">💧 Dopouštění</button>
-                    <button type="button" class="chip" data-cat="sensors">📡 Čidla</button>
-                    <button type="button" class="chip" data-cat="settings">⚙️ Nastavení</button>
-                    <button type="button" class="chip" data-cat="login">🔑 Přihlášení</button>
-                    <button type="button" class="chip" data-cat="users">👤 Uživatelé</button>
-                    <button type="button" class="chip" data-cat="system">🖥️ Systém</button>
-                    <button type="button" class="chip chip-danger" data-cat="problems">⚠️ Problémy</button>
+                    <button type="button" class="chip" data-cat="refill">Dopouštění</button>
+                    <button type="button" class="chip" data-cat="sensors">Čidla</button>
+                    <button type="button" class="chip" data-cat="settings">Nastavení</button>
+                    <button type="button" class="chip" data-cat="login">Přihlášení</button>
+                    <button type="button" class="chip" data-cat="users">Uživatelé</button>
+                    <button type="button" class="chip" data-cat="system">Systém</button>
+                    <button type="button" class="chip chip-danger" data-cat="problems">Problémy</button>
                 </div>
                 <div class="log-filters">
-                    <select id="logWho" class="unified-select">
+                    <select id="logWho" class="unified-select" aria-label="Kdo">
                         <option value="">Všichni</option>
                         <option value="people">Jen uživatelé</option>
                         <option value="system">Jen automatika</option>
                     </select>
-                    <input type="search" id="logSearch" class="unified-input" placeholder="Hledat…">
+                    <input type="search" id="logSearch" class="unified-input" placeholder="Hledat…" aria-label="Hledat">
                     <input type="date" id="logFrom" class="unified-input" title="Od">
                     <input type="date" id="logTo" class="unified-input" title="Do">
                     <button class="btn btn-outline" id="auditRefresh" type="button">Obnovit</button>
@@ -566,35 +648,35 @@
                 <div class="log-summary muted small" id="logSummary"></div>
                 <div class="log-list" id="auditList"></div>
                 <div class="audit-pagination" id="auditPagination"></div>
-            </div>
+            </section>
 
-            <div class="card">
+            <section class="card">
                 <h2>Export dat</h2>
-                <div class="card-head">
+                <div class="export-row">
                     <div class="range-picker" data-chart="export" data-default="30d" data-kind="days"></div>
                     <button class="btn btn-primary" id="exportBtn" type="button">Stáhnout CSV</button>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 
     <!-- ======================================================= UŽIVATELÉ -->
     <div id="uzivatele" class="tab-content">
-        <div class="card">
-            <h2>Správa uživatelů</h2>
+        <div class="page-head"><h1>Správa uživatelů</h1></div>
+        <section class="card">
             <div class="table-responsive">
                 <table class="user-table">
                     <thead><tr><th>Jméno</th><th>Role</th><th>Poslední přihlášení</th><th>Akce</th></tr></thead>
                     <tbody id="usersBody"></tbody>
                 </table>
             </div>
-            <div class="config-form mt-25">
+            <div class="config-form">
                 <form id="addUserForm">
                     <h3>Přidat nového uživatele</h3>
                     <div class="form-row">
-                        <div class="form-group"><label>Jméno</label><input type="text" id="newUsername" class="unified-input" required maxlength="32" autocomplete="off"></div>
+                        <div class="form-group"><label for="newUsername">Jméno</label><input type="text" id="newUsername" class="unified-input" required maxlength="32" autocomplete="off"></div>
                         <div class="form-group">
-                            <label>Role</label>
+                            <label for="newRole">Role</label>
                             <select id="newRole" class="unified-select">
                                 <option value="user">Uživatel (jen čtení)</option>
                                 <option value="admin">Administrátor</option>
@@ -602,53 +684,56 @@
                         </div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label>Heslo (min. 10 znaků)</label><input type="password" id="newPassword" class="unified-input" required minlength="10" autocomplete="new-password"></div>
-                        <div class="form-group"><label>Potvrzení hesla</label><input type="password" id="newPasswordConfirm" class="unified-input" required minlength="10" autocomplete="new-password"></div>
+                        <div class="form-group"><label for="newPassword">Heslo (min. 10 znaků)</label><input type="password" id="newPassword" class="unified-input" required minlength="10" autocomplete="new-password"></div>
+                        <div class="form-group"><label for="newPasswordConfirm">Potvrzení hesla</label><input type="password" id="newPasswordConfirm" class="unified-input" required minlength="10" autocomplete="new-password"></div>
                     </div>
-                    <button type="submit" class="btn btn-primary mt-15 w-100">Přidat uživatele</button>
+                    <div class="form-actions"><button type="submit" class="btn btn-primary">Přidat uživatele</button></div>
                 </form>
             </div>
-        </div>
+        </section>
     </div>
 
     <!-- ======================================================= MŮJ ÚČET -->
     <div id="heslo" class="tab-content">
-        <div class="card">
-            <h2>📱 Telegram</h2>
-            <p class="muted" id="tgMineInfo">Upozornění a ovládání nádrží z telefonu.</p>
-            <div id="tgLinkBox" class="hidden">
-                <p>Otevřete odkaz v telefonu a v Telegramu klepněte na <b>Start</b>:</p>
-                <p><a id="tgLinkUrl" href="#" target="_blank" rel="noopener" class="btn btn-primary">Otevřít Telegram</a></p>
-                <p class="muted small">Nebo pošlete botovi <b id="tgLinkBot"></b> zprávu <code id="tgLinkCode"></code>
-                    (platí 10 minut).</p>
-            </div>
-            <button type="button" id="tgLinkBtn" class="btn btn-outline">Propojit s Telegramem</button>
-            <div class="table-responsive mt-15">
-                <table class="user-table">
-                    <thead><tr><th>Propojený chat</th><th>Od</th><th></th></tr></thead>
-                    <tbody id="tgMineBody"></tbody>
-                </table>
-            </div>
-        </div>
-        <div class="card account-card">
-            <h2>🔑 Změna hesla</h2>
-            <p class="muted mb-20">Heslo musí mít alespoň 10 znaků. Po změně budou odhlášena všechna ostatní zařízení.</p>
-            <form id="pwForm" class="config-form">
-                <div class="form-group mb-20">
-                    <label>Současné heslo</label>
-                    <input type="password" id="pwOld" class="unified-input" required autocomplete="current-password">
+        <div class="page-head"><h1>Můj účet</h1></div>
+        <div class="stack narrow">
+            <section class="card">
+                <h2>Telegram</h2>
+                <p class="muted" id="tgMineInfo">Upozornění a ovládání nádrží z telefonu.</p>
+                <div id="tgLinkBox" class="hidden">
+                    <p>Otevřete odkaz v telefonu a v Telegramu klepněte na <b>Start</b>:</p>
+                    <p><a id="tgLinkUrl" href="#" target="_blank" rel="noopener" class="btn btn-primary">Otevřít Telegram</a></p>
+                    <p class="muted small">Nebo pošlete botovi <b id="tgLinkBot"></b> zprávu <code id="tgLinkCode"></code>
+                        (platí 10 minut).</p>
                 </div>
-                <div class="form-group mb-20">
-                    <label>Nové heslo</label>
-                    <input type="password" id="pwNew" class="unified-input" required minlength="10" autocomplete="new-password">
+                <button type="button" id="tgLinkBtn" class="btn btn-outline">Propojit s Telegramem</button>
+                <div class="table-responsive mt-15">
+                    <table class="user-table">
+                        <thead><tr><th>Propojený chat</th><th>Od</th><th></th></tr></thead>
+                        <tbody id="tgMineBody"></tbody>
+                    </table>
                 </div>
-                <div class="form-group">
-                    <label>Potvrzení nového hesla</label>
-                    <input type="password" id="pwNew2" class="unified-input" required minlength="10" autocomplete="new-password">
-                </div>
-                <button type="submit" class="btn btn-primary mt-15 w-100">Uložit nové heslo</button>
-            </form>
-            <p class="muted small mt-20" id="aboutLine"></p>
+            </section>
+            <section class="card account-card">
+                <h2>Změna hesla</h2>
+                <p class="muted">Heslo musí mít alespoň 10 znaků. Po změně budou odhlášena všechna ostatní zařízení.</p>
+                <form id="pwForm" class="config-form">
+                    <div class="form-group">
+                        <label for="pwOld">Současné heslo</label>
+                        <input type="password" id="pwOld" class="unified-input" required autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="pwNew">Nové heslo</label>
+                        <input type="password" id="pwNew" class="unified-input" required minlength="10" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="pwNew2">Potvrzení nového hesla</label>
+                        <input type="password" id="pwNew2" class="unified-input" required minlength="10" autocomplete="new-password">
+                    </div>
+                    <div class="form-actions"><button type="submit" class="btn btn-primary">Uložit nové heslo</button></div>
+                </form>
+                <p class="muted small mt-20" id="aboutLine"></p>
+            </section>
         </div>
     </div>
 </div>
