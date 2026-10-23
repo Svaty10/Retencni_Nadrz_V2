@@ -29,7 +29,13 @@
     --red: #b0372b;
     --red-soft: #f8e6e3;
     --chart-2: #5f5d57;
-    --grid: #ecebe5;
+    --series-1: #1f63a8;
+    --series-2: #b45309;
+    --series-3: #2e7d4f;
+    --series-4: #7a4fb0;
+    --series-5: #0f7470;
+    --series-6: #a83f6a;
+    --grid: #f1f0ec;
     --band-refill: rgba(47, 122, 77, 0.11);
     --band-rain: rgba(43, 108, 176, 0.09);
     --focus: rgba(43, 108, 176, 0.35);
@@ -64,7 +70,13 @@
         --red: #ec7d70;
         --red-soft: #3a2320;
         --chart-2: #aeada7;
-        --grid: #2c2d31;
+        --series-1: #6eaae6;
+        --series-2: #eba25a;
+        --series-3: #6fc490;
+        --series-4: #b79be8;
+        --series-5: #5cc2bb;
+        --series-6: #e889ae;
+        --grid: #292a2e;
         --band-refill: rgba(108, 191, 138, 0.12);
         --band-rain: rgba(106, 165, 223, 0.11);
         --focus: rgba(106, 165, 223, 0.45);
@@ -278,7 +290,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
     gap: 16px;
 }
 
-.tank-main { display: flex; gap: 24px; align-items: stretch; }
+.tank-card { display: flex; flex-direction: column; }
+.tank-main { display: flex; gap: 24px; align-items: stretch; flex: 1; }
 .tank-figures { flex: 1; min-width: 0; }
 .level-big {
     font-size: 56px; font-weight: 600; line-height: 1.05; letter-spacing: -0.025em;
@@ -709,11 +722,17 @@ body:not(.show-adv) #nastaveni .adv { display: none; }
     background: var(--accent-soft); border-radius: var(--radius-sm); color: var(--ink);
 }
 
+/* Bez ventilu: vše o dopouštění na dashboardu pryč, mřížka grafů se přeskládá bez děr */
+body.no-refill .refill-only { display: none !important; }
+@media (min-width: 641px) and (max-width: 1279px) { body.no-refill .wx-card { grid-column: 1 / -1; } }
+@media (min-width: 1280px) { body.no-refill .bat-card { grid-column: 1 / -1; } }
+
 /* --- Responzivita -------------------------------------------- */
 @media (min-width: 1280px) {
     .chart-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    #nastaveni .stack { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
-    #nastaveni .stack > .card:first-child { grid-column: 1 / -1; }
+    #nastaveni .stack { display: block; columns: 2; column-gap: 16px; }
+    #nastaveni .stack > .card { break-inside: avoid; margin-bottom: 16px; }
+    #nastaveni .stack > .card:first-child, #nastaveni .stack > .card.span-cols { column-span: all; }
 }
 @media (min-width: 1100px) {
     /* pole formuláře tečou do 2–4 sloupců podle šířky karty */
@@ -737,6 +756,7 @@ body:not(.show-adv) #nastaveni .adv { display: none; }
     /* tablet: nádrž a dopouštění vedle sebe, ať karta nemá prázdnou polovinu */
     .tank-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
     .tank-card .refill-block { margin-top: 0; padding-top: 0; border-top: 0; padding-left: 24px; border-left: 1px solid var(--line); }
+    body.no-refill .tank-card { display: flex; }
 }
 @media (max-width: 960px) {
     .dash-top { grid-template-columns: minmax(0, 1fr); }
@@ -810,3 +830,10 @@ body:not(.show-adv) #nastaveni .adv { display: none; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+@media (min-width: 1700px) { #nastaveni .stack { columns: 3; } }
+
+/* Čidla: tři tabulky pod sebou se stejně širokým prvním sloupcem, akce vpravo */
+.span-cols .user-table th:first-child { width: 26%; }
+.span-cols .user-table td { white-space: nowrap; }
+.span-cols .user-table td:first-child { white-space: normal; }

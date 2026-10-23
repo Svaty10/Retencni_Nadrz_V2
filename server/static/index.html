@@ -14,7 +14,7 @@
     <link rel="icon" href="/favicon.ico" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body class="no-refill">
 <!-- Ikony: jednou definované čárové symboly (stroke = currentColor), používá se <use href="#i-…"> -->
 <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
     <defs>
@@ -125,11 +125,11 @@
                         </div>
                     </div>
 
-                    <div class="refill-block" id="refillBox">
+                    <div class="refill-block hidden" id="refillBox">
                         <div class="refill-state">
                             <svg class="ico" aria-hidden="true"><use href="#i-drop"/></svg>
                             <div>
-                                <div class="refill-title">Dopouštění: <strong id="txtRefillStatus">–</strong></div>
+                                <div class="refill-title" id="refillTitle">Dopouštění: <strong id="txtRefillStatus">–</strong></div>
                                 <div class="muted small" id="txtRefillTime">–</div>
                             </div>
                         </div>
@@ -193,7 +193,7 @@
                     </div>
                     <div class="chart-container chart-tall"><canvas id="historyChart"></canvas></div>
                     <div class="chart-legend-extra">
-                        <span><i class="lg lg-refill"></i>dopouštění</span>
+                        <span class="refill-only"><i class="lg lg-refill"></i>dopouštění</span>
                         <span><i class="lg lg-rain"></i>přítok z deště</span>
                     </div>
                 </section>
@@ -206,7 +206,7 @@
                     <div class="chart-container"><canvas id="consumptionChart"></canvas></div>
                 </section>
 
-                <section class="card chart-card">
+                <section class="card chart-card refill-only">
                     <div class="card-head">
                         <h2>Dopouštění z řadu</h2>
                         <div class="range-picker" data-chart="refill" data-default="7d" data-kind="days"></div>
@@ -222,7 +222,7 @@
                     <div class="chart-container"><canvas id="klimaChart"></canvas></div>
                 </section>
 
-                <section class="card chart-card">
+                <section class="card chart-card wx-card">
                     <div class="card-head">
                         <h2>Předpověď počasí</h2>
                         <span class="hint">Výhled na 7 dní</span>
@@ -230,7 +230,7 @@
                     <div class="chart-container"><canvas id="weatherChart"></canvas></div>
                 </section>
 
-                <section class="card chart-card span-2">
+                <section class="card chart-card span-2 bat-card">
                     <div class="card-head">
                         <h2>Baterie a signál</h2>
                         <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
@@ -446,6 +446,47 @@
                 </div>
             </section>
 
+            <!-- Čidla -->
+            <section class="card span-cols">
+                <h2>Čidla</h2>
+                <div class="table-responsive">
+                    <table class="user-table">
+                        <thead><tr><th>Čidlo</th><th>ID</th><th>Stav</th><th>Signál</th><th>Baterie</th><th></th></tr></thead>
+                        <tbody id="nodesBody"></tbody>
+                    </table>
+                </div>
+                <div class="config-form">
+                    <h3>Přidat čidlo</h3>
+                    <ol class="steps" id="pairSteps">
+                        <li data-step="1"><b>Vložte baterii</b><span>do čidla</span></li>
+                        <li data-step="2"><b>Potvrďte ID</b><span>podle štítku</span></li>
+                        <li data-step="3"><b>První data</b><span>čekám na čidlo</span></li>
+                        <li data-step="4"><b>Hotovo</b><span>čidlo je přidané</span></li>
+                    </ol>
+                    <div class="table-responsive">
+                        <table class="user-table">
+                            <thead><tr><th>Čidlo</th><th>Signál</th><th>Naposledy</th><th>Stav</th><th></th></tr></thead>
+                            <tbody id="pairBody"></tbody>
+                        </table>
+                    </div>
+                    <form id="addNodeForm" class="inline-actions">
+                        <input type="text" id="newNodeId" class="unified-input" placeholder="ID ze štítku" maxlength="6" required autocomplete="off" aria-label="ID ze štítku">
+                        <input type="text" id="newNodeName" class="unified-input" placeholder="Název" maxlength="40" aria-label="Název">
+                        <button class="btn btn-primary" type="submit">Čekat na čidlo</button>
+                    </form>
+                </div>
+                <div class="adv">
+                    <h3>Čidla v dosahu</h3>
+                    <div class="table-responsive">
+                        <table class="user-table">
+                            <thead><tr><th>ID</th><th>Signál</th><th>Naposledy</th><th>Paketů</th><th>Typ</th></tr></thead>
+                            <tbody id="heardBody"></tbody>
+                        </table>
+                    </div>
+                    <dl class="kv mt-20" id="radioInfo"></dl>
+                </div>
+            </section>
+
             <!-- Obecné -->
             <section class="card">
                 <h2>Obecné</h2>
@@ -530,47 +571,6 @@
                     </div>
                 </div>
                 <div class="form-actions"><button type="button" id="servisSave" class="btn btn-outline">Uložit</button></div>
-            </section>
-
-            <!-- Čidla -->
-            <section class="card">
-                <h2>Čidla</h2>
-                <div class="table-responsive">
-                    <table class="user-table">
-                        <thead><tr><th>Čidlo</th><th>ID</th><th>Stav</th><th>Signál</th><th>Baterie</th><th></th></tr></thead>
-                        <tbody id="nodesBody"></tbody>
-                    </table>
-                </div>
-                <div class="config-form">
-                    <h3>Přidat čidlo</h3>
-                    <ol class="steps" id="pairSteps">
-                        <li data-step="1"><b>Vložte baterii</b><span>do čidla</span></li>
-                        <li data-step="2"><b>Potvrďte ID</b><span>podle štítku</span></li>
-                        <li data-step="3"><b>První data</b><span>čekám na čidlo</span></li>
-                        <li data-step="4"><b>Hotovo</b><span>čidlo je přidané</span></li>
-                    </ol>
-                    <div class="table-responsive">
-                        <table class="user-table">
-                            <thead><tr><th>Čidlo</th><th>Signál</th><th>Naposledy</th><th>Stav</th><th></th></tr></thead>
-                            <tbody id="pairBody"></tbody>
-                        </table>
-                    </div>
-                    <form id="addNodeForm" class="inline-actions">
-                        <input type="text" id="newNodeId" class="unified-input" placeholder="ID ze štítku" maxlength="6" required autocomplete="off" aria-label="ID ze štítku">
-                        <input type="text" id="newNodeName" class="unified-input" placeholder="Název" maxlength="40" aria-label="Název">
-                        <button class="btn btn-primary" type="submit">Čekat na čidlo</button>
-                    </form>
-                </div>
-                <div class="adv">
-                    <h3>Čidla v dosahu</h3>
-                    <div class="table-responsive">
-                        <table class="user-table">
-                            <thead><tr><th>ID</th><th>Signál</th><th>Naposledy</th><th>Paketů</th><th>Typ</th></tr></thead>
-                            <tbody id="heardBody"></tbody>
-                        </table>
-                    </div>
-                    <dl class="kv mt-20" id="radioInfo"></dl>
-                </div>
             </section>
 
             <!-- Záloha -->

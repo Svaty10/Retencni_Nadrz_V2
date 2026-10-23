@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.1.1-2b6cb0)
+![verze](https://img.shields.io/badge/verze-1.1.2-2b6cb0)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -40,7 +40,8 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 - **Chytré dopouštění:** když má brzy pršet a déšť nádrž doplní, hub nedopouští a čeká; když déšť nepřijde
   nebo hladina klesne příliš, dopustí – a jen tolik, kolik déšť nedodá.
 - Dopouštění pro každou nádrž zvlášť (Hydrawise) – automatika, odložení při dešti, pojistky;
-  jeden ventil ovládá vždy jen jedna nádrž (nikdy se nedopouští 2×).
+  jeden ventil ovládá vždy jen jedna nádrž (nikdy se nedopouští 2×). Nádrž bez ventilu nic z toho
+  neukazuje – ovládání, stav ani graf dopouštění se objeví až po nastavení ventilu.
 - Dopouštění jde kdykoli zrušit – před startem i za chodu, ruční i automatické; bez čerstvých dat ventil nepustí.
 - Přihlášení s rolemi (admin / uživatel); menu účtu vpravo nahoře (Můj účet, Nastavení, Správa uživatelů,
   Logování). Přehledný log s filtry, nastavení **základní / pokročilé**, jen pro admina.
@@ -56,6 +57,10 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 </p>
 <p align="center">
   <img src="docs/img/dashboard-tmavy.webp" alt="Tmavý režim" width="395">
+  <img src="docs/img/bez-ventilu.webp" alt="Nádrž bez ventilu – bez ovládání dopouštění" width="395">
+</p>
+<p align="center">
+  <img src="docs/img/nastaveni.webp" alt="Nastavení nádrže" width="395">
   <img src="docs/img/log.webp" alt="Záznamy s filtry" width="395">
 </p>
 

@@ -292,7 +292,10 @@
             surface: cssVar('--surface'), line: cssVar('--line'), lineStrong: cssVar('--line-strong'),
             grid: cssVar('--grid'), accent: cssVar('--accent'), c2: cssVar('--chart-2'),
             green: cssVar('--green'), amber: cssVar('--amber'), red: cssVar('--red'),
-            bandRefill: cssVar('--band-refill'), bandRain: cssVar('--band-rain')
+            bandRefill: cssVar('--band-refill'), bandRain: cssVar('--band-rain'),
+            // datové řady – dost kontrastní proti --surface (>= 4.5:1), navzájem odlišné odstíny
+            s1: cssVar('--series-1'), s2: cssVar('--series-2'), s3: cssVar('--series-3'),
+            s4: cssVar('--series-4'), s5: cssVar('--series-5'), s6: cssVar('--series-6')
         });
         const d = Chart.defaults;
         d.color = T.muted;
@@ -302,9 +305,10 @@
         d.scale.grid.color = T.grid;
         d.scale.grid.tickLength = 0;
         d.scale.border.display = false;
-        d.scale.ticks.color = T.muted;
+        d.scale.ticks.color = T.ink2;
+        d.scale.ticks.font = { size: 12 };
         d.scale.ticks.padding = 6;
-        d.elements.line.borderWidth = 1.75;
+        d.elements.line.borderWidth = 2.25;
         d.elements.line.tension = 0.25;
         d.elements.point.radius = 0;
         d.elements.point.hoverRadius = 3;
@@ -338,6 +342,17 @@
     // by spadla ("this._fn is not a function") → další grafy by zůstaly prázdné
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     Chart.defaults.animation.duration = reduceMotion ? 0 : 150;
+    // Zvýraznění aktuální (poslední platné) hodnoty tečkou na konci čáry
+    function lastDot(values, color) {
+        let last = -1;
+        for (let i = (values || []).length - 1; i >= 0; i--) { if (values[i] != null) { last = i; break; } }
+        return {
+            pointRadius: (c) => (c.dataIndex === last ? 4 : 0),
+            pointBorderWidth: (c) => (c.dataIndex === last ? 2 : 1),
+            pointBorderColor: (c) => (c.dataIndex === last ? T.surface : color),
+            pointBackgroundColor: color
+        };
+    }
     // čára + body stejné barvy (legenda a tooltip berou backgroundColor)
     const line = (color, extra) => Object.assign({ borderColor: color, backgroundColor: color, pointBackgroundColor: color, pointBorderColor: color }, extra || {});
 
@@ -487,12 +502,12 @@
         const d = await getHistory(r);
         upsert('level', 'historyChart', {
             type: 'line',
-            data: { datasets: [line(T.accent, { label: 'Hladina (%)', data: series(d.t, d.level_pct), backgroundColor: alpha(T.accent, 0.08), fill: 'origin', borderWidth: 2, spanGaps: false })] },
+            data: { datasets: [line(T.s1, Object.assign({ label: 'Hladina (%)', data: series(d.t, d.level_pct), backgroundColor: alpha(T.s1, 0.05), fill: 'origin', borderWidth: 2.5, spanGaps: false }, lastDot(d.level_pct, T.s1)))] },
             plugins: [bandsPlugin],
             options: Object.assign(baseOpts(), {
                 plugins: {
                     legend: { display: false },
-                    bands: { bands: d.bands },
+                    bands: { bands: (lastState && lastState.refill && lastState.refill.configured) ? d.bands : (d.bands || []).filter((b) => b.kind !== 'refill') },
                     tooltip: {
                         displayColors: false,
                         callbacks: {
@@ -511,7 +526,7 @@
     }
 
     // Přehled: hladina všech nádrží v jednom grafu (kategorické, tlumené barvy)
-    const PALETTE = () => [T.accent, T.c2, '#b07a2e', '#3c8c87', '#8a6bb8', '#b65f7f', '#6f8a3c', '#5b7fa6'];
+    const PALETTE = () => [T.s1, T.s2, T.s3, T.s4, T.s5, T.s6];
     async function loadAllNodesChart() {
         const nodes = (lastState && lastState.nodes) || [];
         if (!nodes.length) return;
@@ -520,7 +535,7 @@
             api('GET', `/api/history?node=${n.id}&` + rangeQuery(r)).then((d) => ({ n, d })).catch(() => null)));
         const pal = PALETTE();
         const datasets = res.filter(Boolean).map(({ n, d }, i) => line(pal[i % pal.length], {
-            label: n.name, data: series(d.t, d.level_pct), spanGaps: false
+            label: n.name, data: series(d.t, d.level_pct), spanGaps: false, ...lastDot(d.level_pct, pal[i % pal.length])
         }));
         upsert('all', 'allChart', {
             type: 'line',
@@ -539,8 +554,8 @@
             type: 'line',
             data: {
                 datasets: [
-                    line(T.c2, { label: 'Teplota (°C)', data: series(d.t, d.temp), yAxisID: 'y' }),
-                    line(T.accent, { label: 'Vlhkost (%)', data: series(d.t, d.hum), yAxisID: 'y1' })
+                    line(T.s2, { label: 'Teplota (°C)', data: series(d.t, d.temp), yAxisID: 'y' }),
+                    line(T.s1, { label: 'Vlhkost (%)', data: series(d.t, d.hum), yAxisID: 'y1' })
                 ]
             },
             options: Object.assign(baseOpts(), {
@@ -562,8 +577,8 @@
             plugins: [bootMarks],
             data: {
                 datasets: [
-                    line(T.accent, { label: 'Napětí baterie (V)', data: series(d.t, d.vbat), spanGaps: true, yAxisID: 'y' }),
-                    line(T.c2, { label: 'Signál (dBm)', data: series(d.t, d.rssi || []), borderWidth: 1.25, yAxisID: 'y1' })
+                    line(T.s3, { label: 'Napětí baterie (V)', data: series(d.t, d.vbat), spanGaps: true, yAxisID: 'y' }),
+                    line(T.s4, { label: 'Signál (dBm)', data: series(d.t, d.rssi || []), borderWidth: 1.5, yAxisID: 'y1' })
                 ]
             },
             options: Object.assign(baseOpts(), {
@@ -618,8 +633,8 @@
             data: {
                 labels: dayLabels(rows),
                 datasets: [
-                    { label: 'Denní spotřeba (L)', data: rows.map((x) => x.use), backgroundColor: T.c2 },
-                    { label: 'Přítok ze srážek (L)', data: rows.map((x) => x.rain), backgroundColor: alpha(T.accent, 0.6) }
+                    { label: 'Denní spotřeba (L)', data: rows.map((x) => x.use), backgroundColor: alpha(T.s2, 0.9) },
+                    { label: 'Přítok ze srážek (L)', data: rows.map((x) => x.rain), backgroundColor: alpha(T.s1, 0.9) }
                 ]
             },
             options: barOpts()
@@ -630,7 +645,7 @@
         const rows = await getFlows(rangeOf('refill'));
         upsert('refill', 'refillChart', {
             type: 'bar',
-            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: alpha(T.green, 0.75) }] },
+            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: alpha(T.s3, 0.9) }] },
             options: barOpts()
         });
     }
@@ -642,8 +657,8 @@
             data: {
                 labels: (d.time || []).map((x) => { const p = x.split('-'); return `${+p[2]}. ${+p[1]}.`; }),
                 datasets: [
-                    { label: 'Srážky (mm)', data: d.precipitation_sum || [], backgroundColor: alpha(T.accent, 0.6), yAxisID: 'y', order: 2 },
-                    line(T.c2, { label: 'Max teplota (°C)', data: d.temperature_2m_max || [], type: 'line', yAxisID: 'y1', order: 1, pointRadius: 2 })
+                    { label: 'Srážky (mm)', data: d.precipitation_sum || [], backgroundColor: alpha(T.s1, 0.9), yAxisID: 'y', order: 2 },
+                    line(T.s2, { label: 'Max teplota (°C)', data: d.temperature_2m_max || [], type: 'line', yAxisID: 'y1', order: 1, pointRadius: 2.5 })
                 ]
             },
             options: {
@@ -671,6 +686,7 @@
         (VIEW_ALL ? ['all'] : NODE_CHARTS).forEach((k) => {
             if (!CURRENT_NODE && k !== 'weather') return;
             if (onlyLive && pickers[k] && !rangeOf(k).live) return;   // vlastní rozsah se nemění
+            if (k === 'refill' && document.body.classList.contains('no-refill')) return;   // karta je skrytá
             reloadChart(k);
         });
     }
@@ -722,7 +738,15 @@
         $('zoneNote').classList.toggle('hidden', !zc);
         $('zoneNote').textContent = zc ? `Tento ventil ovládá nádrž „${zc.name}“.` : '';
         $('refillBox').classList.toggle('ok', !!rf.active);
-        $('refillActions').classList.toggle('hidden', !(ME.role === 'admin' && rf.configured));
+        // Bez ventilu na dashboardu nic o dopouštění; ventil jiné nádrže → jen poznámka.
+        // (Běžící dopouštění se ukáže i po změně nastavení, aby šlo zastavit.)
+        const hasValve = !!rf.configured || !!rf.active;
+        const wasHidden = document.body.classList.contains('no-refill');
+        document.body.classList.toggle('no-refill', !hasValve);
+        if (wasHidden && hasValve && lastTs !== null && $('dashboard').classList.contains('active')) reloadChart('refill');
+        $('refillBox').classList.toggle('hidden', !hasValve && !zc);
+        $('refillTitle').classList.toggle('hidden', !hasValve);
+        $('refillActions').classList.toggle('hidden', !(ME.role === 'admin' && hasValve));
         $('refillResumeBtn').classList.toggle('hidden', !rf.auto_paused_until);
         $('manualPctInput').max = rf.max_pct || 100;
         runRefillTimer();
@@ -773,7 +797,7 @@
                 <div class="big">${num(n.level_pct, 0, ' %')}</div>
                 <div class="meta">${num(n.volume_l, 0, ' L')}${n.max_l ? ' z ' + num(n.max_l, 0, ' L') : ''}<br>
                 <span class="${n.status === 'online' ? '' : n.status === 'stale' ? 'warn' : 'bad'}">${esc(st)}</span>${n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}<br>
-                ${ico('battery')} <span class="${b.low ? 'bad' : ''}">${num(b.percent, 0, ' %')}</span>${n.refilling ? ` · <span class="ok">${ico('drop')} dopouští</span>` : ''}</div></div>`;
+                ${ico('battery')} <span class="${b.low ? 'bad' : ''}">${num(b.percent, 0, ' %')}</span>${n.refill_configured && n.refilling ? ` · <span class="ok">${ico('drop')} dopouští</span>` : ''}</div></div>`;
             c.querySelector('.water-level').style.height = pct + '%';     // CSSOM (CSP bez inline stylů)
             c.addEventListener('click', () => { setViewAll(false); selectNode(n.id, true); renderNodeBar(nodes); });
             g.appendChild(c);
@@ -1204,7 +1228,7 @@
                 : foreign ? 'patří jinému hubu'
                 : q.known ? (q.node_paired ? 'výměna baterie' : 'bez klíče')
                 : 'nové';
-            tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${num(q.rssi, 0, ' dBm')}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td></td>`;
+            tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${num(q.rssi, 0, ' dBm')}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td class="td-actions"></td>`;
             if (!q.target && !foreign) {
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'btn btn-primary btn-sm'; b.textContent = q.known ? 'Znovu spárovat' : 'Spárovat';
@@ -1223,7 +1247,7 @@
         targets.filter((t) => !pr.some((q) => q.id === t.id)).forEach((t) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `<td><code>${esc(t.id)}</code> ${esc(t.name || '')}</td><td>–</td><td>–</td>
-                <td>čekám (${Math.ceil(t.expires_in / 60)} min)</td><td></td>`;
+                <td>čekám (${Math.ceil(t.expires_in / 60)} min)</td><td class="td-actions"></td>`;
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = 'Zrušit';
             b.addEventListener('click', () => action(() => api('POST', '/api/pairing/cancel', { node_id: t.id })).then(refreshNodes));
@@ -1291,7 +1315,11 @@
             });
             y += `      - name: "${pre} stav"\n        unique_id: ${uid}_stav\n        value_template: "{{ value_json.status }}"\n        icon: mdi:access-point\n`;
             y += `    binary_sensor:\n      - name: "${pre} baterie slaba"\n        unique_id: ${uid}_baterie_slaba\n        value_template: "{{ value_json.battery_low }}"\n        device_class: battery\n`;
-            y += `      - name: "${pre} dopousti"\n        unique_id: ${uid}_dopousti\n        value_template: "{{ value_json.is_refilling }}"\n        device_class: running\n`;
+            // senzor dopouštění jen pro nádrž s vlastním ventilem
+            const sum = nodesCache && (nodesCache.summaries || []).find((x) => x.id === n.id);
+            if (sum && sum.refill_configured) {
+                y += `      - name: "${pre} dopousti"\n        unique_id: ${uid}_dopousti\n        value_template: "{{ value_json.is_refilling }}"\n        device_class: running\n`;
+            }
         });
         return y;
     }

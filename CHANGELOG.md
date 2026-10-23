@@ -3,9 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
-## [Nevydáno]
+## [1.1.2] - 2026-10-23
+
+### Změněno
+- Nádrž bez nastaveného ventilu neukazuje nic o dopouštění (stav, tlačítka, graf „Dopouštění z řadu“, úseky v grafu hladiny, údaje v přehledu, senzor v YAML pro Home Assistant); rozložení se přeskládá bez mezer.
+- Výraznější grafy: kontrastní a navzájem odlišené barvy řad (≥ 5:1 proti pozadí ve světlém i tmavém režimu), silnější čáry, slabší výplň a mřížka, čitelnější popisky, tečka u poslední hodnoty.
 
 ### Opraveno
+- Nastavení: karty se skládají bez prázdných míst (2 sloupce, na širokém monitoru 3), sjednocené tabulky čidel.
 - Instalace jedním příkazem (`curl … | sudo bash`) potichu skončila, aniž by cokoli nainstalovala (`system/bootstrap.sh` odpojil vstup, ze kterého bash četl sám sebe). Skript se stahuje přímo z `main`, oprava platí hned.
 
 ## [1.1.1] - 2026-10-23

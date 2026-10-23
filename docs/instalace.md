@@ -58,6 +58,8 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    body („skutečná hladina je teď X cm“ – ideálně jednou při nízké a jednou při vysoké hladině).
    Čidlo se páruje vždy jen po potvrzení: *Nastavení → Čidla → Spárovat* u jeho ID
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
+7. Dopouštění (volitelné): *Nastavení → Nádrž → Dopouštění → Ventil: Hunter Hydrawise* + zóna a API klíč
+   v *Obecné*. Dokud ventil není nastavený, dashboard o dopouštění nic neukazuje (stav, tlačítka, graf).
 
 ### Výměna baterie čidla
 Do čidla patří 3× AA. Doporučené jsou **lithiové Li-FeS2** (Energizer Ultimate Lithium): 10+ let,
