@@ -13,7 +13,10 @@
 # Nikdy nečte ze stdin, takže funguje i přes rouru.
 # =============================================================================
 set -euo pipefail
-exec </dev/null
+
+# Vše je ve funkci: bash při "curl | bash" čte skript ze stdin postupně, takže
+# kód se musí celý načíst dřív, než se stdin odpojí (jinak skript potichu skončí).
+main() {
 
 REPO_URL="${RETENCKA_REPO_URL:-https://github.com/Svaty10/Retencni_Nadrz_V2.git}"
 BRANCH="${RETENCKA_BRANCH:-main}"
@@ -54,3 +57,6 @@ else
 fi
 
 exec bash "$DEST/system/install.sh" "$@"
+}
+
+main "$@" </dev/null      # žádný příkaz nesmí čekat na vstup (stdin je roura s tímto skriptem)

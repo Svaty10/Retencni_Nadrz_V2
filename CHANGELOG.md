@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [Nevydáno]
+
+### Opraveno
+- Instalace jedním příkazem (`curl … | sudo bash`) potichu skončila, aniž by cokoli nainstalovala (`system/bootstrap.sh` odpojil vstup, ze kterého bash četl sám sebe). Skript se stahuje přímo z `main`, oprava platí hned.
+
 ## [1.1.1] - 2026-10-23
 
 ### Opraveno
