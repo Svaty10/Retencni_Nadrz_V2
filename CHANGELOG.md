@@ -3,6 +3,22 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.1.0] - 2026-10-23
+
+### Přidáno
+- Typ baterie u každého čidla (lithiové Li-FeS2 / alkalické): vlastní vybíjecí křivka, kapacita a samovybíjení – u alkalických správná procenta i odhad výdrže, žádné předčasné varování.
+- Menu účtu vpravo nahoře (Můj účet, Nastavení, Správa uživatelů, Logování, Odhlásit).
+
+### Změněno
+- Nový vzhled webu: světlý i tmavý režim podle systému, systémové písmo, SVG ikony místo emoji, bez gradientů a záře.
+- Rozložení využívá celou šířku obrazovky (až 1920 px): hustá mřížka na PC, 2 sloupce na tabletu, kompaktní 1 sloupec na mobilu (hladina, dopouštění a varování bez posouvání).
+- Výběr rozsahu grafu jako přepínač (24 h / 7 dní / 30 dní / rok / vlastní), přepínače zap/vyp místo rozbalovacích seznamů, jednotky přímo v polích, nastavení ve více sloupcích.
+- Grafy podle barev motivu, úseky dopouštění a deště jako jemné plochy.
+- Pod stavem „Nedopouští“ místo „V normě“ informace, co se stane (ventil nenastaven / jen ručně / automaticky pod X %).
+
+### Opraveno
+- Vývojový server na Windows (volné místo na disku, signály).
+
 ## [1.0.0] - 2026-10-23
 
 První veřejné vydání. Nahrazuje původní prototyp (ESP32 + Flask).

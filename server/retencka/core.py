@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import shutil
 import socket
 import threading
 import time
@@ -806,6 +807,15 @@ class Core:
         return (lambda secs: self.hydrawise.call(key, relay, "run", secs),
                 lambda: self.hydrawise.call(key, relay, "stop"))
 
+    def _refill_idle_note(self, node: dict) -> str:
+        """What happens next when nothing runs: shown under "Nedopouští"."""
+        if self._provider(node) is None:
+            return "Ventil není nastaven"
+        if not node["auto_refill_enabled"]:
+            return "Automatika vypnutá – jen ruční dopouštění"
+        return (f"Automaticky pod {float(node['refill_threshold_pct']):.0f} % "
+                f"(doplní na {float(node['auto_refill_target_pct']):.0f} %)")
+
     def refill_info(self, nid: Optional[int]) -> dict:
         node = self.nodes.get(nid)
         if node is None:
@@ -818,7 +828,7 @@ class Core:
             shared = {"id": f"{owner:04X}", "name": on.get("name", "")}
         info = {"configured": self._provider(node) is not None, "provider": node.get("refill_provider"),
                 "zone_controlled_by": shared,
-                "active": r is not None, "status": self.refill_notes.get(nid, "V normě"),
+                "active": r is not None, "status": self.refill_notes.get(nid) or self._refill_idle_note(node),
                 "max_pct": node["max_refill_pct"], "auto": node["auto_refill_enabled"],
                 "waiting_for_rain": nid in self._rain_wait,
                 "waiting_for_data": nid in self.refill_wait,
@@ -944,7 +954,7 @@ class Core:
         self._save_auto_pause()
         name = (self.nodes.get(nid) or {}).get("name", f"{nid:04X}")
         self.audit("AUTO_REFILL", f"{name}: automatika znovu zapnuta", user, ip)
-        self.refill_notes[nid] = "V normě"
+        self.refill_notes.pop(nid, None)        # back to the default description
         self.invalidate()
         return True, "Automatické dopouštění znovu zapnuto (rozhodne příští měření)."
 
@@ -1047,7 +1057,7 @@ class Core:
                 if self._rain_wait.pop(nid, None):
                     self.audit("RAIN_WAIT", f"{node['name']}: déšť doplnil nádrž ({lv.percent:.0f} %), "
                                             f"dopouštění nebylo potřeba")
-                self.refill_notes[nid] = "V normě"
+                self.refill_notes.pop(nid, None)        # back to the default description
                 return
             paused = self._auto_pause.get(nid, 0)
             if paused and time.time() >= paused:
@@ -1308,8 +1318,7 @@ class Core:
             log.exception("local backup failed")
 
     def _free_mb(self) -> float:
-        st = os.statvfs(self.data_dir)
-        return st.f_bavail * st.f_frsize / 1048576
+        return shutil.disk_usage(self.data_dir).free / 1048576
 
     def _disk_guard(self) -> None:
         """Only if the card is nearly full: drop the oldest raw 5-min data (hourly

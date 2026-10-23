@@ -142,7 +142,7 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
   (aiohttp by přidal ~15 MB RSS a lišil by se mezi verzemi OS.)
 - Žádné server-side šablony: statické HTML/JS/CSS, data přes JSON. **Grafy kreslí prohlížeč**
   (Chart.js hostovaný lokálně), server vrací max. ~600 předem zprůměrovaných bodů.
-- Web musí fungovat i bez internetu (žádné CDN – font Outfit i Chart.js lokálně).
+- Web musí fungovat i bez internetu (žádné CDN ani webové fonty – systémové písmo, Chart.js lokálně).
 
 ### 2.2 Procesy a porty
 | Port | Kdo | Přístup |
@@ -246,8 +246,10 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   `unit_of_measurement`, `availability` z pole `status`.
 
 ### 2.8 Dashboard
-- Vizuálně **shodný s původním prototypem** (dark glassmorphism, Outfit, animovaná nádrž, stat boxy, karty grafů,
-  záložky Dashboard / Nastavení / Logování / Uživatelé / Můj účet).
+- Střídmý vzhled: světlý i tmavý režim podle systému, jedna akcentová barva, systémové písmo, SVG ikony
+  (žádné emoji, gradienty ani záře); rozložení využívá celou šířku (až 1920 px, na mobilu 1 sloupec).
+  Nahoře jen Dashboard a přepínání nádrží; *Můj účet / Nastavení / Správa uživatelů / Logování / Odhlásit*
+  v menu pod ikonou účtu vpravo nahoře.
 - Lišta čidel: **Všechny nádrže** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
   čidlo + společný graf hladin) nebo konkrétní nádrž. Tečka = stav (zelená online, žlutá zpožděná, červená offline).
 - Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):

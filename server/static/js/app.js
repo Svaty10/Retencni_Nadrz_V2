@@ -91,64 +91,58 @@
         }
     }
 
-    // ------------------------------------------------------- custom selects
-    function initializeCustomSelects(root) {
-        (root || document).querySelectorAll('select.unified-select:not([data-custom-init])').forEach((select) => {
-            select.setAttribute('data-custom-init', 'true');
-            const wrapper = document.createElement('div');
-            wrapper.className = 'custom-select-wrapper unified-select-wrapper' + (select.disabled ? ' disabled' : '');
-            select.parentNode.insertBefore(wrapper, select);
-            wrapper.appendChild(select);
-            select.classList.add('hidden');
-
-            const trigger = document.createElement('div');
-            trigger.className = 'custom-select-trigger';
-            wrapper.appendChild(trigger);
-            const options = document.createElement('div');
-            options.className = 'custom-select-options';
-            wrapper.appendChild(options);
-
-            function render() {
-                const sel = select.options[select.selectedIndex];
-                trigger.textContent = sel ? sel.textContent.trim() : '';
-                options.textContent = '';
-                Array.from(select.options).forEach((o) => {
-                    const d = document.createElement('div');
-                    d.className = 'custom-select-option' + (o.selected ? ' selected' : '');
-                    d.textContent = o.textContent.trim();
-                    d.addEventListener('click', () => {
-                        select.value = o.value;
-                        render();
-                        wrapper.classList.remove('open');
-                        select.dispatchEvent(new Event('change'));
-                    });
-                    options.appendChild(d);
-                });
-            }
-            select._render = render;
-            render();
-            if (select.disabled) return;
-            trigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                document.querySelectorAll('.custom-select-wrapper.open').forEach((w) => { if (w !== wrapper) w.classList.remove('open'); });
-                wrapper.classList.toggle('open');
-            });
-        });
+    // Čárové ikony ze SVG sprite v index.html (<symbol id="i-…">)
+    function ico(name, cls) {
+        return `<svg class="ico${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
     }
+
+    // Výběry jsou nativní <select> (styl v CSS) – jen nastavení hodnoty
     function setSelect(select, value) {
         select.value = String(value);
-        if (select._render) select._render();
     }
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.custom-select-wrapper.open').forEach((w) => w.classList.remove('open'));
-    });
+
+    // ------------------------------------------------------- účet (menu)
+    function bindAccountMenu() {
+        const btn = $('accountBtn'), menu = $('accountMenu');
+        const items = () => Array.from(menu.querySelectorAll('.menu-item')).filter((el) => !el.classList.contains('hidden'));
+        const isOpen = () => !menu.classList.contains('hidden');
+        function open() {
+            menu.classList.remove('hidden');
+            btn.setAttribute('aria-expanded', 'true');
+            const first = items()[0];
+            if (first) first.focus();
+        }
+        function close(refocus) {
+            if (!isOpen()) return;
+            menu.classList.add('hidden');
+            btn.setAttribute('aria-expanded', 'false');
+            if (refocus) btn.focus();
+        }
+        btn.addEventListener('click', (e) => { e.stopPropagation(); if (isOpen()) close(false); else open(); });
+        btn.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown' && !isOpen()) { e.preventDefault(); open(); }
+        });
+        menu.addEventListener('keydown', (e) => {
+            const list = items(), i = list.indexOf(document.activeElement);
+            if (!list.length) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); list[(i + 1) % list.length].focus(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
+            else if (e.key === 'Home') { e.preventDefault(); list[0].focus(); }
+            else if (e.key === 'End') { e.preventDefault(); list[list.length - 1].focus(); }
+            else if (e.key === 'Tab') close(false);
+        });
+        menu.querySelectorAll('.menu-item').forEach((el) => el.addEventListener('click', () => close(false)));
+        document.addEventListener('click', (e) => { if (isOpen() && !menu.contains(e.target)) close(false); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isOpen()) { e.preventDefault(); close(true); } });
+    }
 
     // --------------------------------------------------------------- tabs
     function showTab(id, btn) {
         document.querySelectorAll('.tab-content').forEach((el) => el.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach((el) => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach((el) => { el.classList.remove('active'); el.removeAttribute('aria-current'); });
         $(id).classList.add('active');
         btn.classList.add('active');
+        btn.setAttribute('aria-current', 'page');
         try { sessionStorage.setItem('tab', id); } catch (e) { /* ignore */ }
         if (lastState) renderNodeBar(lastState.nodes || []);
         if (id === 'dashboard') loadAllCharts();
@@ -160,8 +154,8 @@
 
     // ------------------------------------------------------- range pickers
     const PRESETS = {
-        time: [['24h', 'Posledních 24h'], ['7d', 'Posledních 7 dní'], ['30d', 'Posledních 30 dní'], ['365d', 'Poslední rok'], ['custom', 'Vlastní rozsah…']],
-        days: [['7d', 'Posledních 7 dní'], ['30d', 'Posledních 30 dní'], ['365d', 'Poslední rok'], ['custom', 'Vlastní rozsah…']]
+        time: [['24h', '24 h', 'Posledních 24 h'], ['7d', '7 dní', 'Posledních 7 dní'], ['30d', '30 dní', 'Posledních 30 dní'], ['365d', 'rok', 'Poslední rok'], ['custom', 'vlastní', 'Vlastní rozsah']],
+        days: [['7d', '7 dní', 'Posledních 7 dní'], ['30d', '30 dní', 'Posledních 30 dní'], ['365d', 'rok', 'Poslední rok'], ['custom', 'vlastní', 'Vlastní rozsah']]
     };
     const SPAN = { '24h': 86400, '7d': 7 * 86400, '30d': 30 * 86400, '365d': 365 * 86400 };
     const pickers = {};
@@ -199,7 +193,8 @@
         btn.type = 'button';
         btn.className = 'date-cz-btn';
         btn.title = 'Vybrat v kalendáři';
-        btn.textContent = '📅';
+        btn.setAttribute('aria-label', 'Vybrat v kalendáři');
+        btn.innerHTML = ico('calendar');
         native.classList.add('date-native');
         native.tabIndex = -1;
         wrap.append(shown, btn, native);
@@ -223,13 +218,20 @@
     function buildRangePicker(el) {
         const key = el.dataset.chart;
         const kind = el.dataset.kind || 'time';
-        const select = document.createElement('select');
-        select.className = 'unified-select';
-        PRESETS[kind].forEach(([v, label]) => {
-            const o = document.createElement('option');
-            o.value = v; o.textContent = label;
-            if (v === el.dataset.default) o.selected = true;
-            select.appendChild(o);
+        // segmentový přepínač místo rozbalovacího seznamu
+        const seg = document.createElement('div');
+        seg.className = 'seg';
+        seg.setAttribute('role', 'group');
+        seg.setAttribute('aria-label', 'Rozsah');
+        const segBtns = PRESETS[kind].map(([v, label, title]) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.dataset.range = v;
+            b.textContent = label;
+            b.title = title;
+            b.setAttribute('aria-pressed', v === el.dataset.default ? 'true' : 'false');
+            seg.appendChild(b);
+            return b;
         });
         const custom = document.createElement('div');
         custom.className = 'range-custom hidden';
@@ -238,19 +240,23 @@
         custom.innerHTML = `<span>od</span><input type="date" class="unified-input" value="${isoDate(weekAgo)}" max="${isoDate(today)}">
             <span>do</span><input type="date" class="unified-input" value="${isoDate(today)}" max="${isoDate(today)}">
             <button type="button" class="btn btn-outline btn-sm range-apply">Zobrazit</button>`;
+        el.appendChild(seg);
         el.appendChild(custom);
-        el.appendChild(select);
         const [inFrom, inTo] = custom.querySelectorAll('input[type="date"]');
+        inFrom.setAttribute('aria-label', 'Od');
+        inTo.setAttribute('aria-label', 'Do');
         czDateInput(inFrom);
         czDateInput(inTo);
         const state = { key, preset: el.dataset.default, from: null, to: null };
         pickers[key] = state;
 
-        select.addEventListener('change', () => {
-            state.preset = select.value;
-            custom.classList.toggle('hidden', select.value !== 'custom');
-            if (select.value !== 'custom') reloadChart(key);
-        });
+        segBtns.forEach((b) => b.addEventListener('click', () => {
+            const v = b.dataset.range;
+            segBtns.forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+            state.preset = v;
+            custom.classList.toggle('hidden', v !== 'custom');
+            if (v !== 'custom') reloadChart(key);
+        }));
         custom.querySelector('.range-apply').addEventListener('click', () => {
             const f = new Date(inFrom.value + 'T00:00:00');
             const t = new Date(inTo.value + 'T00:00:00');
@@ -271,12 +277,69 @@
     function rangeQuery(r) { return `from=${r.from}&to=${r.to}`; }
 
     // -------------------------------------------------------------- charts
-    Chart.defaults.color = '#94a3b8';
-    Chart.defaults.font.family = 'Outfit, sans-serif';
-    Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
+    // Vzhled grafů z CSS proměnných (světlý / tmavý motiv) – čte se znovu při změně motivu
+    const T = {};
+    function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+    function alpha(color, a) {
+        const m = /^#([0-9a-f]{6})$/i.exec(color);
+        if (!m) return color;
+        const n = parseInt(m[1], 16);
+        return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+    }
+    function readTheme() {
+        Object.assign(T, {
+            ink: cssVar('--ink'), ink2: cssVar('--ink-2'), muted: cssVar('--muted'),
+            surface: cssVar('--surface'), line: cssVar('--line'), lineStrong: cssVar('--line-strong'),
+            grid: cssVar('--grid'), accent: cssVar('--accent'), c2: cssVar('--chart-2'),
+            green: cssVar('--green'), amber: cssVar('--amber'), red: cssVar('--red'),
+            bandRefill: cssVar('--band-refill'), bandRain: cssVar('--band-rain')
+        });
+        const d = Chart.defaults;
+        d.color = T.muted;
+        d.borderColor = T.grid;
+        d.font.family = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+        d.font.size = 12;
+        d.scale.grid.color = T.grid;
+        d.scale.grid.tickLength = 0;
+        d.scale.border.display = false;
+        d.scale.ticks.color = T.muted;
+        d.scale.ticks.padding = 6;
+        d.elements.line.borderWidth = 1.75;
+        d.elements.line.tension = 0.25;
+        d.elements.point.radius = 0;
+        d.elements.point.hoverRadius = 3;
+        d.elements.point.hitRadius = 6;
+        d.elements.bar.borderRadius = 2;
+        d.datasets.bar.maxBarThickness = 26;
+        const lg = d.plugins.legend;
+        lg.align = 'start';
+        lg.labels.color = T.ink2;
+        lg.labels.usePointStyle = true;
+        lg.labels.pointStyle = 'rect';
+        lg.labels.boxWidth = 8;
+        lg.labels.boxHeight = 8;
+        lg.labels.padding = 14;
+        const tt = d.plugins.tooltip;
+        tt.backgroundColor = T.surface;
+        tt.titleColor = T.ink;
+        tt.bodyColor = T.ink2;
+        tt.footerColor = T.muted;
+        tt.borderColor = T.lineStrong;
+        tt.borderWidth = 1;
+        tt.cornerRadius = 6;
+        tt.padding = 10;
+        tt.boxPadding = 4;
+        tt.usePointStyle = true;
+        tt.titleFont = { weight: '600' };
+        tt.footerFont = { weight: 'normal' };
+    }
+    readTheme();
     // jen délka – nahrazení celého objektu by smazalo easing a animační smyčka Chart.js
     // by spadla ("this._fn is not a function") → další grafy by zůstaly prázdné
-    Chart.defaults.animation.duration = 300;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    Chart.defaults.animation.duration = reduceMotion ? 0 : 150;
+    // čára + body stejné barvy (legenda a tooltip berou backgroundColor)
+    const line = (color, extra) => Object.assign({ borderColor: color, backgroundColor: color, pointBackgroundColor: color, pointBorderColor: color }, extra || {});
 
     const histCache = new Map();
     async function getHistory(r) {
@@ -326,7 +389,7 @@
     }
 
     function timeScale(r) {
-        const ticks = timeTicks(r.from * 1000, r.to * 1000, 8);
+        const ticks = timeTicks(r.from * 1000, r.to * 1000, window.innerWidth < 640 ? 4 : 8);   // na telefonu méně popisků
         const unitOf = new Map(ticks.map((t) => [t.value, t.unit]));
         return {
             type: 'linear',
@@ -349,12 +412,8 @@
         charts[key] = new Chart($(canvasId).getContext('2d'), config);
     }
 
-    // Úseky dopouštění (zeleně) a přítoku z deště (modře): jemné podbarvení + přerušované hrany,
-    // kreslí se pod křivku hladiny
-    const BAND_STYLE = {
-        refill: { fill: 'rgba(16, 185, 129, 0.12)', edge: 'rgba(16, 185, 129, 0.6)' },
-        rain: { fill: 'rgba(56, 189, 248, 0.09)', edge: 'rgba(56, 189, 248, 0.6)' }
-    };
+    // Úseky dopouštění (zeleně) a přítoku z deště (modře): jen jemné podbarvení pod křivkou,
+    // bez hran (popis dává tooltip)
     const bandsPlugin = {
         id: 'bands',
         beforeDatasetsDraw(chart, args, opts) {
@@ -362,21 +421,23 @@
             if (!bands.length) return;
             const x = chart.scales.x, { top, bottom, left, right } = chart.chartArea;
             const ctx = chart.ctx;
-            ctx.save();
-            ctx.lineWidth = 1;
-            ctx.setLineDash([4, 4]);
-            bands.forEach((b) => {
-                const st = BAND_STYLE[b.kind] || BAND_STYLE.rain;
+            // blízké úseky téhož druhu se slijí do jedné plochy (místo hřebenu tenkých čar)
+            const spans = { refill: [], rain: [] };
+            bands.slice().sort((a, b) => a.start - b.start).forEach((b) => {
                 let l = x.getPixelForValue(b.start), r = x.getPixelForValue(b.end);
                 if (r < left || l > right) return;
-                if (r - l < 4) { l -= 2; r += 2; }
-                const cl = Math.max(l, left), cr = Math.min(r, right);
-                ctx.fillStyle = st.fill;
-                ctx.fillRect(cl, top, cr - cl, bottom - top);
-                ctx.strokeStyle = st.edge;
-                [l, r].forEach((px) => {
-                    if (px < left || px > right) return;
-                    ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
+                if (r - l < 3) { l -= 1.5; r += 1.5; }
+                const list = spans[b.kind === 'refill' ? 'refill' : 'rain'];
+                const last = list[list.length - 1];
+                if (last && l - last[1] < 8) last[1] = Math.max(last[1], r);
+                else list.push([l, r]);
+            });
+            ctx.save();
+            Object.keys(spans).forEach((k) => {
+                ctx.fillStyle = k === 'refill' ? T.bandRefill : T.bandRain;
+                spans[k].forEach(([l, r]) => {
+                    const cl = Math.max(l, left), cr = Math.min(r, right);
+                    ctx.fillRect(cl, top, cr - cl, bottom - top);
                 });
             });
             ctx.restore();
@@ -387,13 +448,14 @@
         (bands || []).forEach((b) => {
             if (xVal < b.start - 150e3 || xVal > b.end + 150e3) return;
             const t = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-            const what = b.kind === 'refill' ? '💧 Dopouštění' : '🌧️ Přítok z deště';
+            const what = b.kind === 'refill' ? 'Dopouštění' : 'Přítok z deště';
             out.push(`${what} ${t(b.start)}–${t(b.end)}${b.litres != null ? ` · +${num(b.litres, 0, ' L')}` : ''}`);
         });
         return out;
     }
 
-    // Zapnutí čidla / výměna baterie – značky v grafu baterie
+    // Zapnutí čidla / výměna baterie – tenká plná čára a značka nahoře v grafu baterie
+    // (plný kroužek = vložení baterie, prázdný = restart)
     const bootMarks = {
         id: 'bootMarks',
         afterDatasetsDraw(chart, args, opts) {
@@ -402,68 +464,71 @@
             const x = chart.scales.x, { top, bottom, left, right } = chart.chartArea;
             const ctx = chart.ctx;
             ctx.save();
-            ctx.font = '13px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
-            ctx.setLineDash([3, 4]);
+            ctx.lineWidth = 1;
             ev.forEach((e) => {
-                const px = x.getPixelForValue(e.t);
+                const px = Math.round(x.getPixelForValue(e.t)) + 0.5;
                 if (px < left || px > right) return;
-                ctx.beginPath(); ctx.moveTo(px, top + 16); ctx.lineTo(px, bottom); ctx.stroke();
-                ctx.fillText(e.wdt ? '⟳' : '🔋', px, top + 12);
+                ctx.strokeStyle = alpha(T.amber, 0.35);
+                ctx.beginPath(); ctx.moveTo(px, top + 8); ctx.lineTo(px, bottom); ctx.stroke();
+                ctx.beginPath(); ctx.arc(px, top + 4, 3.5, 0, Math.PI * 2);
+                ctx.strokeStyle = T.amber;
+                ctx.fillStyle = e.wdt ? T.surface : T.amber;
+                ctx.fill(); ctx.stroke();
             });
             ctx.restore();
         }
     };
+
+    const pctAxis = () => ({ min: 0, max: 100, ticks: { callback: (v) => v + ' %', maxTicksLimit: 6 } });
+    const baseOpts = () => ({ responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false } });
 
     async function loadLevelChart() {
         const r = rangeOf('level');
         const d = await getHistory(r);
         upsert('level', 'historyChart', {
             type: 'line',
-            data: { datasets: [{ label: 'Hladina (%)', data: series(d.t, d.level_pct), borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', fill: true, tension: 0.3, pointRadius: 0, spanGaps: false }] },
+            data: { datasets: [line(T.accent, { label: 'Hladina (%)', data: series(d.t, d.level_pct), backgroundColor: alpha(T.accent, 0.08), fill: 'origin', borderWidth: 2, spanGaps: false })] },
             plugins: [bandsPlugin],
-            options: {
-                responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            options: Object.assign(baseOpts(), {
                 plugins: {
                     legend: { display: false },
                     bands: { bands: d.bands },
                     tooltip: {
+                        displayColors: false,
                         callbacks: {
                             title: timeTooltip.callbacks.title,
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
-                                return ` ${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}`;
+                                return `${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}`;
                             },
                             footer: (items) => items.length ? bandsAt(d.bands, items[0].parsed.x) : []
                         }
                     }
                 },
-                scales: { x: timeScale(r), y: { min: 0, max: 100, ticks: { callback: (v) => v + ' %' } } }
-            }
+                scales: { x: timeScale(r), y: pctAxis() }
+            })
         });
     }
 
-    // Přehled: hladina všech nádrží v jednom grafu
-    const PALETTE = ['#38bdf8', '#f59e0b', '#10b981', '#a78bfa', '#f472b6', '#facc15', '#fb7185', '#2dd4bf'];
+    // Přehled: hladina všech nádrží v jednom grafu (kategorické, tlumené barvy)
+    const PALETTE = () => [T.accent, T.c2, '#b07a2e', '#3c8c87', '#8a6bb8', '#b65f7f', '#6f8a3c', '#5b7fa6'];
     async function loadAllNodesChart() {
         const nodes = (lastState && lastState.nodes) || [];
         if (!nodes.length) return;
         const r = rangeOf('all');
         const res = await Promise.all(nodes.map((n) =>
             api('GET', `/api/history?node=${n.id}&` + rangeQuery(r)).then((d) => ({ n, d })).catch(() => null)));
-        const datasets = res.filter(Boolean).map(({ n, d }, i) => ({
-            label: n.name, data: series(d.t, d.level_pct), borderColor: PALETTE[i % PALETTE.length],
-            tension: 0.3, pointRadius: 0, spanGaps: false
+        const pal = PALETTE();
+        const datasets = res.filter(Boolean).map(({ n, d }, i) => line(pal[i % pal.length], {
+            label: n.name, data: series(d.t, d.level_pct), spanGaps: false
         }));
         upsert('all', 'allChart', {
             type: 'line',
             data: { datasets },
-            options: {
-                responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            options: Object.assign(baseOpts(), {
                 plugins: { tooltip: { callbacks: { title: timeTooltip.callbacks.title, label: (c) => ` ${c.dataset.label}: ${num(c.parsed.y, 1, ' %')}` } } },
-                scales: { x: timeScale(r), y: { min: 0, max: 100, ticks: { callback: (v) => v + ' %' } } }
-            }
+                scales: { x: timeScale(r), y: pctAxis() }
+            })
         });
     }
 
@@ -474,15 +539,18 @@
             type: 'line',
             data: {
                 datasets: [
-                    { label: 'Teplota (°C)', data: series(d.t, d.temp), borderColor: '#f59e0b', tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-                    { label: 'Vlhkost (%)', data: series(d.t, d.hum), borderColor: '#10b981', tension: 0.3, pointRadius: 0, yAxisID: 'y1' }
+                    line(T.c2, { label: 'Teplota (°C)', data: series(d.t, d.temp), yAxisID: 'y' }),
+                    line(T.accent, { label: 'Vlhkost (%)', data: series(d.t, d.hum), yAxisID: 'y1' })
                 ]
             },
-            options: {
-                responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            options: Object.assign(baseOpts(), {
                 plugins: { tooltip: timeTooltip },
-                scales: { x: timeScale(r), y: { position: 'left' }, y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } } }
-            }
+                scales: {
+                    x: timeScale(r),
+                    y: { position: 'left', ticks: { callback: (v) => v + ' °C', maxTicksLimit: 6 } },
+                    y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' %', maxTicksLimit: 6 } }
+                }
+            })
         });
     }
 
@@ -494,12 +562,11 @@
             plugins: [bootMarks],
             data: {
                 datasets: [
-                    { label: 'Napětí baterie (V)', data: series(d.t, d.vbat), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.3, pointRadius: 0, spanGaps: true, yAxisID: 'y' },
-                    { label: 'Signál (dBm)', data: series(d.t, d.rssi || []), borderColor: 'rgba(148, 163, 184, 0.7)', borderWidth: 1.5, tension: 0.3, pointRadius: 0, yAxisID: 'y1' }
+                    line(T.accent, { label: 'Napětí baterie (V)', data: series(d.t, d.vbat), spanGaps: true, yAxisID: 'y' }),
+                    line(T.c2, { label: 'Signál (dBm)', data: series(d.t, d.rssi || []), borderWidth: 1.25, yAxisID: 'y1' })
                 ]
             },
-            options: {
-                responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            options: Object.assign(baseOpts(), {
                 plugins: {
                     bootMarks: { boots: d.boots },
                     tooltip: {
@@ -509,22 +576,22 @@
                                 if (!items.length) return [];
                                 const xv = items[0].parsed.x, half = Math.max(d.bucket_s || 300, 900) * 1000;
                                 return (d.boots || []).filter((b) => Math.abs(b.t - xv) <= half)
-                                    .map((b) => b.wdt ? '⟳ Restart čidla' : '🔋 Vložení baterie');
+                                    .map((b) => b.wdt ? 'Restart čidla' : 'Vložení baterie');
                             }
                         }
                     }
                 },
                 scales: {
                     x: timeScale(r),
-                    y: { suggestedMin: 3.0, suggestedMax: 5.5, ticks: { callback: (v) => v.toFixed(1) + ' V' } },
-                    y1: { position: 'right', suggestedMin: -110, suggestedMax: -50, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' dBm' } }
+                    y: { suggestedMin: 3.0, suggestedMax: 5.5, ticks: { callback: (v) => v.toFixed(1) + ' V', maxTicksLimit: 6 } },
+                    y1: { position: 'right', suggestedMin: -110, suggestedMax: -50, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' dBm', maxTicksLimit: 6 } }
                 }
-            }
+            })
         });
     }
 
     function dayLabels(rows) {
-        return rows.map((x) => { const p = x.day.split('-'); return `${+p[2]}.${+p[1]}.`; });
+        return rows.map((x) => { const p = x.day.split('-'); return `${+p[2]}. ${+p[1]}.`; });
     }
 
     const flowsCache = new Map();
@@ -538,6 +605,12 @@
         return data;
     }
 
+    const barScales = () => ({
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } },
+        y: { beginAtZero: true, ticks: { callback: (v) => num(v, 0) + ' L', maxTicksLimit: 6 } }
+    });
+    const barOpts = () => ({ responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: barScales() });
+
     async function loadConsumptionChart() {
         const rows = await getFlows(rangeOf('consumption'));
         upsert('consumption', 'consumptionChart', {
@@ -545,11 +618,11 @@
             data: {
                 labels: dayLabels(rows),
                 datasets: [
-                    { label: 'Denní spotřeba (L)', data: rows.map((x) => x.use), backgroundColor: '#6366f1' },
-                    { label: 'Přítok ze srážek (L)', data: rows.map((x) => x.rain), backgroundColor: 'rgba(14, 165, 233, 0.55)' }
+                    { label: 'Denní spotřeba (L)', data: rows.map((x) => x.use), backgroundColor: T.c2 },
+                    { label: 'Přítok ze srážek (L)', data: rows.map((x) => x.rain), backgroundColor: alpha(T.accent, 0.6) }
                 ]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: barOpts()
         });
     }
 
@@ -557,8 +630,8 @@
         const rows = await getFlows(rangeOf('refill'));
         upsert('refill', 'refillChart', {
             type: 'bar',
-            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: '#10b981' }] },
-            options: { responsive: true, maintainAspectRatio: false }
+            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: alpha(T.green, 0.75) }] },
+            options: barOpts()
         });
     }
 
@@ -567,13 +640,20 @@
         upsert('weather', 'weatherChart', {
             type: 'bar',
             data: {
-                labels: (d.time || []).map((x) => { const p = x.split('-'); return `${+p[2]}.${+p[1]}.`; }),
+                labels: (d.time || []).map((x) => { const p = x.split('-'); return `${+p[2]}. ${+p[1]}.`; }),
                 datasets: [
-                    { label: 'Srážky (mm)', data: d.precipitation_sum || [], backgroundColor: '#0ea5e9', yAxisID: 'y', order: 2 },
-                    { label: 'Max teplota (°C)', data: d.temperature_2m_max || [], type: 'line', borderColor: '#ef4444', tension: 0.4, yAxisID: 'y1', order: 1 }
+                    { label: 'Srážky (mm)', data: d.precipitation_sum || [], backgroundColor: alpha(T.accent, 0.6), yAxisID: 'y', order: 2 },
+                    line(T.c2, { label: 'Max teplota (°C)', data: d.temperature_2m_max || [], type: 'line', yAxisID: 'y1', order: 1, pointRadius: 2 })
                 ]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { position: 'left', beginAtZero: true }, y1: { position: 'right', grid: { drawOnChartArea: false } } } }
+            options: {
+                responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxRotation: 0 } },
+                    y: { position: 'left', beginAtZero: true, ticks: { callback: (v) => v + ' mm', maxTicksLimit: 6 } },
+                    y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' °C', maxTicksLimit: 6 } }
+                }
+            }
         });
     }
 
@@ -657,7 +737,7 @@
         const ban = $('banner');
         ban.classList.toggle('hidden', warn.length === 0);
         ban.classList.toggle('danger', s.status === 'offline' || (s.radio && !s.radio.ok));
-        ban.textContent = warn.join(' · ');
+        ban.innerHTML = ico('alert') + '<ul>' + warn.map((w) => `<li>${esc(w)}</li>`).join('') + '</ul>';
 
         // živá data v nastavení
         $('liveProbeMv').textContent = num(s.probe_mv, 1, ' mV');
@@ -693,7 +773,7 @@
                 <div class="big">${num(n.level_pct, 0, ' %')}</div>
                 <div class="meta">${num(n.volume_l, 0, ' L')}${n.max_l ? ' z ' + num(n.max_l, 0, ' L') : ''}<br>
                 <span class="${n.status === 'online' ? '' : n.status === 'stale' ? 'warn' : 'bad'}">${esc(st)}</span>${n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}<br>
-                🔋 <span class="${b.low ? 'bad' : ''}">${num(b.percent, 0, ' %')}</span>${n.refilling ? ' · <span class="ok">💧 dopouští</span>' : ''}</div></div>`;
+                ${ico('battery')} <span class="${b.low ? 'bad' : ''}">${num(b.percent, 0, ' %')}</span>${n.refilling ? ` · <span class="ok">${ico('drop')} dopouští</span>` : ''}</div></div>`;
             c.querySelector('.water-level').style.height = pct + '%';     // CSSOM (CSP bez inline stylů)
             c.addEventListener('click', () => { setViewAll(false); selectNode(n.id, true); renderNodeBar(nodes); });
             g.appendChild(c);
@@ -719,6 +799,8 @@
             const all = document.createElement('button');
             all.type = 'button';
             all.className = 'node-pill all' + (allActive ? ' active' : '');
+            all.setAttribute('role', 'tab');
+            all.setAttribute('aria-selected', allActive ? 'true' : 'false');
             const online = nodes.filter((n) => n.status === 'online').length;
             all.innerHTML = `Všechny nádrže <span class="pct">${online}/${nodes.length} online</span>`;
             all.addEventListener('click', () => {
@@ -733,6 +815,8 @@
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'node-pill' + (n.id === CURRENT_NODE && !allActive ? ' active' : '');
+            b.setAttribute('role', 'tab');
+            b.setAttribute('aria-selected', n.id === CURRENT_NODE && !allActive ? 'true' : 'false');
             b.innerHTML = `<span class="dot ${esc(n.status)}"></span>${esc(n.name)} <span class="pct">${num(n.level_pct, 0, ' %')}</span>`;
             b.addEventListener('click', () => {
                 const wasAll = VIEW_ALL;
@@ -800,7 +884,8 @@
     function fillForm(form, s) {
         Array.from(form.elements).forEach((el) => {
             if (!el.name || !(el.name in s)) return;
-            if (el.tagName === 'SELECT') setSelect(el, s[el.name] == null ? '' : String(s[el.name]));
+            if (el.type === 'checkbox') el.checked = s[el.name] === true || s[el.name] === 'true';   // přepínač
+            else if (el.tagName === 'SELECT') setSelect(el, s[el.name] == null ? '' : String(s[el.name]));
             else if (el.type === 'password') { el.value = ''; el.placeholder = s[el.name] || 'nenastaveno'; }
             else el.value = s[el.name] == null ? '' : s[el.name];
         });
@@ -810,6 +895,7 @@
         Array.from(form.elements).forEach((el) => {
             if (!el.name || el.disabled) return;
             if (el.type === 'password' && el.value === '') return;   // klíč beze změny
+            if (el.type === 'checkbox') { out[el.name] = el.checked; return; }        // true / false jako dřív
             out[el.name] = el.tagName === 'SELECT' ? (el.value === 'true' ? true : el.value === 'false' ? false : el.value) : el.value;
         });
         return out;
@@ -1076,7 +1162,7 @@
             const tr = document.createElement('tr');
             const st = n.unpairing ? 'odpárování – vyjměte a vložte baterii'
                 : ({ online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status);
-            tr.innerHTML = `<td><strong>${esc(n.name)}</strong>${n.refill_configured ? ' 💧' : ''}${n.paired ? ' 🔒' : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
+            tr.innerHTML = `<td><strong>${esc(n.name)}</strong>${n.refill_configured ? `<span title="Ovládá dopouštění">${ico('drop', 'ico-sm')}</span>` : ''}${n.paired ? `<span title="Spárováno">${ico('lock', 'ico-sm')}</span>` : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
                 <td>${esc(st)}${!n.unpairing && n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${num(n.rssi, 0, ' dBm')}</td>
                 <td>${num(n.battery && n.battery.percent, 0, ' %')}</td><td class="td-actions"></td>`;
             const btn = (label, cls, fn) => {
@@ -1152,7 +1238,7 @@
         }
         d.heard.forEach((h) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td><code>${esc(h.id)}</code>${h.added ? ' ✓' : ''}</td><td>${num(h.rssi, 0, ' dBm')}</td>
+            tr.innerHTML = `<td><code>${esc(h.id)}</code>${h.added ? ico('check', 'ico-sm') : ''}</td><td>${num(h.rssi, 0, ' dBm')}</td>
                 <td>${fmtAgo(h.age_s)}</td><td>${esc(h.count)}</td><td class="muted small">${h.kind === 'pair' ? 'nabízí párování' : (h.added ? 'data' : 'cizí čidlo')}</td>`;
             hb.appendChild(tr);
         });
@@ -1229,22 +1315,23 @@
     // ---------------------------------------------------------------- audit
     // [ikona, text, závažnost]  závažnost: '' | ok | warn | bad | info
     const ACTIONS = {
-        LOGIN_SUCCESS: ['🔑', 'Přihlášení', 'ok'], LOGIN_FAILED: ['⛔', 'Neúspěšné přihlášení', 'bad'],
-        LOGOUT: ['🚪', 'Odhlášení', ''], SETUP_LOGIN: ['🔑', 'První přihlášení', 'warn'],
-        SETUP_FAILED: ['⛔', 'Neplatné výchozí přihlášení', 'bad'], PASSWORD_CHANGED: ['🔑', 'Změna hesla', ''],
-        USER_ADDED: ['👤', 'Nový uživatel', 'ok'], USER_DELETED: ['👤', 'Smazán uživatel', 'warn'],
-        USER_ROLE_CHANGED: ['👤', 'Změna role', 'warn'],
-        SETTINGS_CHANGED: ['⚙️', 'Změna nastavení', ''], CALIBRATION: ['📐', 'Kalibrace', ''],
-        MANUAL_REFILL: ['💧', 'Dopouštění (ručně)', 'info'], AUTO_REFILL: ['💧', 'Dopouštění (automaticky)', 'info'],
-        RAIN_WAIT: ['🌧️', 'Čekání na déšť', 'info'], REFILL_ERROR: ['⚠️', 'Chyba dopouštění', 'bad'],
-        REFILL_FAULT: ['⚠️', 'Porucha dopouštění', 'bad'],
-        NODE_PAIRED: ['📡', 'Čidlo spárováno', 'ok'], NODE_PAIRING: ['📡', 'Čekání na párování', ''],
-        NODE_REMOVED: ['📡', 'Čidlo odebráno', 'warn'], NODE_UNPAIR_REQUESTED: ['📡', 'Odpárování zahájeno', 'warn'],
-        NODE_UNPAIRED: ['📡', 'Čidlo odpárováno', 'warn'], NODE_UNPAIR_CANCELLED: ['📡', 'Odpárování zrušeno', ''],
-        NODE_BOOT: ['🔋', 'Restart čidla', ''],
-        TIME_FIXED: ['🕒', 'Oprava času', ''], UPDATE_REQUESTED: ['⬆️', 'Aktualizace', ''],
-        BACKUP_DOWNLOADED: ['💾', 'Stažení zálohy', ''], BACKUP_IMPORTED: ['💾', 'Nahrání zálohy', 'warn'],
-        DISK_LOW: ['⚠️', 'Málo místa na kartě', 'bad']
+        // ikona = název symbolu ve sprite (index.html)
+        LOGIN_SUCCESS: ['key', 'Přihlášení', 'ok'], LOGIN_FAILED: ['block', 'Neúspěšné přihlášení', 'bad'],
+        LOGOUT: ['logout', 'Odhlášení', ''], SETUP_LOGIN: ['key', 'První přihlášení', 'warn'],
+        SETUP_FAILED: ['block', 'Neplatné výchozí přihlášení', 'bad'], PASSWORD_CHANGED: ['key', 'Změna hesla', ''],
+        USER_ADDED: ['user', 'Nový uživatel', 'ok'], USER_DELETED: ['user', 'Smazán uživatel', 'warn'],
+        USER_ROLE_CHANGED: ['user', 'Změna role', 'warn'],
+        SETTINGS_CHANGED: ['sliders', 'Změna nastavení', ''], CALIBRATION: ['ruler', 'Kalibrace', ''],
+        MANUAL_REFILL: ['drop', 'Dopouštění (ručně)', 'info'], AUTO_REFILL: ['drop', 'Dopouštění (automaticky)', 'info'],
+        RAIN_WAIT: ['rain', 'Čekání na déšť', 'info'], REFILL_ERROR: ['alert', 'Chyba dopouštění', 'bad'],
+        REFILL_FAULT: ['alert', 'Porucha dopouštění', 'bad'],
+        NODE_PAIRED: ['antenna', 'Čidlo spárováno', 'ok'], NODE_PAIRING: ['antenna', 'Čekání na párování', ''],
+        NODE_REMOVED: ['antenna', 'Čidlo odebráno', 'warn'], NODE_UNPAIR_REQUESTED: ['antenna', 'Odpárování zahájeno', 'warn'],
+        NODE_UNPAIRED: ['antenna', 'Čidlo odpárováno', 'warn'], NODE_UNPAIR_CANCELLED: ['antenna', 'Odpárování zrušeno', ''],
+        NODE_BOOT: ['restart', 'Restart čidla', ''],
+        TIME_FIXED: ['clock', 'Oprava času', ''], UPDATE_REQUESTED: ['arrow-up', 'Aktualizace', ''],
+        BACKUP_DOWNLOADED: ['archive', 'Stažení zálohy', ''], BACKUP_IMPORTED: ['archive', 'Nahrání zálohy', 'warn'],
+        DISK_LOW: ['alert', 'Málo místa na kartě', 'bad']
     };
     const LOG = { page: 1, cat: '', items: 0 };
     const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
@@ -1285,7 +1372,6 @@
                     who.appendChild(o);
                 }
             });
-            if (who._render) who._render();
             if (!d.logs.length && page === 1) list.innerHTML = '<div class="muted log-empty">Žádné záznamy</div>';
             d.logs.forEach((l) => {
                 const ms = l.ts * 1000;
@@ -1297,12 +1383,12 @@
                     list.appendChild(h);
                     LOG.lastDay = day;
                 }
-                const [icon, text, sev] = ACTIONS[l.action] || ['•', l.action, ''];
+                const [icon, text, sev] = ACTIONS[l.action] || ['dot', l.action, ''];
                 const sys = !l.username || l.username.startsWith('system');
                 const row = document.createElement('div');
                 row.className = 'log-row ' + (sev ? 'sev-' + sev : '');
                 const t = new Date(ms);
-                row.innerHTML = `<div class="log-icon">${icon}</div>
+                row.innerHTML = `<div class="log-icon">${ico(icon)}</div>
                     <div class="log-main"><div class="log-title">${esc(text)}</div>
                     <div class="log-detail">${esc(l.detail || '')}</div></div>
                     <div class="log-meta"><span class="log-time">${pad(t.getHours())}:${pad(t.getMinutes())}</span>
@@ -1334,7 +1420,7 @@
             const self = u.username.toLowerCase() === ME.username.toLowerCase();
             const tr = document.createElement('tr');
             tr.innerHTML = `<td><strong>${esc(u.username)}</strong>${self ? ' (vy)' : ''}</td>
-                <td><select class="unified-input table-select"${self ? ' disabled' : ''}>
+                <td><select class="table-select" aria-label="Role"${self ? ' disabled' : ''}>
                     <option value="user">Uživatel</option><option value="admin">Administrátor</option></select></td>
                 <td>${u.last_login ? fmtDateTime(u.last_login * 1000) : '–'}</td><td class="td-actions"></td>`;
             const sel = tr.querySelector('select');
@@ -1360,7 +1446,6 @@
             }
             body.appendChild(tr);
         });
-        initializeCustomSelects(body);
     }
 
     function bindTelegram() {
@@ -1411,13 +1496,25 @@
             Object.assign(ME, await api('GET', '/api/me'));
             try { CURRENT_NODE = sessionStorage.getItem('node'); VIEW_ALL = sessionStorage.getItem('viewAll') === '1'; } catch (e) { /* ignore */ }
         } catch (e) { return; }
-        $('userBadge').textContent = `${ME.username} (${ME.role === 'admin' ? 'admin' : 'uživatel'})`;
+        $('userBadge').textContent = ME.username;
+        $('userRole').textContent = ME.role === 'admin' ? 'Administrátor' : 'Uživatel';
+        const initial = (ME.username || '?').trim().charAt(0) || '?';
+        $('avatarInitial').textContent = initial;
+        $('menuInitial').textContent = initial;
+        $('accountBtn').title = `${ME.username} (${ME.role === 'admin' ? 'admin' : 'uživatel'})`;
+        $('menuVersion').textContent = `Verze ${ME.version}`;
         $('aboutLine').textContent = `Verze ${ME.version} · ${(ME.hostnames || []).join(', ')}`;
         if (ME.role === 'admin') document.querySelectorAll('.admin-only').forEach((el) => el.classList.remove('hidden'));
 
         document.querySelectorAll('.range-picker').forEach(buildRangePicker);
         document.querySelectorAll('input[type="date"]').forEach(czDateInput);
-        initializeCustomSelects();
+        bindAccountMenu();
+        // přepnutí světlý/tmavý motiv → grafy znovu s novými barvami
+        if (window.matchMedia) {
+            const mq = window.matchMedia('(prefers-color-scheme: dark)');
+            const onScheme = () => { readTheme(); if ($('dashboard').classList.contains('active')) loadAllCharts(); };
+            if (mq.addEventListener) mq.addEventListener('change', onScheme); else if (mq.addListener) mq.addListener(onScheme);
+        }
 
         document.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab, b)));
         $('logoutBtn').addEventListener('click', () => {

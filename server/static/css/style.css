@@ -114,9 +114,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ico-sm { width: 14px; height: 14px; vertical-align: -2px; }
 
 .app-container {
-    max-width: 1200px;
+    max-width: 1920px;
     margin: 0 auto;
-    padding: 0 24px 48px;
+    padding: 0 32px 40px;
 }
 
 /* --- Hlavička ------------------------------------------------- */
@@ -125,7 +125,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    height: 64px;
+    height: 60px;
+    position: sticky; top: 0; z-index: 40;
+    background: var(--bg);
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-mark { width: 22px; height: 22px; color: var(--accent); stroke-width: 1.75; }
@@ -248,7 +250,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .page-head h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
 
 .stack { display: grid; gap: 16px; }
-.stack.narrow { max-width: 760px; }
+.stack.narrow { max-width: 1100px; }
+@media (min-width: 1100px) { .stack.narrow { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
 
 .card {
     background: var(--surface);
@@ -271,7 +274,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* --- Dashboard: nádrž --------------------------------------- */
 .dash-top {
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-columns: minmax(340px, 4fr) minmax(0, 8fr);
     gap: 16px;
 }
 
@@ -302,19 +305,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .gauge-tick.t50 { bottom: 50%; width: 16px; }
 .gauge-tick.t75 { bottom: 75%; }
 
-.refill-block { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.refill-block { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
 .refill-state { display: flex; gap: 10px; align-items: flex-start; }
 .refill-state .ico { color: var(--muted); margin-top: 2px; }
 .refill-title { font-size: 15px; }
 .refill-block.ok .refill-state .ico, .refill-block.ok .refill-title strong { color: var(--green); }
-.refill-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.refill-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .refill-input { width: 160px; }
 
 /* Doplňkové hodnoty */
 .facts-card {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 28px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px 24px;
     align-content: start;
 }
 .fact-group h3 {
@@ -341,9 +344,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px; margin-top: 16px;
 }
-.span-2 { grid-column: 1 / -1; }
-.chart-container { position: relative; height: 250px; width: 100%; }
-.chart-container.chart-tall { height: 310px; }
+.span-all { grid-column: 1 / -1; }
+.span-2 { grid-column: span 2; }
+.chart-container { position: relative; height: 260px; width: 100%; }
+.chart-container.chart-tall { height: clamp(300px, 45vh, 560px); }
 .chart-legend-extra { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .chart-legend-extra span { display: inline-flex; align-items: center; gap: 6px; }
 .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
@@ -702,15 +706,44 @@ body:not(.show-adv) #nastaveni .adv { display: none; }
 }
 
 /* --- Responzivita -------------------------------------------- */
+@media (min-width: 1280px) {
+    .chart-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #nastaveni .stack { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+    #nastaveni .stack > .card:first-child { grid-column: 1 / -1; }
+}
+@media (min-width: 1100px) {
+    /* pole formuláře tečou do 2–4 sloupců podle šířky karty */
+    .flow-form {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 14px 16px; align-items: end;
+    }
+    .flow-form > .form-row, .flow-form > .adv:not(.form-row), .flow-form > .adv > .form-row { display: contents; }
+    .flow-form > h3, .flow-form > p, .flow-form > .alert-warning, .flow-form > .form-actions,
+    .flow-form .table-responsive, .flow-form > .adv > h3 { grid-column: 1 / -1; }
+    .flow-form h3 { margin-bottom: -4px; }
+    .flow-form > .form-actions { margin-top: 4px; }
+}
+@media (max-width: 1279px) and (min-width: 961px) {
+    .dash-top { grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr); }
+}
+@media (max-width: 1100px) {
+    .app-container { padding: 0 24px 32px; }
+}
+@media (max-width: 960px) and (min-width: 641px) {
+    /* tablet: nádrž a dopouštění vedle sebe, ať karta nemá prázdnou polovinu */
+    .tank-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+    .tank-card .refill-block { margin-top: 0; padding-top: 0; border-top: 0; padding-left: 24px; border-left: 1px solid var(--line); }
+}
 @media (max-width: 960px) {
     .dash-top { grid-template-columns: minmax(0, 1fr); }
-    .chart-grid { grid-template-columns: minmax(0, 1fr); }
     .live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
-    .app-container { padding: 0 16px 40px; }
+    .app-container { padding: 0 16px 32px; }
     .app-header { height: 56px; }
+    .chart-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+    .dash-top, .stack { gap: 12px; }
     .brand-name { font-size: 15px; }
     .card { padding: 16px; }
     .tab-content { padding-top: 16px; }
@@ -724,7 +757,10 @@ body:not(.show-adv) #nastaveni .adv { display: none; }
 
     .facts-card { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     .chart-container { height: 220px; }
-    .chart-container.chart-tall { height: 250px; }
+    .chart-container.chart-tall { height: 260px; }
+    .span-2 { grid-column: auto; }
+    .tank-meta { margin-top: 10px; gap: 6px; }
+    .level-litres { font-size: 16px; }
     .card-head { align-items: flex-start; }
     .range-picker { justify-content: flex-start; width: 100%; }
     .range-custom { justify-content: flex-start; }
@@ -752,6 +788,7 @@ body:not(.show-adv) #nastaveni .adv { display: none; }
     }
     .menu-item { min-height: 48px; font-size: 15px; }
     .menu-sep, .menu-foot { margin-left: -10px; margin-right: -10px; }
+    .menu-foot { padding-left: 20px; }
 }
 
 @media (max-width: 400px) {

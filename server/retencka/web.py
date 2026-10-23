@@ -13,6 +13,7 @@ import json
 import logging
 import mimetypes
 import os
+import shutil
 import secrets
 import time
 import zlib
@@ -894,8 +895,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         except OSError:
             pass
         try:
-            st_ = os.statvfs(core.data_dir)
-            info["disk_free_mb"] = round(st_.f_bavail * st_.f_frsize / 1048576)
+            info["disk_free_mb"] = round(shutil.disk_usage(core.data_dir).free / 1048576)
             info["db_mb"] = round(os.path.getsize(db.path) / 1048576, 1)
         except OSError:
             pass

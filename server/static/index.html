@@ -96,12 +96,12 @@
         <!-- Přehled všech nádrží (volba „Všechny“ v liště čidel) -->
         <div id="overview" class="hidden">
             <div class="overview-grid" id="overviewGrid"></div>
-            <section class="card chart-card span-2 mt-20">
+            <section class="card chart-card span-all mt-20">
                 <div class="card-head">
                     <h2>Hladina všech nádrží</h2>
                     <div class="range-picker" data-chart="all" data-default="7d" data-kind="time"></div>
                 </div>
-                <div class="chart-container"><canvas id="allChart"></canvas></div>
+                <div class="chart-container chart-tall"><canvas id="allChart"></canvas></div>
             </section>
         </div>
 
@@ -186,7 +186,7 @@
             </div>
 
             <div class="chart-grid">
-                <section class="card chart-card span-2">
+                <section class="card chart-card span-all">
                     <div class="card-head">
                         <h2>Hladina vody</h2>
                         <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
@@ -274,7 +274,7 @@
                     </div>
                 </div>
 
-                <form id="calForm" class="config-form">
+                <form id="calForm" class="config-form flow-form">
                     <h3>Nádrž</h3>
                     <div class="form-row">
                         <div class="form-group">
@@ -449,7 +449,7 @@
             <!-- Obecné -->
             <section class="card">
                 <h2>Obecné</h2>
-                <form id="sysForm" class="config-form">
+                <form id="sysForm" class="config-form flow-form">
                     <h3>Poloha (předpověď počasí)</h3>
                     <div class="form-row">
                         <div class="form-group">
