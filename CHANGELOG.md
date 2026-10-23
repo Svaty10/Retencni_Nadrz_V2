@@ -3,6 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.2.2] - 2026-10-23
+
+### Opraveno
+- Varování „Čidlo neposílá data“ se už neukazuje, když v hubu žádné čidlo není.
+
+### Přidáno
+- `uzel/4-smazat-parovani.cmd`: smaže párování v čidle (EEPROM) pro čidlo, které hub ukazuje jako „cizí čidlo“ (odebrané z hubu nebo z jiného hubu bez zálohy); firmware zůstane.
+
 ## [1.2.1] - 2026-10-23
 
 ### Opraveno

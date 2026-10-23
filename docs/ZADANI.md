@@ -108,7 +108,7 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
 4. **Znovu spárovat** (nový klíč, stejný hub) = UNPAIR + PAIR_ACK v jednom okně; nastavení i historie zůstanou.
 5. **Výměna baterie** bez akce v hubu nic nemění – čidlo pokračuje se starým klíčem.
 6. **Ztracené / zničené čidlo:** *Odebrat bez čidla* smaže klíč hned. Kdyby se čidlo našlo, zůstane
-   zamčené na smazaný klíč – obnova jen přeprogramováním přes UPDI (vymazání EEPROM).
+   zamčené na smazaný klíč – obnova jen smazáním EEPROM přes UPDI (`uzel/4-smazat-parovani.cmd`).
 7. **Ochrana proti přehrání UNPAIR:** podpis zahrnuje veřejný klíč z aktuálního PAIR_REQ, který čidlo
    generuje po každém zapnutí znovu – nahraný UNPAIR z dřívějška je neplatný.
 8. Výpočet X25519 trvá na ATtiny ~9 s (CPU dočasně na 10 MHz, jen když má baterie při startu ≥ 3,1 V – 10 MHz smí až od 2,7 V; jinak 5 MHz, ~18 s), jednou po vložení baterie. Entropie: šum ADC

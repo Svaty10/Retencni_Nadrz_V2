@@ -24,6 +24,7 @@ param(
     [switch]$Test,
     [switch]$Build,
     [switch]$PripravArduino,
+    [switch]$SmazatParovani,
     [int]$Baud = 115200,
     [string]$Programmer = "auto",
     [string]$ToolsDir = "C:\avr"
@@ -215,6 +216,16 @@ if ($PripravArduino) {
 if ($Test) {
     Invoke-Avrdude @()
     Write-Host "Spojení OK (signatura ATtiny1624 = 1E 94 2A)." -ForegroundColor Green
+    return
+}
+
+if ($SmazatParovani) {
+    # EEPROM = klíč párování a čítač rámců (obě kopie); flash ani fuses se nemění.
+    # Nutné jen u čidla, jehož hub klíč ztratil (čidlo odebrané z hubu, nový hub bez zálohy).
+    $ff = (@("0xff") * 256) -join ","
+    Invoke-Avrdude @("-U", "eeprom:w:${ff}:m")
+    Write-Host "Párování smazáno. Vyndejte a vložte baterii (nebo odpojte a připojte napájení) –" -ForegroundColor Green
+    Write-Host "čidlo pak 10 minut nabízí párování (hub: Nastavení → Čidla → Čekat na čidlo)." -ForegroundColor Green
     return
 }
 

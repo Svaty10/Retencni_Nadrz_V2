@@ -114,6 +114,15 @@ Při napájení 3,3 V smí ATtiny1624 běžet nejvýš na **10 MHz** (20 MHz až
 
 Aktualizace firmwaru později = `3-aktualizace-firmwaru.cmd`. Párování zůstane.
 
+### Smazání párování (`4-smazat-parovani.cmd`)
+Když hub čidlo ukazuje jako **„cizí čidlo“**, čidlo má klíč, který hub nezná – bylo z hubu odebrané
+(*Odebrat bez čidla*), nebo jde o nový hub bez zálohy. Takové čidlo se samo znovu nespáruje (z bezpečnosti
+přijme nový klíč jen od hubu, který zná ten starý). Řešení:
+1. Zapojit jako pro nahrání (bod 2 a 3), dvojklik na **`4-smazat-parovani.cmd`** – smaže EEPROM
+   (klíč a čítač), firmware zůstane.
+2. Odpojit a znovu připojit napájení (nebo vyndat a vložit baterii) – čidlo 10 minut nabízí párování.
+3. Na hubu *Nastavení → Čidla → Čekat na čidlo* s jeho ID a **Spárovat**.
+
 ## 6. Když to nejde
 
 | Co vidíte | Co zkusit |

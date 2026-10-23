@@ -753,7 +753,7 @@
 
         // výstrahy
         const warn = [];
-        if (s.status === 'offline') warn.push('Čidlo neposílá data – zkontrolujte baterii nebo dosah signálu.');
+        if (s.node && s.status === 'offline') warn.push('Čidlo neposílá data – zkontrolujte baterii nebo dosah signálu.');
         if (s.radio && !s.radio.ok) warn.push('Rádiový přijímač CC1101 nepracuje – probíhá automatická obnova.');
         if (b.low) warn.push('Baterie čidla je téměř vybitá.');
         if (!s.time_ok) warn.push('Čas zařízení zatím není synchronizován (chybí internet) – časové údaje mohou být posunuté.');

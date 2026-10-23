@@ -78,7 +78,9 @@ takže čidlo zůstane spárované se svým hubem.
 
 Čidlo spárované s jiným hubem se v seznamu zobrazí jako „spárované s jiným hubem“ a převzít ho nelze.
 Ztracené čidlo: *Odebrat bez čidla*. **Zálohujte `/var/lib/retencka`** – bez klíčů v DB jdou čidla
-odemknout jen přeprogramováním.
+odemknout jen smazáním párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
+[programovani_uzlu.md](programovani_uzlu.md#smazání-párování-4-smazat-parovanicmd)). Hub takové čidlo
+ukazuje v *Čidla v dosahu* jako „cizí čidlo“.
 
 ### Záloha a obnova
 - Hub dělá každou noc zálohu na kartu (7 dní zpět). Proti odumření karty: *Nastavení → Záloha →
