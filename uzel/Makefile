@@ -32,12 +32,16 @@ CFLAGS  = -mmcu=$(MCU) -DF_CPU=$(F_CPU) -Iinclude -Os -std=gnu11 \
           -ffunction-sections -fdata-sections -flto
 LDFLAGS = -mmcu=$(MCU) -Os -flto -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/firmware.map
 
-ifeq ($(OS),Windows_NT)
+# Windows make runs recipes in cmd.exe, or in sh when MSYS/Git sh is found (and under
+# MSYS make): decide by the shell, not by the OS (cmd's echo keeps the quotes).
+ifeq ($(shell echo "x"),"x")
   MKDIR = if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
   RMDIR = if exist $(BUILD_DIR) rmdir /s /q $(BUILD_DIR)
+  RUN   = $(subst /,\,$(1))
 else
   MKDIR = mkdir -p $(BUILD_DIR)
   RMDIR = rm -rf $(BUILD_DIR)
+  RUN   = ./$(1)
 endif
 
 .PHONY: all clean flash fuses size test
@@ -72,9 +76,18 @@ fuses:
 		-U fuse1:w:0x04:m -U fuse2:w:0x02:m -U fuse5:w:0xC5:m
 
 # crypto self-test on the host (needs a native C compiler)
+HOSTCC    ?= cc
+ifeq ($(OS),Windows_NT)
+  EXE = .exe
+else
+  EXE =
+endif
+SELFTEST   = $(BUILD_DIR)/crypto_selftest$(EXE)
+
 test:
-	cc -O2 -Wall -Iinclude tools/crypto_selftest.c src/crypto.c src/proto.c -o $(BUILD_DIR)/crypto_selftest
-	$(BUILD_DIR)/crypto_selftest
+	@$(MKDIR)
+	$(HOSTCC) -O2 -Wall -Iinclude tools/crypto_selftest.c src/crypto.c src/proto.c -o $(SELFTEST)
+	$(call RUN,$(SELFTEST))
 
 clean:
 	$(RMDIR)

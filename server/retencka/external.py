@@ -52,13 +52,26 @@ class Weather:
         self._rain: list[tuple[int, float]] = []
         self._key: Optional[tuple] = None
         self._fetched = 0.0
+        self._attempt_key: Optional[tuple] = None    # key / time of the last attempt (success or failure)
+        self._attempt_at = 0.0
         self._lock = asyncio.Lock()
+
+    def _due(self, key: tuple) -> bool:
+        """Refresh needed? Good data older than 1 h or for another place; a failed attempt
+        backs off for ~10 min (unless the place changed)."""
+        now = time.time()
+        if self._attempt_key != key:
+            return True
+        if self._key == key:
+            return now - self._fetched >= 3600
+        return now - self._attempt_at >= 600
 
     async def forecast(self, lat: float, lon: float) -> Optional[dict]:
         """Return the cached forecast, refreshing it first when older than 1 h."""
         key = (round(lat, 3), round(lon, 3))
         async with self._lock:
-            if time.time() - self._fetched >= 3600 or self._key != key:
+            if self._due(key):
+                self._attempt_key, self._attempt_at = key, time.time()
                 try:
                     # days follow the location's calendar (timezone=auto); all times come
                     # as epoch seconds, so nothing depends on the time zone of the Pi
@@ -91,13 +104,13 @@ class Weather:
                     self._fetched = time.time()
                 except Exception as e:
                     log.warning("Open-Meteo failed: %s", e)
-                    self._fetched = time.time() - 3000      # retry in ~10 min
+                    # data stays; _due() retries after the back-off
             return self._data
 
     def cached(self, lat: float, lon: float) -> Optional[dict]:
         """Non-blocking: cached data now, refresh in the background when stale."""
         key = (round(lat, 3), round(lon, 3))
-        if (time.time() - self._fetched >= 3600 or self._key != key) and not self._lock.locked():
+        if self._due(key) and not self._lock.locked():
             asyncio.ensure_future(self.forecast(lat, lon))
         return self._data if self._key == key else None
 

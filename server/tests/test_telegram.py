@@ -73,6 +73,33 @@ class TelegramTest(Base):
         self.assertIn("Dopouštění není pro tuto nádrž nastaveno", self.msg(2, "dopustit 60")[-1])
         self.assertIn("Hub", self.msg(2, "diag")[-1])
 
+    def test_refill_target_validated(self):
+        self.link(2, "admin")
+        for bad in ("nan", "inf", "-5", "0", "101", "1e999"):
+            self.sent.clear()
+            self.assertIn("1–100", self.msg(2, f"dopustit {bad}")[-1], bad)
+
+    def test_call_survives_http_exceptions(self):
+        import http.client
+        from unittest import mock
+        from retencka import telegram
+        with mock.patch("urllib.request.urlopen", side_effect=http.client.IncompleteRead(b"")):
+            res = telegram._call("1:a", "getMe")
+        self.assertFalse(res["ok"])
+
+    def test_poll_thread_survives_crash(self):
+        from unittest import mock
+        calls = []
+
+        def loop():
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("boom")
+            self.bot._stop.set()
+        with mock.patch.object(self.bot, "_poll_loop", side_effect=loop),                 mock.patch.object(self.bot._stop, "wait", return_value=False):
+            self.bot._poll_thread()
+        self.assertEqual(len(calls), 2)
+
     def test_code_single_use_and_rate_limit(self):
         code = self.bot.new_code("pepa")["code"]
         self.msg(1, f"/start {code}")

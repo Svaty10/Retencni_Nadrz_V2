@@ -6,21 +6,47 @@
 3. Doporučená karta: *high endurance* (SanDisk High Endurance, Samsung PRO Endurance).
 
 ## 2. Instalace
+Pi musí mít internet (Wi-Fi z Imageru nebo kabel). Přihlaste se přes SSH a spusťte **jediný příkaz**:
 ```bash
 ssh pi@raspberrypi.local
-sudo apt-get install -y git
-git clone https://github.com/Svaty10/Retencni_Nadrz_V2.git
-cd Retencni_Nadrz_V2
-sudo ./system/install.sh          # volitelně: --cloudflare-token <TOKEN>
-sudo reboot                        # po prvním zapnutí SPI
+curl -fsSL https://raw.githubusercontent.com/Svaty10/Retencni_Nadrz_V2/main/system/bootstrap.sh | sudo bash
 ```
+Skript sám doinstaluje `git`, stáhne repozitář do `/opt/retencka-src`, nainstaluje balíčky, zapne SPI
+(bez restartu), nastaví zemi pro Wi-Fi (CZ) a spustí služby. Na konci vypíše rámeček s webovou adresou,
+názvem zařízení, jménem a heslem hotspotu a krátkou kontrolu (služba, SPI, web: OK / CHYBA).
+Restart je potřeba jen výjimečně (SPI se nepodařilo zapnout za běhu, overlay) – skript se pak sám
+restartuje po 10 s (Ctrl+C zruší, volba `--no-reboot` restart vypne).
+
+Volby se předávají za `-s --`, např. vzdálený přístup přes Cloudflare:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Svaty10/Retencni_Nadrz_V2/main/system/bootstrap.sh | sudo bash -s -- --cloudflare-token <TOKEN>
+```
+| Volba | Význam |
+|---|---|
+| `--wifi-country XX` | země pro Wi-Fi (výchozí `CZ`; bez ní je Wi-Fi na čerstvém Pi zablokovaná) |
+| `--no-reboot` | nikdy automaticky nerestartovat |
+| `--timezone ZÓNA` | časová zóna (výchozí `Europe/Prague`) |
+| `--no-hotspot` | bez záložního hotspotu |
+| `--cloudflare-token`, `--netbird-setup-key`, `--netbird-url`, `--overlay` | viz oddíly 7–9 |
+| `--force` | dovolit instalaci starší verze, než je nainstalovaná |
+
+Alternativa bez `curl | bash` (stejný výsledek):
+```bash
+sudo apt-get install -y git
+git clone https://github.com/Svaty10/Retencni_Nadrz_V2.git && cd Retencni_Nadrz_V2
+sudo ./system/install.sh
+```
+Skript lze kdykoli spustit znovu (aktualizace ručně: stejný příkaz, nebo `cd /opt/retencka-src && sudo ./system/install.sh`;
+data a nastavení se nemění, chybějící klíče v `/etc/default/retencka` se doplní jako zakomentované).
+
 Po instalaci se zařízení přejmenuje na `retencka-xxxx` (xxxx = konec MAC adresy).
 Do souboru `/boot/firmware/retencka.txt` se zapíše **heslo zařízení** (platí pro hotspot i pro první
-přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 B+ (stejné zapojení i instalace).
+přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 B+/4 (stejné zapojení i instalace).
 
 ## 3. Uvedení do provozu u zákazníka
 1. Zapojit do zásuvky. Pokud zařízení nezná žádnou Wi-Fi (nebo se k ní 3 min nepřipojí), spustí
-   hotspot **Retencka-XXXX** (heslo ze štítku).
+   hotspot **Retencka-XXXX** (heslo ze štítku). Je-li zapojen **kabel (Ethernet)**, hotspot se nespouští
+   – zařízení je dostupné po kabelu (`http://retencka-xxxx.local`) a Wi-Fi lze nastavit později.
 2. Telefon se připojí → sám nabídne „Přihlásit se k síti“ a otevře portál (jinak `http://retencka-xxxx.local`
    nebo `http://192.168.4.1`).
 3. Vybrat domácí síť, zadat heslo → zařízení se připojí, hotspot zmizí.
@@ -29,7 +55,7 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    výchozí přístup se tím zruší.
 6. *Nastavení → Kalibrace*: rozměry nádrže, výška sondy nade dnem, přesnost a rozsah sondy a 2 kalibrační
    body („skutečná hladina je teď X cm“ – ideálně jednou při nízké a jednou při vysoké hladině).
-   První čidlo se při první instalaci spáruje samo; další přes *Nastavení → Čidla a rádio → Spárovat*
+   První čidlo se při úplně první instalaci spáruje samo (jen jednou – po odpárování už ne); další přes *Nastavení → Čidla a rádio → Spárovat*
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem).
 
 ### Výměna baterie čidla
@@ -56,7 +82,7 @@ odemknout jen přeprogramováním.
 | Situace | Reakce |
 |---|---|
 | Výpadek proudu | SQLite WAL + atomické zápisy, logy jen v RAM; po startu vše naběhne samo |
-| Router naběhne později než Pi | 3 min tolerance, pak hotspot; každé 3 min nový pokus o známou síť |
+| Router naběhne později než Pi | 3 min tolerance, pak hotspot (jen bez kabelu); každé 3 min nový pokus o známou síť |
 | Změna Wi-Fi hesla / nový router | po 3 min hotspot → nové nastavení přes portál |
 | Pád aplikace | systemd restart do 3 s (bez limitu pokusů) |
 | Zamrznutí aplikace / rádiového vlákna | systemd watchdog (60 s) → restart |
@@ -77,7 +103,12 @@ odemknout jen přeprogramováním.
   Obsah `release.key` vložte do GitHub secretu `RELEASE_SIGNING_KEY`.
 - Vydání verze: zvýšit `__version__` v `server/retencka/__init__.py`, commit, `git tag v1.0.1 && git push --tags`.
   GitHub Action sestaví a podepíše balík. Ručně: `tools/make-release.sh release.key`.
-- Kanál (`stable`/`beta`) a vypnutí automatiky: `/etc/default/retencka`.
+- Kanál (`stable`/`beta`) a vypnutí automatiky: `/etc/default/retencka`. Kanál `beta` nabídne i
+  předběžné verze (tag s pomlčkou, např. `v1.3.0-beta1` – GitHub Release se označí jako *pre-release*);
+  předběžná verze je vždy starší než finální (`1.3.0-beta1` < `1.3.0`), takže se z bety po vydání
+  finální verze přejde automaticky.
+- Při nepovedené aktualizaci se vrací i systemd jednotky; adresa kontroly zdraví se řídí
+  `RETENCKA_HA_PORT` / `RETENCKA_BIND` z `/etc/default/retencka`.
 
 ## 6. Telegram – upozornění a ovládání z telefonu
 Zdarma, bez veřejné IP a bez otevřených portů (hub se k Telegramu jen sám připojuje).
@@ -113,7 +144,7 @@ NetBird je zdarma do 5 uživatelů a 100 zařízení a je open source (lze provo
    skupina např. `retencka`).
 2. *Access Control*: pravidlo „skupina `servis` (vaše PC/telefon) → skupina `retencka`, TCP 22 a 80“ a **žádné**
    pravidlo `retencka → retencka` (huby se navzájem nevidí). Výchozí pravidlo „All“ smažte.
-3. Instalace hubu: `sudo ./system/install.sh --netbird-setup-key <KLÍČ>`
+3. Instalace hubu: `cd /opt/retencka-src && sudo ./system/install.sh --netbird-setup-key <KLÍČ>`
    (vlastní server: navíc `--netbird-url https://…`).
 4. Po instalaci je přístup povolen **24 hodin**, pak se sám vypne. Zákazník (nebo technik s jeho souhlasem)
    ho zapíná v *Nastavení → Telegram a vzdálený servis* (vypnuto / na 24 h / trvale) nebo příkazem
@@ -128,7 +159,7 @@ požadavek, služba zavolá `netbird up` / `netbird down` a každých 5 minut ko
 Pro vlastní nasazení s doménou (adresa typu `https://nadrz.mojedomena.cz`).
 
 1. Cloudflare Zero Trust → *Networks → Tunnels* → vytvořit tunel, zkopírovat token.
-2. `sudo ./system/install.sh --cloudflare-token <TOKEN>`
+2. `cd /opt/retencka-src && sudo ./system/install.sh --cloudflare-token <TOKEN>`
 3. *Public hostname* → `http://localhost:80`. **Port 8081 (Home Assistant) do tunelu nedávejte.**
 4. **Doporučeno:** *Access → Applications* → aplikace pro stejný hostname s politikou
    „e-mail je jeden z …“ (jednorázový kód e-mailem). Útočník se pak k přihlašovací stránce vůbec nedostane.

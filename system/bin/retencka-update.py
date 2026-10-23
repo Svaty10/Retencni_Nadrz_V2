@@ -7,8 +7,9 @@
   3. verify the Ed25519 signature with /etc/retencka/release.pub (openssl)
   4. unpack into  /var/lib/retencka/app/releases/<ver>  (path-traversal safe)
   5. atomically switch the 'current' symlink, restart retencka.service
-  6. wait up to 120 s for http://127.0.0.1:8081/health to report the new version,
-     otherwise switch back, restart and blacklist the broken version
+  6. wait up to 120 s for http://127.0.0.1:<RETENCKA_HA_PORT>/health to report the
+     new version, otherwise switch back (application AND systemd units), restart
+     and blacklist the broken version
 
 Only the application directory changes; the database and settings live in
 /var/lib/retencka/data and are never touched. Runs as root (oneshot).
@@ -36,7 +37,6 @@ DATA = Path("/var/lib/retencka/data")
 STATUS = DATA / "update-status.json"
 BAD = DATA / "update-bad-versions.json"
 PUBKEY = Path("/etc/retencka/release.pub")
-HEALTH = "http://127.0.0.1:8081/health"
 MAX_DOWNLOAD = 30 * 1024 * 1024
 KEEP = 3
 
@@ -53,8 +53,35 @@ def env(name: str, default: str) -> str:
     return os.environ.get(name, vals.get(name, default))
 
 
+def health_url() -> str:
+    """Health endpoint on the HA port; port and bind come from /etc/default/retencka."""
+    port = env("RETENCKA_HA_PORT", "8081")
+    host = env("RETENCKA_BIND", "127.0.0.1").strip()
+    if host in ("", "0.0.0.0", "::", "[::]"):
+        host = "127.0.0.1"
+    elif ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    return f"http://{host}:{port}/health"
+
+
 def vtuple(v: str) -> tuple:
-    return tuple(int(x) for x in re.findall(r"\d+", v)[:4])
+    """Sort key of a version; a pre-release is older than the final release.
+
+    >>> vtuple("1.2.0-beta1") < vtuple("1.2.0")
+    True
+    >>> vtuple("v1.2.0") == vtuple("1.2")
+    True
+    >>> vtuple("1.2.0-beta2") < vtuple("1.2.0-beta10") < vtuple("1.2.0-rc1") < vtuple("1.2.0")
+    True
+    >>> vtuple("1.2.0") < vtuple("1.2.1-beta1") < vtuple("1.10.0")
+    True
+    """
+    core, _, pre = v.lstrip("vV").split("+", 1)[0].partition("-")
+    nums = [int(x) for x in re.findall(r"\d+", core)[:4]]
+    nums += [0] * (4 - len(nums))
+    ident = tuple((0, int(t), "") if t.isdigit() else (1, 0, t.lower())
+                  for t in re.findall(r"\d+|[A-Za-z]+", pre))
+    return (tuple(nums), 0 if pre else 1, ident)
 
 
 def write_status(**kw) -> None:
@@ -123,9 +150,11 @@ def safe_extract(tar_path: Path, dest: Path) -> None:
             tf.extractall(dest)
 
 
-def sync_units(release: Path) -> None:
+def sync_units(release: Path, backup: dict) -> None:
     """Install changed / new systemd units of the release (new path and timer units
-    are enabled too), so features that need a unit also arrive by auto-update."""
+    are enabled too), so features that need a unit also arrive by auto-update.
+    `backup` receives {unit path: previous bytes or None (= did not exist)} so that
+    restore_units() can undo everything on rollback."""
     src = release / "system" / "systemd"
     if not src.is_dir():
         return
@@ -137,6 +166,7 @@ def sync_units(release: Path) -> None:
             continue
         if not dst.exists() and u.suffix in (".path", ".timer"):
             new.append(u.name)
+        backup[dst] = dst.read_bytes() if dst.exists() else None
         dst.write_bytes(data)
         os.chmod(dst, 0o644)
         changed = True
@@ -144,6 +174,32 @@ def sync_units(release: Path) -> None:
         subprocess.run(["systemctl", "daemon-reload"], check=False)
     for name in new:
         subprocess.run(["systemctl", "enable", "--now", name], check=False)
+
+
+def restore_units(backup: dict) -> None:
+    """Undo sync_units(): put the old unit files back, remove the newly added ones."""
+    if not backup:
+        return
+    for dst, old in backup.items():
+        try:
+            if old is None:
+                if dst.suffix in (".path", ".timer"):
+                    subprocess.run(["systemctl", "disable", "--now", dst.name], check=False)
+                dst.unlink(missing_ok=True)
+            else:
+                dst.write_bytes(old)
+                os.chmod(dst, 0o644)
+        except OSError as e:
+            print(f"unit restore failed for {dst}: {e}", flush=True)
+    subprocess.run(["systemctl", "daemon-reload"], check=False)
+
+
+def stage_version(stage: Path) -> str:
+    try:
+        init = (stage / "server" / "retencka" / "__init__.py").read_text()
+        return re.search(r'__version__\s*=\s*"([^"]+)"', init).group(1)
+    except (OSError, AttributeError):
+        return ""
 
 
 def switch(target: Path) -> None:
@@ -160,7 +216,7 @@ def healthy(expected: str, timeout: int = 120) -> bool:
     while time.time() < end:
         time.sleep(5)
         try:
-            with urllib.request.urlopen(HEALTH, timeout=5) as r:
+            with urllib.request.urlopen(health_url(), timeout=5) as r:
                 body = json.loads(r.read())
         except urllib.error.HTTPError as e:     # 503 = running but radio degraded
             try:
@@ -217,6 +273,15 @@ def main() -> int:
             safe_extract(tar, stage)
             if not (stage / "server" / "retencka" / "__main__.py").exists():
                 raise RuntimeError("archive does not contain server/retencka")
+            got = stage_version(stage)
+            if got != ver:
+                raise RuntimeError(f"balík obsahuje verzi '{got}', očekávána {ver}")
+            if vtuple(got) <= vtuple(cur):
+                raise RuntimeError(f"verze {got} není novější než nainstalovaná {cur}")
+            # tar may not keep the exec bit (or a Windows-built archive loses it)
+            for f in (stage / "system" / "bin").glob("*"):
+                if f.is_file():
+                    os.chmod(f, 0o755)
             subprocess.run([sys.executable, "-m", "compileall", "-q", str(stage / "server")], check=False)
             final = RELEASES / ver
             if final.exists():
@@ -228,8 +293,9 @@ def main() -> int:
 
     previous = CURRENT.resolve()
     switch(RELEASES / ver)
+    units_backup: dict = {}
     try:
-        sync_units(RELEASES / ver)
+        sync_units(RELEASES / ver, units_backup)
     except OSError as e:
         print(f"unit sync failed: {e}", flush=True)
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
@@ -237,11 +303,12 @@ def main() -> int:
         write_status(current=ver, latest=ver, message=f"Aktualizováno {cur} → {ver}")
         keep = sorted((p for p in RELEASES.iterdir() if p.is_dir()), key=lambda p: vtuple(p.name))[-KEEP:]
         for p in RELEASES.iterdir():
-            if p.is_dir() and p not in keep and p.resolve() != previous:
+            if p.is_dir() and p not in keep and p.resolve() not in (previous, final.resolve()):
                 shutil.rmtree(p, ignore_errors=True)
         return 0
 
     switch(previous)
+    restore_units(units_backup)
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
     bad.add(ver)
     BAD.write_text(json.dumps(sorted(bad)))

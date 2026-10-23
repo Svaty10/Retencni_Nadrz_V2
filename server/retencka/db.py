@@ -157,6 +157,10 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_tg_user ON telegram_chats(username);
     """,
+    # --- v8: replay watermark per node (survives retention of old measurements) --
+    """
+    ALTER TABLE nodes ADD COLUMN last_ctr INTEGER;
+    """,
 ]
 
 

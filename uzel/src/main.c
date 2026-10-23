@@ -82,6 +82,9 @@ static uint16_t abs_diff_u16(uint16_t a, uint16_t b)
 
 static bool radio_ready(void)
 {
+    if (!cc1101_sleep_ok) {
+        g.rf_ok = false;                     /* last SLEEP strobe timed out: radio may be awake */
+    }
     if (!g.rf_ok) {
         g.rf_ok = cc1101_init();             /* retry radio init every cycle */
     }

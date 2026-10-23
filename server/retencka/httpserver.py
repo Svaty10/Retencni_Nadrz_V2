@@ -239,6 +239,7 @@ class StreamResponse(Response):
             hook(request, self)
         self._writer.write(self._head(False, None))
         self.prepared = True
+        request["_stream_started"] = True
 
     async def write(self, data: bytes) -> None:
         if data:
@@ -398,9 +399,10 @@ class Server:
         if "Transfer-Encoding" in headers:
             return await self._send_error(writer, 501)
         try:
-            length = int(headers.get("Content-Length", "0"))
-            if length < 0:
+            cl = headers.get("Content-Length", "0")
+            if not (cl.isascii() and cl.isdigit()):
                 raise ValueError
+            length = int(cl)
         except ValueError:
             return await self._send_error(writer, 400)
         stream_max = self.app.stream_paths.get(target.partition("?")[0]) if method == "POST" else None
@@ -418,7 +420,10 @@ class Server:
         keep_alive = (version == "HTTP/1.1" and conn_hdr != "close") or \
                      (version == "HTTP/1.0" and conn_hdr == "keep-alive")
 
-        request = Request(self.app, method, target, version, headers, body, remote)
+        try:
+            request = Request(self.app, method, target, version, headers, body, remote)
+        except ValueError:                      # e.g. too many query parameters
+            return await self._send_error(writer, 400)
         request["_writer"] = writer
         if stream_max:
             request._stream, request.stream_left = reader, length
@@ -430,8 +435,8 @@ class Server:
             log.exception("handler error on %s %s", method, request.path)
             resp = Response(text="500 Internal Server Error", status=500)
 
-        if isinstance(resp, StreamResponse):
-            return False                       # chunked stream already written, close
+        if isinstance(resp, StreamResponse) or request.get("_stream_started"):
+            return False                       # chunked stream already written (or broken mid-way), close
         if request.stream_left > 0:
             keep_alive = False                 # unread upload left in the socket -> close
         payload = b"" if method == "HEAD" or resp.status in (204, 304) else resp.body

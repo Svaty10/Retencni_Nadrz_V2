@@ -57,9 +57,14 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 </p>
 
 ## Rychlý start
+Na Raspberry Pi OS Lite (po SSH) jediný příkaz – sám doinstaluje vše potřebné a na konci vypíše adresu,
+heslo a kontrolu:
 ```bash
-git clone https://github.com/Svaty10/Retencni_Nadrz_V2.git && cd Retencni_Nadrz_V2
-sudo ./system/install.sh && sudo reboot
+curl -fsSL https://raw.githubusercontent.com/Svaty10/Retencni_Nadrz_V2/main/system/bootstrap.sh | sudo bash
+```
+Alternativa přes git:
+```bash
+git clone https://github.com/Svaty10/Retencni_Nadrz_V2.git && cd Retencni_Nadrz_V2 && sudo ./system/install.sh
 ```
 Pak `http://retencka.local` → první přihlášení `admin` + heslo ze štítku (`/boot/firmware/retencka.txt`)
 → vytvoření vlastního účtu. Funguje na Pi Zero 2 W i Pi 3 B/3 B+/4.

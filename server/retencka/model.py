@@ -67,9 +67,14 @@ def column_cm(probe_mv: float, points: Sequence[Sequence[float]]) -> float:
 
     Outside the calibrated range the nearest segment is extrapolated (better than
     clamping – a slightly over-full tank must not read as "exactly full").
-    One point = proportional through the origin.
+    One point = proportional through the origin. Points with the same voltage
+    (only possible in a config that bypassed validation, e.g. an old backup) are
+    merged into their mean, so a segment never has zero width.
     """
-    pts = sorted((float(a), float(b)) for a, b in points)
+    merged: dict[float, list[float]] = {}
+    for a, b in points:
+        merged.setdefault(float(a), []).append(float(b))
+    pts = sorted((x, sum(ys) / len(ys)) for x, ys in merged.items())
     if not pts:
         return 0.0
     if len(pts) == 1:

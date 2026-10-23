@@ -9,9 +9,19 @@
  * Only an unpaired node accepts a new key (PAIR_ACK).
  *
  * Frame counter: 32 bit, strictly increasing over the whole life of the node.
- * EEPROM holds a reserved upper bound (ctr_base); after any reset counting
- * resumes from that bound, so a counter value is never reused (replay safety)
- * while EEPROM is written only once per CTR_RESERVE frames.
+ * EEPROM holds a reserved upper bound (ctr_base). Invariant: every counter ever
+ * put on the air is < the ctr_base of a store copy that was completely written
+ * (CRC valid) BEFORE that transmission. After any reset counting resumes at the
+ * newest valid ctr_base, so a value is never reused (replay safety). The reserve
+ * is bumped lazily – on the first send after boot and then once per CTR_RESERVE
+ * frames – so a boot itself (e.g. a brown-out loop) writes nothing.
+ *
+ * The store is kept in two copies written alternately; a reset in the middle of a
+ * write corrupts only the copy being written, the other one (older, but still an
+ * upper bound of everything sent before the interrupted write) stays valid.
+ * The newer copy is the one with the larger ctr_base: every save makes it strictly
+ * larger than the copy it supersedes. Copy 0 sits where the old single store was,
+ * so an existing pairing survives the firmware update.
  */
 
 #include "link.h"
@@ -36,8 +46,10 @@ typedef struct __attribute__((packed)) {
     uint16_t crc;
 } store_t;
 
-static store_t EEMEM ee_store;
+static store_t EEMEM ee_store[2];
 static store_t g_st;
+static uint8_t g_slot;                 /* copy holding the current valid data */
+static uint32_t g_saved_base;          /* its ctr_base (0 = none valid) */
 static uint16_t g_node_id;
 static uint32_t g_ctr;
 static bool g_keypair_ready;
@@ -56,12 +68,29 @@ static uint16_t crc16(const uint8_t *d, uint8_t n)
     return crc;
 }
 
+static bool store_valid(const store_t *s)
+{
+    return s->magic == STORE_MAGIC && s->crc == crc16((const uint8_t *)s, sizeof(*s) - 2);
+}
+
+/** Write g_st into the other copy and wait until the EEPROM write has finished,
+ *  so nothing (e.g. a transmission) runs while the new copy is incomplete. */
 static void store_save(void)
 {
+    if (g_st.ctr_base <= g_saved_base) {
+        g_st.ctr_base = g_saved_base + 1U;      /* newer copy = larger ctr_base */
+    }
     g_st.magic = STORE_MAGIC;
     g_st.crc = crc16((const uint8_t *)&g_st, sizeof(g_st) - 2);
+    uint8_t slot = (uint8_t)(g_slot ^ 1U);
     wdt_kick();
-    eeprom_update_block(&g_st, &ee_store, sizeof(g_st));
+    eeprom_update_block(&g_st, &ee_store[slot], sizeof(g_st));
+    for (uint16_t t = 0; (NVMCTRL.STATUS & NVMCTRL_EEBUSY_bm) && ++t;) {
+        ;                                       /* last byte: ~4 ms max, bounded */
+    }
+    wdt_kick();
+    g_slot = slot;
+    g_saved_base = g_st.ctr_base;
 }
 
 /* -------------------------------------------------------------- entropy */
@@ -155,7 +184,12 @@ static void make_keypair(void)
     aes128_encrypt(seed, blk, g_priv + 16);
     blk[0] = 3;
     aes128_encrypt(seed, blk, g_st.pool);        /* new pool for the next boot */
-    store_save();
+    if (!link_paired()) {
+        store_save();
+    }
+    /* Paired node (e.g. a brown-out reboot): no EEPROM write here, the new pool is
+     * stored with the next save (counter reserve, UNPAIR) – before this keypair
+     * could ever become a link key (only after an UNPAIR, which saves). */
 
     x25519_progress = progress;
     fast_clock(true);
@@ -168,14 +202,24 @@ static void make_keypair(void)
 bool link_init(uint16_t node_id)
 {
     g_node_id = node_id;
-    eeprom_read_block(&g_st, &ee_store, sizeof(g_st));
-    if (g_st.magic != STORE_MAGIC || g_st.crc != crc16((const uint8_t *)&g_st, sizeof(g_st) - 2)) {
+    /* pick the newest valid copy (larger ctr_base); none valid -> blank store */
+    store_t other;
+    eeprom_read_block(&g_st, &ee_store[0], sizeof(g_st));
+    eeprom_read_block(&other, &ee_store[1], sizeof(other));
+    bool v0 = store_valid(&g_st);
+    bool v1 = store_valid(&other);
+    g_slot = 0;
+    if (v1 && (!v0 || other.ctr_base > g_st.ctr_base)) {
+        memcpy(&g_st, &other, sizeof(g_st));
+        g_slot = 1;
+    } else if (!v0) {
         memset(&g_st, 0, sizeof(g_st));
+        g_slot = 1;                             /* first save goes to copy 0 */
     }
-    /* resume the frame counter above everything that may have been used */
+    g_saved_base = g_st.ctr_base;
+    /* resume the frame counter above everything that may have been used; the
+     * next reserve is saved lazily by link_send_data (g_ctr >= ctr_base) */
     g_ctr = g_st.ctr_base;
-    g_st.ctr_base = g_ctr + CTR_RESERVE;
-    store_save();
     return g_st.paired == 1;
 }
 
@@ -248,7 +292,7 @@ bool link_send_data(const telemetry_t *t)
     }
     if (g_ctr >= g_st.ctr_base) {               /* reserve the next block of counters */
         g_st.ctr_base = g_ctr + CTR_RESERVE;
-        store_save();
+        store_save();                           /* completes before the frame is sent */
     }
     uint32_t ctr = g_ctr++;
 

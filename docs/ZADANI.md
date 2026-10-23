@@ -135,7 +135,7 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
 ## 2. Server na Raspberry Pi Zero 2 W
 
 ### 2.1 Mantinely
-- RSS procesu **< 35 MB** (cíl ~25 MB), `MemoryMax=64M` v systemd.
+- RSS procesu **< 35 MB** (cíl ~25 MB), `MemoryMax=128M` v systemd (rezerva pro 64bit Python).
 - **Bez Dockeru** (dockerd ≈ 60 MB RAM a zbytečné zápisy na SD).
 - **Bez pip a bez frameworků**: jen standardní knihovna Pythonu (vlastní striktní HTTP/1.1 server nad asyncio)
   + `python3-spidev` (+ volitelně `python3-libgpiod`) z apt. Běží i na Pi 3 B/3 B+/4/5 (stejný konektor, stejná instalace). Aktualizace aplikace = jen výměna souborů.

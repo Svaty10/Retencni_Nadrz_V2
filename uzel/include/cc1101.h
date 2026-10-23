@@ -84,6 +84,10 @@ extern void (*cc1101_tx_hook)(void);
 /** Listen-before-talk back-offs of the last cc1101_send(). */
 extern uint8_t cc1101_lbt_backoffs;
 
+/** false when the last attempt to put the radio to SLEEP timed out (it may still be
+ *  awake drawing mA): the caller must treat the radio as not ready and re-init it. */
+extern bool cc1101_sleep_ok;
+
 int8_t cc1101_send(const uint8_t *tx, uint8_t txlen, uint8_t *rx, uint8_t rxmax, uint16_t rx_window_ms);
 
 #endif /* CC1101_H_ */

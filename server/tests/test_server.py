@@ -73,7 +73,7 @@ def free_port():
 class ServerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory()
+        cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         cls.web_port, cls.ha_port = free_port(), free_port()
         ready = threading.Event()
 
@@ -90,6 +90,7 @@ class ServerTest(unittest.TestCase):
                     f.write("Label-Pass9\n")
                 web_app = build_web_app(cls.core, os.path.join(os.path.dirname(__file__), "..", "static"))
                 web_app["ha_port"] = cls.ha_port
+                cls.web_app = web_app
                 await Server(web_app).start("127.0.0.1", cls.web_port)
                 await Server(build_ha_app(cls.core)).start("127.0.0.1", cls.ha_port)
                 ready.set()
@@ -233,7 +234,11 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.core.last.get(0x9999), None)
         n2.reboot()
         self.assertEqual(n2.try_pair(), "unpaired")
-        self.assertIsNone(n2.try_pair())                         # confirmation -> removed
+        self.assertIsNone(n2.try_pair())                         # confirmation (key kept a moment)
+        time.sleep(0.3)
+        self.assertIn(0x9999, self.core._unpair_confirm)
+        self.core._unpair_confirm[0x9999] -= 60                  # sensor stayed unpaired
+        self.assertIsNone(n2.try_pair())                         # -> removed
         time.sleep(0.3)
         st, js, _ = self.req("GET", "/api/nodes", headers=h)
         self.assertEqual([n["id"] for n in js["nodes"]], ["1234"])
@@ -357,6 +362,90 @@ class ServerTest(unittest.TestCase):
         st, _, _ = self.req("GET", "/static/%2e%2e/retencka/auth.py")
         self.assertEqual(st, 404)
 
+    def raw(self, data: bytes, port=None) -> bytes:
+        s = socket.create_connection(("127.0.0.1", port or self.web_port), timeout=10)
+        try:
+            s.sendall(data)
+            out = b""
+            while b"\r\n\r\n" not in out:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                out += chunk
+            return out
+        finally:
+            s.close()
+
+    def test_3_lockout_is_generic_and_does_not_block_owner(self):
+        self.core.ip_limiter.success("127.0.0.1")
+        msgs = set()
+        for _ in range(6):                      # > USER_MAX_FAILS wrong passwords for the real account
+            st, js, _ = self.req("POST", "/api/auth/login", {"username": "admin2", "password": "wrong-password-x"})
+            self.assertEqual(st, 401)
+            msgs.add(js["error"])
+            self.core.ip_limiter.success("127.0.0.1")
+        st, js, _ = self.req("POST", "/api/auth/login", {"username": "nobody", "password": "wrong-password-x"})
+        self.assertEqual(st, 401)
+        msgs.add(js["error"])
+        self.assertEqual(len(msgs), 1)          # no oracle: unknown / locked / wrong all look the same
+        locks = self.web_app["login_locks"]
+        # the pair (admin2, 127.0.0.1) is locked, but the same account from another address is not
+        self.assertTrue(locks.locked("admin2", "127.0.0.1"))
+        self.assertFalse(locks.locked("admin2", "203.0.113.9"))
+        st, js, _ = self.req("POST", "/api/auth/login", {"username": "admin2", "password": "Velmi-Tajne-Heslo1"})
+        self.assertEqual((st, js["error"]), (401, next(iter(msgs))))     # locked looks like a wrong password
+        locks.success("admin2", "127.0.0.1")
+        self.core.ip_limiter.success("127.0.0.1")
+        st, _, _ = self.req("POST", "/api/auth/login", {"username": "admin2", "password": "Velmi-Tajne-Heslo1"})
+        self.assertEqual(st, 200)
+
+    def test_4_http_hardening(self):
+        for cl in ("+5", "1_0", "5 5", "-1", "0x5", "٥"):
+            data = ("POST /api/auth/login HTTP/1.1\r\nHost: x\r\nContent-Length: %s\r\n\r\n" % cl).encode("utf-8")
+            self.assertTrue(self.raw(data).startswith(b"HTTP/1.1 400"), cl)
+        many = "&".join(f"a{i}=1" for i in range(80))
+        out = self.raw(f"GET /api/auth/mode?{many} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+        self.assertTrue(out.startswith(b"HTTP/1.1 400"), out[:40])
+
+    def test_5_ha_token_non_ascii(self):
+        out = self.raw("GET /api/v1/water/state HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer héslo\r\n\r\n".encode("latin-1"),
+                       port=self.ha_port)
+        self.assertTrue(out.startswith(b"HTTP/1.1 401"), out[:40])
+
+    def test_6_reserved_usernames_and_huge_numbers(self):
+        from retencka import auth
+        self.assertIsNotNone(auth.username_problem("System"))
+        self.assertIsNotNone(auth.username_problem("system-bot"))
+        self.assertIsNone(auth.username_problem("pepa"))
+        h = self.login()
+        st, _, _ = self.req("GET", "/api/history?from=1e999", headers=h)
+        self.assertEqual(st, 400)
+        st, js, _ = self.req("GET", "/api/audit?page=" + "9" * 400, headers=h)
+        self.assertEqual(st, 200)
+
+    def test_7_stream_error_closes_connection(self):
+        from retencka import httpserver as hs
+        app = hs.Application()
+
+        async def boom(request):
+            resp = hs.StreamResponse()
+            await resp.prepare(request)
+            await resp.write(b"abc")
+            raise RuntimeError("late failure")
+        app.router.add_get("/boom", boom)
+        port = free_port()
+        asyncio.run_coroutine_threadsafe(hs.Server(app).start("127.0.0.1", port), self.loop).result(10)
+        s = socket.create_connection(("127.0.0.1", port), timeout=10)
+        s.sendall(b"GET /boom HTTP/1.1\r\nHost: x\r\n\r\n")
+        data = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        s.close()
+        self.assertNotIn(b"500", data)
+        self.assertEqual(data.count(b"HTTP/1.1"), 1)
 
 if __name__ == "__main__":
     unittest.main()

@@ -210,7 +210,7 @@ Převod parametrů z původního prototypu (Flask + ESP32):
 
 | Jednotka | Úkol |
 |---|---|
-| `retencka.service` | aplikace (`python3 -m retencka`), `MemoryMax=64M`, `WatchdogSec=60`, `Restart=always` |
+| `retencka.service` | aplikace (`python3 -m retencka`), `MemoryMax=128M`, `WatchdogSec=60`, `Restart=always` |
 | `retencka-identity.service` | hostname `retencka-xxxx`, heslo hotspotu, setup kód |
 | `retencka-netwatch.service` | hlídá Wi-Fi, bez spojení spustí hotspot |
 | `retencka-portal.service` | captive portál pro zadání Wi-Fi (jen v režimu hotspotu) |
@@ -224,7 +224,7 @@ Read-only root (overlayfs), data na `/var/lib/retencka`, logy v RAM, HW watchdog
 
 | Položka | Hodnota | Proč stačí |
 |---|---|---|
-| RAM | 512 MB, služba omezená na 64 MB | jeden Python proces bez frameworků ~20–30 MB RSS; scrypt 16 MB serializovaně |
+| RAM | 512 MB, služba omezená na 128 MB | jeden Python proces bez frameworků ~20–30 MB RSS; scrypt 16 MB serializovaně |
 | CPU | 4× Cortex-A53 | jeden paket za minutu: dešifrování ~ms; X25519 při párování desítky ms; grafy kreslí prohlížeč |
 | Disk | ~10 MB na čidlo a rok | WAL, `commit=60`, hodinové agregace |
 | Síť | jen 2,4 GHz Wi-Fi | |

@@ -83,7 +83,10 @@ def jresp(data: Any, status: int = 200) -> web.Response:
 
 
 def jerr(msg: str, status: int = 400, **extra) -> web.Response:
-    return jresp({"ok": False, "error": msg, **extra}, status)
+    resp = jresp({"ok": False, "error": msg, **extra}, status)
+    if status == 429 and extra.get("retry_after"):
+        resp.headers["Retry-After"] = str(extra["retry_after"])
+    return resp
 
 
 # =============================================================== client info
@@ -195,6 +198,8 @@ async def security_headers(request: web.Request, handler):
         raise
     except Exception:
         log.exception("Unhandled error on %s %s", request.method, request.path)
+        if request.get("_stream_started"):
+            raise                       # response already half-sent: the server just drops the connection
         resp = jerr("Interní chyba serveru", 500)
     _apply_security_headers(request, resp.headers)
     return resp
@@ -219,7 +224,7 @@ def make_auth_middleware(core: Core):
             sess = request["session"]
             if sess and request.path not in ("/api/auth/login", "/api/auth/setup"):
                 sent = request.headers.get("X-CSRF-Token", "")
-                if not hmac.compare_digest(sent, sess["csrf"]):
+                if not hmac.compare_digest(sent.encode("utf-8"), sess["csrf"].encode("utf-8")):
                     return jerr("Neplatný CSRF token – obnovte stránku", 403)
         return await handler(request)
     return authenticate
@@ -247,6 +252,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     app.prepare_hooks.append(lambda req, resp: _apply_security_headers(req, resp.headers))
     st = Static(static_dir)
     db, settings = core.db, core.settings
+    login_locks = app["login_locks"] = auth.LoginLocks()
+    setup_lock = asyncio.Lock()
 
     def no_users() -> bool:
         return db.scalar("SELECT COUNT(*) FROM users", default=0) == 0
@@ -342,23 +349,20 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return resp
 
         row = db.one("SELECT * FROM users WHERE username = ?", (username,)) if username else None
-        if row and row["locked_until"] > now:
-            core.ip_limiter.fail(ip)
-            core.audit("LOGIN_FAILED", f"Účet {username!r} je dočasně zamčen", username, ip)
-            return jerr("Účet je dočasně zamčen kvůli opakovaným neúspěšným pokusům.", 429)
+        # locked (username, IP) pair: verify against nothing (same cost) and answer exactly
+        # like a wrong password - no oracle for existing / locked accounts
+        locked = login_locks.locked(username, ip)
         ok = await asyncio.get_running_loop().run_in_executor(
-            None, auth.verify_password, password, row["pw_hash"] if row else None)
-        if not ok:
+            None, auth.verify_password, password, row["pw_hash"] if row and not locked else None)
+        if not ok or locked:
             core.ip_limiter.fail(ip)
-            if row:
-                fails = row["failed"] + 1
-                lock = now + auth.USER_LOCK_S if fails >= auth.USER_MAX_FAILS else 0
-                db.execute("UPDATE users SET failed=?, locked_until=? WHERE username=?",
-                           (0 if lock else fails, lock, row["username"]))
+            if not locked:
+                login_locks.fail(username, ip)
             core.audit("LOGIN_FAILED", "Neplatné jméno nebo heslo", username or "(prázdné)", ip)
             await asyncio.sleep(0.5 + secrets.randbelow(500) / 1000)
             return jerr("Neplatné jméno nebo heslo.", 401)
         core.ip_limiter.success(ip)
+        login_locks.success(username, ip)
         db.execute("UPDATE users SET failed=0, locked_until=0, last_login=? WHERE username=?",
                    (now, row["username"]))
         core.sessions.delete(request["token"])            # no session fixation
@@ -394,11 +398,14 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jerr(problem)
         if hmac.compare_digest(password.encode(), setup_password().encode()):
             return jerr("Nové heslo nesmí být stejné jako heslo ze štítku.")
-        pw_hash = await asyncio.get_running_loop().run_in_executor(None, auth.hash_password, password)
-        now = int(time.time())
-        db.execute("INSERT INTO users(username, pw_hash, role, created, pw_changed) VALUES(?,?,?,?,?)",
-                   (username, pw_hash, "admin", now, now))
-        setup_tickets.clear()
+        async with setup_lock:
+            pw_hash = await asyncio.get_running_loop().run_in_executor(None, auth.hash_password, password)
+            if not no_users():                    # another request finished setup meanwhile
+                return jerr("Systém už je nastaven.", 409)
+            now = int(time.time())
+            db.execute("INSERT INTO users(username, pw_hash, role, created, pw_changed) VALUES(?,?,?,?,?)",
+                       (username, pw_hash, "admin", now, now))
+            setup_tickets.clear()
         core.audit("USER_ADDED", f"Vytvořen administrátor {username!r}; výchozí účet admin zrušen", username, ip)
         token, _ = core.sessions.create(username, ip, request.headers.get("User-Agent", ""))
         resp = jresp({"ok": True})
@@ -415,6 +422,9 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need()
     async def api_me_password(request):
         s = request["session"]
+        wait = core.ip_limiter.retry_after(request["ip"])
+        if wait:
+            return jerr(f"Příliš mnoho pokusů. Zkuste to za {wait} s.", 429, retry_after=wait)
         data = await read_json(request)
         old, new = str(data.get("old_password", "")), str(data.get("new_password", ""))
         row = db.one("SELECT pw_hash FROM users WHERE username=?", (s["username"],))
@@ -444,7 +454,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             else:
                 spans = {"24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400, "365d": 365 * 86400}
                 t_to, t_from = now, now - spans.get(q.get("range", "24h"), 86400)
-        except ValueError:
+        except (ValueError, OverflowError):
             raise web.HTTPBadRequest(text="bad range")
         t_from = max(0, t_from)
         t_to = min(max(t_to, t_from + 3600), now + 86400)
@@ -808,8 +818,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         """Audit log with filters: category, who (people/system/<username>), text, date range."""
         q = request.query
         try:
-            page = max(1, int(q.get("page", 1)))
-        except ValueError:
+            page = min(max(1, int(q.get("page", 1))), 1_000_000)
+        except (ValueError, OverflowError):
             page = 1
         per = 50
         where, args = [], []
@@ -837,9 +847,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         for key, op in (("from", ">="), ("to", "<")):
             try:
                 v = int(q.get(key, ""))
+                if not -2**62 < v < 2**62:
+                    continue
                 where.append(f"ts {op} ?")
                 args.append(v)
-            except ValueError:
+            except (ValueError, OverflowError):
                 pass
         w = ("WHERE " + " AND ".join(where)) if where else ""
         total = db.scalar(f"SELECT COUNT(*) FROM audit {w}", args, 0)
@@ -1071,7 +1083,8 @@ def build_ha_app(core: Core) -> web.Application:
     def authorized(request: web.Request) -> bool:
         h = request.headers.get("Authorization", "")
         token = core.settings.get("ha_token") or ""
-        return h.startswith("Bearer ") and bool(token) and hmac.compare_digest(h[7:].strip(), token)
+        return h.startswith("Bearer ") and bool(token) and hmac.compare_digest(h[7:].strip().encode("utf-8"),
+                                                                              token.encode("utf-8"))
 
     async def state(request):
         if not authorized(request):

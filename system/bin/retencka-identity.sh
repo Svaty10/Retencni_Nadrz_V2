@@ -18,12 +18,30 @@ gen() {  # unambiguous characters only (no 0/O, 1/I/l)
     LC_ALL=C tr -dc 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789' < /dev/urandom | head -c "$1"
 }
 
-mac=$(cat "/sys/class/net/$IFACE/address" 2>/dev/null || cat /sys/class/net/eth0/address 2>/dev/null || echo "00:00:00:00:00:00")
+# wlan0 may appear a few seconds after this unit starts (driver / firmware load);
+# an all-zero MAC would freeze the identity as "retencka-0000" forever
+valid_mac() { [ -n "$1" ] && [ "$1" != "00:00:00:00:00:00" ]; }
+mac=""
+for _ in $(seq 1 30); do
+    for dev in "$IFACE" eth0; do
+        m=$(cat "/sys/class/net/$dev/address" 2>/dev/null || true)
+        if valid_mac "$m"; then mac="$m"; break 2; fi
+    done
+    sleep 1
+done
+if ! valid_mac "$mac"; then
+    echo "identity: no network interface with a valid MAC address after 30 s - will retry" >&2
+    exit 1
+fi
 suffix=$(echo "$mac" | tr -d ':' | tail -c 5 | tr 'A-F' 'a-f')
 name="retencka-$suffix"
 
 if [ "$(hostname)" != "$name" ]; then
-    hostnamectl set-hostname "$name"
+    # hostnamectl needs dbus/systemd-hostnamed, which may not be up yet this early
+    if ! hostnamectl set-hostname "$name" 2>/dev/null; then
+        echo "$name" > /etc/hostname
+        hostname "$name"
+    fi
     if grep -q '^127\.0\.1\.1' /etc/hosts; then
         sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$name/" /etc/hosts
     else

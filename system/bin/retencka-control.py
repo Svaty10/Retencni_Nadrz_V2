@@ -95,7 +95,10 @@ def main() -> None:
         log("reboot requested from the hub")
         subprocess.run(["systemctl", "reboot"], check=False)
         return
-    (DATA / "control-servis").unlink(missing_ok=True)
+    # drop every other request file too, otherwise the .path unit (glob control-*)
+    # would restart this helper in a loop
+    for f in DATA.glob("control-*"):
+        f.unlink(missing_ok=True)
     apply_servis()
 
 

@@ -328,6 +328,6 @@ def coerce(schema: dict, key: str, raw: Any) -> Any:
             return v
     except SettingsError:
         raise
-    except (TypeError, ValueError, IndexError) as e:
+    except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise SettingsError(f"{key}: neplatná hodnota") from e
     return raw

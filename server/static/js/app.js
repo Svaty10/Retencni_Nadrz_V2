@@ -1396,6 +1396,7 @@
         $('logSearch').addEventListener('input', () => { clearTimeout(searchT); searchT = setTimeout(() => loadAuditLog(1), 350); });
         $('auditRefresh').addEventListener('click', () => loadAuditLog(1));
         $('exportBtn').addEventListener('click', () => {
+            if (CURRENT_NODE === null || CURRENT_NODE === undefined) return;
             window.location.href = `/api/export.csv?node=${CURRENT_NODE}&` + rangeQuery(rangeOf('export'));
         });
     }

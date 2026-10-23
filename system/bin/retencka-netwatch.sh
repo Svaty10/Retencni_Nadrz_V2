@@ -2,7 +2,8 @@
 # =============================================================================
 # retencka-netwatch – Wi-Fi supervisor with a fallback setup hotspot
 #
-#  * connected to a known Wi-Fi             -> nothing to do (hotspot off)
+#  * connected to a known Wi-Fi or by Ethernet cable
+#                                           -> nothing to do (hotspot off)
 #  * no connection for GRACE_S (or no known network at all)
 #                                           -> start hotspot "Retencka-XXXX" +
 #                                              captive portal (redirect :80 -> :8088)
@@ -40,6 +41,17 @@ wifi_connected() {
     echo "$con" | grep -q '^GENERAL.STATE:100' || return 1
     echo "$con" | grep -q "^GENERAL.CONNECTION:$AP_CON\$" && return 1
     return 0
+}
+
+eth_connected() {
+    # any wired (or other non-Wi-Fi) device that is connected counts as "online":
+    # a Pi on a cable without any Wi-Fi profile must not start the hotspot
+    nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null \
+        | awk -F: '$2=="ethernet" && $3=="connected" {found=1} END {exit !found}'
+}
+
+lan_connected() {
+    wifi_connected || eth_connected
 }
 
 ap_active() {
@@ -99,6 +111,9 @@ EOF
 
 start_ap() {
     ensure_ap_profile || return 1
+    # fresh Pi OS Lite has the Wi-Fi radio blocked until a regulatory country is set
+    rfkill unblock wifi 2>/dev/null
+    nmcli radio wifi on >/dev/null 2>&1
     save_scan
     log "starting hotspot"
     if nmcli --wait 30 connection up "$AP_CON" >/dev/null 2>&1; then
@@ -186,7 +201,7 @@ while true; do
                 start_ap
             fi
         fi
-    elif wifi_connected; then
+    elif lan_connected; then
         LAST_OK=$now
     else
         if [ -z "$(known_networks)" ] || [ $((now - LAST_OK)) -ge "$GRACE_S" ]; then

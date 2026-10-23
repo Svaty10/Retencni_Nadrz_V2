@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import html
+import http.client
 import json
 import logging
+import math
 import os
 import secrets
 import signal
@@ -86,7 +88,7 @@ def _call(token: str, method: str, payload: Optional[dict] = None, files: Option
             return json.loads(e.read(64 * 1024))
         except ValueError:
             return {"ok": False, "error_code": e.code, "description": f"HTTP {e.code}"}
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, http.client.HTTPException) as e:
         return {"ok": False, "error_code": 0, "description": type(e).__name__}
 
 
@@ -121,7 +123,19 @@ class TelegramBot:
 
     # -------------------------------------------------------------- polling
     def _poll_thread(self) -> None:
-        """Long polling in its own daemon thread (never blocks the worker pool or exit)."""
+        """Long polling in its own daemon thread; whatever goes wrong, the thread survives."""
+        crash_wait = 5.0
+        while not self._stop.is_set():
+            try:
+                self._poll_loop()
+                return
+            except Exception:
+                log.exception("telegram poll loop crashed - restarting")
+                self.ok, self.error = False, "Telegram není dostupný"
+                self._stop.wait(crash_wait)
+                crash_wait = min(crash_wait * 2, 300.0)
+
+    def _poll_loop(self) -> None:
         backoff = 5.0
         while not self._stop.is_set():
             token = (self.core.settings.get("telegram_token") or "").strip()
@@ -322,9 +336,13 @@ class TelegramBot:
             target = float(node["auto_refill_target_pct"])
             for w in rest:
                 try:
-                    target = float(w.rstrip("%").replace(",", "."))
+                    v = float(w.rstrip("%").replace(",", "."))
                 except ValueError:
-                    pass
+                    continue
+                if not (math.isfinite(v) and 1 <= v <= 100):
+                    await self.send(cid, "⚠️ Cíl musí být 1–100 %.")
+                    return
+                target = v
             ok, msg = await self.core.refill_start(nid, target, "manual", who)
             await self.send(cid, ("💧 " if ok else "⚠️ ") + f"<b>{html.escape(node['name'])}</b>: {html.escape(msg)}")
         elif cmd == "stop":

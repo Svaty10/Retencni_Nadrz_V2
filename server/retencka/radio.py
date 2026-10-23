@@ -175,13 +175,17 @@ class Receiver:
             log.warning("GDO0 edge detection unavailable (%s) – polling", e)
             self._gpio = None
 
-    def _close(self) -> None:
+    def _release_gpio(self) -> None:
+        """Give the GDO0 line back (v1 Line / v2 LineRequest both have release())."""
         if self._gpio:
             try:
                 self._gpio[1].release()
             except Exception:
                 pass
             self._gpio = None
+
+    def _close(self) -> None:
+        self._release_gpio()
         if self.spi:
             try:
                 self.spi.close()
@@ -241,7 +245,7 @@ class Receiver:
                     h.event_read()
         except Exception as e:  # pragma: no cover
             log.warning("GPIO wait failed (%s) – switching to polling", e)
-            self._gpio = None
+            self._release_gpio()
             self.mode = "polling"
 
     def _poll_fifo(self) -> None:
@@ -371,8 +375,12 @@ class Receiver:
             self.last_rx = time.monotonic()
             req = crypto.build_pair_req(0xBEEF, pub, False)
             if keys is None:
-                reply = self.responder(req) if self.responder else None
-                self.on_frame(req, -70.0, 20)
+                reply = None
+                try:
+                    reply = self.responder(req) if self.responder else None
+                    self.on_frame(req, -70.0, 20)
+                except Exception:
+                    log.exception("MOCK pairing request failed")
                 if reply and len(reply) == crypto.PAIR_LEN and reply[0] == crypto.PKT_PAIR_ACK:
                     keys = crypto.derive_keys(crypto.x25519(priv, reply[3:35]))
                     log.info("MOCK node paired")

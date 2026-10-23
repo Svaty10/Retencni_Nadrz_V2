@@ -157,11 +157,17 @@ static void restore_volatile_regs(void)
     write_burst(CC1101_PATABLE, &pa, 1);
 }
 
-static void enter_sleep(void)
+bool cc1101_sleep_ok = true;
+
+/** IDLE + SPWD. If a strobe times out (SO never low) the radio may still be awake
+ *  (mA), so the failure is recorded in cc1101_sleep_ok for the caller to re-init. */
+static bool enter_sleep(void)
 {
-    (void)strobe(CC1101_SIDLE);
-    (void)strobe(CC1101_SPWD);                   /* SLEEP once CSn goes high */
+    bool ok = strobe(CC1101_SIDLE);
+    ok = strobe(CC1101_SPWD) && ok;              /* SLEEP once CSn goes high */
     spi_close();
+    cc1101_sleep_ok = ok;
+    return ok;
 }
 
 bool cc1101_init(void)
@@ -193,8 +199,7 @@ bool cc1101_init(void)
     }
     restore_volatile_regs();
 
-    enter_sleep();
-    return true;
+    return enter_sleep();
 }
 
 static uint8_t read_burst(uint8_t reg, uint8_t *buf, uint8_t len)
@@ -335,6 +340,6 @@ int8_t cc1101_send(const uint8_t *tx, uint8_t txlen, uint8_t *rx, uint8_t rxmax,
 
 out:
     PORTB.PIN2CTRL = PORT_ISC_INPUT_DISABLE_gc;
-    enter_sleep();
+    (void)enter_sleep();                         /* failure -> cc1101_sleep_ok = false */
     return result;
 }

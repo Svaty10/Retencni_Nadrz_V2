@@ -144,9 +144,11 @@ bool sht40_read_measurements(int16_t *temp_x100, uint16_t *hum_x100)
 {
     uint8_t rx[6];
     if (!sht40_transaction(SHT40_CMD_MEASURE_HIGH_PREC, 10, rx)) {
-        /* no answer: try the other variant's address once */
+        /* no answer: try the other variant's address once; keep it only if it answers */
+        uint8_t old = g_addr;
         g_addr = (g_addr == SHT40_I2C_ADDR_A) ? SHT40_I2C_ADDR_B : SHT40_I2C_ADDR_A;
         if (!sht40_transaction(SHT40_CMD_MEASURE_HIGH_PREC, 10, rx)) {
+            g_addr = old;
             return false;
         }
     }

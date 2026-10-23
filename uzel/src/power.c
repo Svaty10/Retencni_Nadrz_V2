@@ -95,13 +95,16 @@ void rtc_pit_init(void)
     (void)rtc_sync(RTC_PERBUSY_bm);
     RTC.CTRLA = RTC_PRESCALER_DIV1_gc | RTC_RUNSTDBY_bm | RTC_RTCEN_bm;
     (void)rtc_sync(RTC_CTRLABUSY_bm);
-    while (RTC.PITSTATUS & RTC_CTRLBUSY_bm) {
-        ;
+    for (uint16_t i = 0; i < 20000U && (RTC.PITSTATUS & RTC_CTRLBUSY_bm); i++) {
+        ;                                                  /* bounded like rtc_sync */
     }
     RTC.PITCTRLA = RTC_PERIOD_CYC32768_gc | RTC_PITEN_bm;   /* 1.000 s */
     RTC.PITINTCTRL = RTC_PI_bm;
 }
 
+/* Counts PIT ticks; the PIT phase is not reset (it shares the free-running RTC
+ * prescaler), so the first tick comes after 0..1 s: the sleep lasts between
+ * seconds-1 and seconds. Accepted – callers only need approximate intervals. */
 void power_sleep_seconds(uint16_t seconds)
 {
     cli();
@@ -205,8 +208,8 @@ void power_off_forever(void)
     RTC.PITCTRLA = 0;
     RTC.INTCTRL = 0;
     RTC.CTRLA = 0;
-    while (WDT.STATUS & WDT_SYNCBUSY_bm) {
-        ;
+    for (uint16_t i = 0; i < 20000U && (WDT.STATUS & WDT_SYNCBUSY_bm); i++) {
+        ;                                    /* bounded: never hang with interrupts off */
     }
     ccp_write_io((void *)&WDT.CTRLA, 0);     /* watchdog off (not locked by fuse) */
     SLPCTRL.CTRLA = SLPCTRL_SMODE_PDOWN_gc | SLPCTRL_SEN_bm;

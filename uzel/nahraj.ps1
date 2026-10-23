@@ -218,6 +218,7 @@ if ($Test) {
     return
 }
 
+$Port = Get-Port               # programmer first: no firmware download without one
 $hex = Get-Firmware
 # fuse1 BODCFG 0x04 = BOD 1,8 V v běhu, ve spánku vypnutý
 # fuse2 OSCCFG 0x02 = interní 20 MHz (firmware si dělí na 3,33 MHz)

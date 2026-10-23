@@ -86,6 +86,8 @@ def username_problem(username: str) -> Optional[str]:
         return "Jméno musí mít 2–32 znaků."
     if any(ch.isspace() or ord(ch) < 32 or ch in "<>\"'&/\\" for ch in username):
         return "Jméno obsahuje nepovolené znaky."
+    if username.lower().startswith("system"):
+        return "Jména začínající „system“ jsou vyhrazena pro automatiku."
     return None
 
 
@@ -137,6 +139,44 @@ class Sessions:
         now = int(time.time())
         self.db.execute("DELETE FROM sessions WHERE last_seen < ? OR created < ?",
                         (now - SESSION_IDLE_S, now - SESSION_ABSOLUTE_S))
+
+
+class LoginLocks:
+    """Lock-out per (username, client IP) in memory. A stranger hammering an account
+    from his own address locks only himself out, never the real owner."""
+
+    def __init__(self, max_fails: int = USER_MAX_FAILS, lock_s: float = USER_LOCK_S):
+        self.max_fails, self.lock_s = max_fails, lock_s
+        self._d: dict[tuple[str, str], tuple[int, float]] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _key(username: str, ip: str) -> tuple[str, str]:
+        return username.lower(), ip
+
+    def locked(self, username: str, ip: str) -> bool:
+        with self._lock:
+            _, until = self._d.get(self._key(username, ip), (0, 0.0))
+        return until > time.time()
+
+    def fail(self, username: str, ip: str) -> None:
+        now = time.time()
+        with self._lock:
+            k = self._key(username, ip)
+            fails, until = self._d.get(k, (0, 0.0))
+            if until and until <= now:
+                fails = 0
+            fails += 1
+            if fails >= self.max_fails:
+                self._d[k] = (0, now + self.lock_s)
+            else:
+                self._d[k] = (fails, 0.0)
+            if len(self._d) > 10000:
+                self._d = {k: v for k, v in self._d.items() if v[1] > now}
+
+    def success(self, username: str, ip: str) -> None:
+        with self._lock:
+            self._d.pop(self._key(username, ip), None)
 
 
 class IpLimiter:

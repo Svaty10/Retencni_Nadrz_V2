@@ -11,7 +11,13 @@ ALIAS="${RETENCKA_MDNS_ALIAS:-retencka.local}"
 FLAG=/run/retencka/alias-owned
 mkdir -p /run/retencka
 
-ip_of() { ip -4 -o addr show dev "$IFACE" scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1; }
+# address of the default-route interface (Ethernet or Wi-Fi); falls back to $IFACE
+ip_of() {
+    local dev
+    dev=$(ip -4 route show default 2>/dev/null | awk '{for (i=1;i<NF;i++) if ($i=="dev") {print $(i+1); exit}}')
+    [ -n "$dev" ] || dev="$IFACE"
+    ip -4 -o addr show dev "$dev" scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1
+}
 
 while true; do
     rm -f "$FLAG"

@@ -2,6 +2,37 @@
 
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Instalace
+- Instalace jedním příkazem: `curl -fsSL …/system/bootstrap.sh | sudo bash` (sám doinstaluje git, stáhne repozitář do `/opt/retencka-src`).
+- SPI se zapne bez restartu; restart jen když je opravdu potřeba (automaticky po 10 s, `--no-reboot` vypne).
+- Nastaví zemi pro Wi-Fi (`--wifi-country`, výchozí CZ) a odblokuje Wi-Fi – na čerstvém Pi OS jinak hotspot nenaběhl.
+- Na konci souhrn (adresa, hotspot, heslo) a kontrola OK/CHYBA; opakovaná instalace bez okamžiku s neplatnou verzí, odmítne downgrade (`--force`), doplní nové klíče do `/etc/default/retencka`.
+
+### Opravy – hub
+- Párování: automatické spárování prvního čidla jen jednou (odpárované čidlo ani cizí čidlo se do prázdného hubu samo nespáruje); podvržený požadavek nemůže dokončit odpárování; čekající klíče mají platnost.
+- Ochrana proti přehrání: poslední čítač rámce se ukládá k čidlu (přežije restart i promazání dat).
+- Dopouštění: nepovedené zavření ventilu se opakuje; chyba u jedné nádrže nezastaví kontroly ostatních; porucha ventilu (24h blokace) jen po doběhnutí časovače; bez platné hladiny se dopouštění nespustí.
+- Kalibrace se dvěma body se stejným napětím už neztrácí měření.
+- Upozornění z vláken údržby (málo místa) se doručí do Telegramu.
+- Telegram: vlákno se po chybě spojení samo obnoví; `dopustit` kontroluje rozsah 1–100 %.
+- Přihlášení: zámek po neúspěšných pokusech platí pro dvojici účet + IP (útočník nezamkne admina), stejná odpověď pro neexistující i zamčený účet; omezení pokusů i při změně hesla; rezervovaná jména `system*`.
+- HTTP: přísnější Content-Length, chybné dotazy → 400 místo pádu spojení, chyba během stahování exportu nepoškodí odpověď, ošetřené přetečení čísel.
+- Počasí: při výpadku internetu se nestahuje při každém obnovení stránky.
+
+### Opravy – systém
+- Pi připojené kabelem nespouští hotspot; `retencka.local` ukazuje na adresu aktivního rozhraní.
+- Identita zařízení se nevytvoří z nulové MAC adresy (dříve hrozilo `retencka-0000`).
+- Aktualizace: správné řazení předběžných verzí (`1.2.0-beta1` < `1.2.0`), kontrola verze v balíku, návrat i systemd jednotek při rollbacku, port kontroly zdraví z konfigurace; release s pomlčkou je *pre-release*.
+- `MemoryMax` služby 128 MB (rezerva pro 64bit Python), `DeviceAllow` podle třídy zařízení.
+- `.gitattributes`: shellové skripty a konfigurace vždy s LF.
+
+### Opravy – čidlo
+- EEPROM se při startu nezapisuje (opakované resety slabé baterie ji neopotřebují); úložiště ve dvou kopiích, takže výpadek během zápisu nesmaže spárování. Zpětně kompatibilní.
+- Omezená čekání na RTC/WDT, SHT40 si při chybě nechá původní adresu, nepovedené uspání CC1101 vede k novému init.
+- `make test` funguje i na Windows; `nahraj.ps1` kontroluje programátor před stažením firmwaru.
+
 ## [1.0.0] - 2026-10-13
 
 První veřejné vydání. Nahrazuje původní prototyp (ESP32 + Flask).

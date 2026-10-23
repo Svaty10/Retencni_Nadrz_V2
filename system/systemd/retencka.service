@@ -24,9 +24,9 @@ TimeoutStopSec=10
 # app pings systemd only while the event loop AND the radio thread are alive
 WatchdogSec=60
 
-# --- resources (Pi Zero 2 W, 512 MB) ---
-MemoryHigh=48M
-MemoryMax=64M
+# --- resources (Pi Zero 2 W, 512 MB; 64bit Python needs headroom) ---
+MemoryHigh=96M
+MemoryMax=128M
 OOMScoreAdjust=-500
 Nice=-2
 
@@ -51,8 +51,8 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 SystemCallArchitectures=native
 DevicePolicy=closed
-DeviceAllow=/dev/spidev0.0 rw
-DeviceAllow=/dev/gpiochip0 rw
+DeviceAllow=char-spidev rw
+DeviceAllow=char-gpiochip rw
 UMask=0027
 
 [Install]

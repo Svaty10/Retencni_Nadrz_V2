@@ -33,6 +33,14 @@ NO_RISE_LOCK_S = 24 * 3600
 
 
 PAIR_TARGET_S = 15 * 60
+# unpairing: the sensor answers an UNPAIR by an unpaired PAIR_REQ ~6 s later (next
+# attempt in its pairing window, uzel/src/main.c). Such a request is unauthenticated,
+# so it only counts shortly after an UNPAIR was sent, and the key is dropped only
+# when the sensor did not come back with a paired request (lost UNPAIR) meanwhile.
+UNPAIR_CONFIRM_S = 30             # unpaired request this soon after UNPAIR = confirmation
+UNPAIR_SETTLE_S = 20              # no paired request for this long after it -> key deleted
+AUTO_PAIR_KEY = "auto_pair_done"  # settings row: first-install auto pairing used up
+STOP_RETRY_MARGIN_S = 60          # refill row closed this long after the planned end at latest
 LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
 BACKUP_KEEP = 7                   # nightly local backups kept
 SERVIS_24H_S = 24 * 3600
@@ -77,8 +85,13 @@ class Core:
         self._pair_lock = threading.Lock()
         self.pair_requests: dict[int, dict] = {}   # node_id -> {ts, rssi, count}
         self.pair_targets: dict[int, dict] = {}    # node_id -> {priv, pub, expires, name, user}
-        self._pending_keys: dict[int, tuple] = {}  # node_id -> (k_enc, k_mac)
+        self._pending_keys: dict[int, tuple] = {}  # node_id -> (k_enc, k_mac, expires)
+        self._unpair_sent: dict[int, float] = {}   # node_id -> last UNPAIR reply sent
+        self._unpair_confirm: dict[int, float] = {}  # node_id -> unpaired request after UNPAIR
         self._last_ctr: dict[int, int] = {}
+        self._auto_pair_done = False
+        self._bad_cal_logged: set[int] = set()
+        self._tasks: set[asyncio.Task] = set()     # fire-and-forget tasks (keep a reference)
 
         # refill controller state, per node
         self.refills: dict[int, dict] = {}         # node_id -> open row of the refills table
@@ -99,6 +112,7 @@ class Core:
 
         self._migrate_v2()
         self._restore()
+        self._init_auto_pair()
 
     # ================================================================ helpers
     def audit(self, action: str, detail: str = "", user: str = "system", ip: str = "") -> None:
@@ -110,17 +124,80 @@ class Core:
         if action in NOTIFY_ACTIONS:
             self.notify(f"{NOTIFY_ICONS.get(action, '')} {detail}", NOTIFY_ACTIONS[action])
 
+    def _on_loop_thread(self) -> bool:
+        try:
+            return asyncio.get_running_loop() is self.loop
+        except RuntimeError:
+            return False
+
     def notify(self, text: str, admin_only: bool = False) -> None:
+        """Thread-safe: the notifier (Telegram) runs on the loop thread, so a call from
+        a worker thread (daily maintenance) is handed over to the loop."""
+        if self.notifier is None:
+            return
+        loop = self.loop
+        if loop is not None and not loop.is_closed() and not self._on_loop_thread():
+            try:
+                loop.call_soon_threadsafe(self._notify_now, text, admin_only)
+            except RuntimeError:                    # loop closed meanwhile (shutdown)
+                log.warning("notification dropped (event loop closed): %s", text)
+            return
+        self._notify_now(text, admin_only)
+
+    def _notify_now(self, text: str, admin_only: bool) -> None:
         if self.notifier is not None:
             try:
                 self.notifier(text, admin_only)
             except Exception:
                 log.exception("notification failed")
 
+    def _spawn(self, coro) -> None:
+        """Fire-and-forget task with a kept reference (a bare ensure_future task can
+        be garbage-collected mid-flight). Without a usable loop the coroutine is dropped."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            task = loop.create_task(coro)
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+        elif self.loop is not None and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(coro, self.loop)
+        else:
+            coro.close()
+
+    # ------------------------------------------------- persistent hub flags
+    def _init_auto_pair(self) -> None:
+        """The first-install auto pairing is available exactly once: an existing
+        install (nodes or data present) counts as used."""
+        row = self.db.scalar("SELECT value FROM settings WHERE key=?", (AUTO_PAIR_KEY,), None)
+        done = False
+        if row is not None:
+            try:
+                done = bool(json.loads(row))
+            except ValueError:
+                done = True
+        if not done and (self.nodes.ids() or self.db.scalar("SELECT 1 FROM measurements LIMIT 1", (), None)):
+            self._mark_auto_pair_done()
+        self._auto_pair_done = self._auto_pair_done or done
+
+    def _mark_auto_pair_done(self) -> None:
+        self._auto_pair_done = True
+        try:
+            self.db.execute("INSERT INTO settings(key, value) VALUES(?, 'true') "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (AUTO_PAIR_KEY,))
+        except Exception:
+            log.exception("could not persist the auto-pair flag")
+
     def watch_tick(self) -> None:
         """Every minute: notify state changes that have no event of their own
         (low level, sensor silent / back, battery low / empty). The first pass only
         records the current state, so a restart does not repeat old warnings."""
+        try:
+            self.unpair_tick()
+        except Exception:
+            log.exception("unpair tick failed")
         for n in self.nodes.all():
             nid, name = n["node_id"], n["name"]
             if n.get("_unpair") or nid not in self.last:
@@ -222,10 +299,7 @@ class Core:
     def _restore(self) -> None:
         for nid in self.nodes.ids():
             self._restore_node(nid)
-            n = self.nodes.get(nid)
-            self._last_ctr[nid] = self.db.scalar(
-                "SELECT MAX(seq) FROM measurements WHERE node_id=? AND ts >= ?",
-                (nid, n.get("paired_at") or 0), -1)
+            self._last_ctr[nid] = self._stored_ctr(nid)
         for r in self.db.query("SELECT * FROM refills WHERE end_ts IS NULL"):
             r = dict(r)
             nid = r.get("node_id") or self.nodes.primary()
@@ -236,6 +310,22 @@ class Core:
             else:
                 self.db.execute("UPDATE refills SET end_ts=?, result=? WHERE id=?",
                                 (int(time.time()), "Ukončeno časovačem (během restartu)", r["id"]))
+
+    def _stored_ctr(self, nid: int) -> int:
+        """Replay watermark after a restart / import: the persisted last accepted
+        counter (survives retention and the disk guard), never lower than the newest
+        stored measurement of the current key."""
+        n = self.nodes.get(nid) or {}
+        from_meas = self.db.scalar("SELECT MAX(seq) FROM measurements WHERE node_id=? AND ts >= ?",
+                                   (nid, n.get("paired_at") or 0), -1)
+        stored = self.db.scalar("SELECT last_ctr FROM nodes WHERE node_id=?", (nid,), -1)
+        return max(int(from_meas), int(stored))
+
+    def _save_ctr(self, nid: int, ctr: Optional[int]) -> None:
+        try:
+            self.db.execute("UPDATE nodes SET last_ctr=? WHERE node_id=?", (ctr, nid))
+        except Exception:
+            log.exception("could not persist the frame counter of %04X", nid)
 
     # =========================================================== radio input
     def on_frame(self, payload: bytes, rssi: float, lqi: int) -> None:
@@ -268,9 +358,18 @@ class Core:
             if node_paired:
                 keys = self.nodes.keys(nid)
                 if keys and (node.get("_unpair") or t is not None):
+                    # the sensor still holds its key: any earlier "unpaired" request
+                    # was not its confirmation (lost UNPAIR, or forged)
+                    self._unpair_sent[nid] = time.time()
+                    self._unpair_confirm.pop(nid, None)
                     return crypto.build_unpair(keys[1], nid, node_pub)
                 return None
-            auto = (not self.nodes.ids() and not self.pair_targets) or (node is not None and not node.get("_secret"))
+            if node is not None and node.get("_unpair"):
+                return None                         # being unpaired: no new key until removed
+            # first installation only (one-time, persisted): once any node was paired
+            # or removed, pairing needs the explicit pairing window
+            first = not self._auto_pair_done and not self.nodes.ids() and not self.pair_targets
+            auto = first or (node is not None and not node.get("_secret"))
             if t is None and auto:
                 # first installation, or a registered node that never had a key (migration)
                 t = {"priv": None, "pub": None, "expires": time.time() + PAIR_TARGET_S,
@@ -283,7 +382,7 @@ class Core:
             keys = crypto.derive_keys(crypto.x25519(t["priv"], node_pub))
             if keys is None:
                 return None
-            self._pending_keys[nid] = keys
+            self._pending_keys[nid] = (keys[0], keys[1], t["expires"])
             return crypto.build_pair_ack(nid, t["pub"])
 
     def _heard(self, nid: int, rssi: float, kind: str) -> None:
@@ -305,9 +404,15 @@ class Core:
                 self.pair_requests[nid] = pr
             node = self.nodes.get(nid)
             if node and not node_paired and node.get("_unpair"):
-                # the sensor confirmed it has forgotten its key -> unpairing complete
-                self.forget_node(nid, "NODE_UNPAIRED",
-                                 f"Čidlo {nid:04X} ({node['name']}) odpárováno – potvrzeno čidlem")
+                # the sensor says it has forgotten its key. The request is not
+                # authenticated: it counts only right after an UNPAIR was sent, and the
+                # key is deleted only once the sensor stays unpaired (unpair_tick).
+                now = time.time()
+                with self._pair_lock:
+                    sent = self._unpair_sent.get(nid)
+                    if sent is not None and now - sent <= UNPAIR_CONFIRM_S:
+                        self._unpair_confirm.setdefault(nid, now)
+            self.unpair_tick()
             return
 
         hdr = crypto.data_header(payload)
@@ -326,6 +431,10 @@ class Core:
             fields = crypto.open_data(keys[0], keys[1], payload)
         with self._pair_lock:
             pending = self._pending_keys.get(nid)
+            if pending and pending[2] < time.time():
+                # pairing window over: the answered key is no longer offered
+                self._pending_keys.pop(nid, None)
+                pending = None
         if pending:
             new_fields = crypto.open_data(pending[0], pending[1], payload)
             if new_fields is not None:
@@ -345,6 +454,7 @@ class Core:
                 self.radio.replays += 1
             return                                  # replay
         self._last_ctr[nid] = ctr
+        self._save_ctr(nid, ctr)
         flags, vbat, temp, hum, probe, fw, diag, sag = fields
         pkt = model.Packet(
             flags=flags, node_id=nid, seq=ctr,
@@ -361,11 +471,15 @@ class Core:
             t = self.pair_targets.pop(nid, {})
             self._pending_keys.pop(nid, None)
             self.pair_requests.pop(nid, None)
+            self._unpair_sent.pop(nid, None)
+            self._unpair_confirm.pop(nid, None)
         new = self.nodes.get(nid) is None
         if new:
             self.nodes.add(nid, t.get("name") or "")
         self.nodes.set_keys(nid, keys[0], keys[1])
-        self._last_ctr[nid] = -1
+        self._mark_auto_pair_done()
+        self._last_ctr[nid] = -1                    # new key: the counter starts over
+        self._save_ctr(nid, None)
         self.audit("NODE_PAIRED", f"Čidlo {nid:04X} {'spárováno' if new else 'znovu spárováno (nový klíč)'}",
                    t.get("user") or "system")
         log.info("Node %04X paired", nid)
@@ -384,6 +498,23 @@ class Core:
         with self._pair_lock:
             self.pair_targets.pop(nid, None)
             self._pending_keys.pop(nid, None)
+            self._unpair_sent.pop(nid, None)
+            self._unpair_confirm.pop(nid, None)
+
+    def unpair_tick(self) -> None:
+        """Finish unpairings the sensor confirmed and did not take back (it did not
+        send a paired request again within UNPAIR_SETTLE_S)."""
+        now = time.time()
+        with self._pair_lock:
+            done = [k for k, ts in self._unpair_confirm.items() if now - ts >= UNPAIR_SETTLE_S]
+        for nid in done:
+            node = self.nodes.get(nid)
+            if node is None or not node.get("_unpair"):
+                with self._pair_lock:
+                    self._unpair_confirm.pop(nid, None)
+                continue
+            self.forget_node(nid, "NODE_UNPAIRED",
+                             f"Čidlo {nid:04X} ({node['name']}) odpárováno – potvrzeno čidlem")
 
     def request_unpair(self, nid: int, user: str, ip: str = "") -> None:
         """Step 1 of unpairing: stop accepting data, wait for the sensor to confirm."""
@@ -406,6 +537,7 @@ class Core:
         """Delete the node and its key (measured data stay in the database)."""
         self.cancel_pairing(nid)
         self.nodes.remove(nid)
+        self._mark_auto_pair_done()                # an emptied hub does not auto-pair again
         self.last.pop(nid, None)
         self.filters.pop(nid, None)
         self._last_ctr.pop(nid, None)
@@ -418,6 +550,7 @@ class Core:
         with self._pair_lock:
             for k in [k for k, v in self.pair_targets.items() if v["expires"] < now]:
                 self.pair_targets.pop(k, None)
+            for k in [k for k, v in self._pending_keys.items() if v[2] < now]:
                 self._pending_keys.pop(k, None)
             reqs = [{"id": f"{k:04X}", "rssi": v["rssi"], "age_s": int(now - v["ts"]), "count": v["count"],
                      "known": self.nodes.get(k) is not None, "node_paired": v.get("node_paired", False),
@@ -437,13 +570,21 @@ class Core:
 
         level_raw = level_mm = volume_l = None
         if pkt.probe_100uv is not None and not pkt.flags & model.FLAG_PROBE_CLIP:
-            lv = model.compute_level(pkt.probe_100uv, node)
-            level_raw = lv.level_cm * 10.0
-            filt = self.filters.setdefault(nid, model.LevelFilter())
-            fmm = filt.update(level_raw, model.deadband_mm(node), follow=nid in self.refills)
-            flv = model.level_from_mm(fmm, node)
-            level_mm, volume_l = int(round(flv.level_cm * 10)), int(round(flv.volume_l))
-            level_raw = int(round(level_raw))
+            try:
+                lv = model.compute_level(pkt.probe_100uv, node)
+                level_raw = lv.level_cm * 10.0
+                filt = self.filters.setdefault(nid, model.LevelFilter())
+                fmm = filt.update(level_raw, model.deadband_mm(node), follow=nid in self.refills)
+                flv = model.level_from_mm(fmm, node)
+                level_mm, volume_l = int(round(flv.level_cm * 10)), int(round(flv.volume_l))
+                level_raw = int(round(level_raw))
+                self._bad_cal_logged.discard(nid)
+            except (ArithmeticError, ValueError, TypeError, KeyError, IndexError):
+                # broken calibration / geometry: keep the sample (raw probe value) without a level
+                level_raw = level_mm = volume_l = None
+                if nid not in self._bad_cal_logged:
+                    self._bad_cal_logged.add(nid)
+                    log.exception("level computation failed for node %04X (calibration?)", nid)
 
         refilling = 1 if nid in self.refills else 0
         synced = time_synced()
@@ -477,7 +618,7 @@ class Core:
             why = (" (watchdog)" if pkt.flags & model.FLAG_WDT_RESET else
                    " (pokles napětí – zkontrolujte baterii)" if (pkt.diag or 0) & model.DIAG_BOD_RESET else "")
             self.audit("NODE_BOOT", f"Čidlo {node['name']} ({nid:04X}) hlásí restart" + why)
-        asyncio.ensure_future(self._refill_on_measurement(nid))
+        self._spawn(self._refill_on_measurement(nid))
 
     # ============================================================ live state
     def level_now(self, nid: Optional[int]) -> Optional[model.Level]:
@@ -741,6 +882,10 @@ class Core:
         lv = self.level_now(nid)
         if lv is None or self.data_age(nid) > FRESH_S:
             return False, "Chybí čerstvá data o hladině – dopouštění nelze bezpečně spustit."
+        if (self.last.get(nid) or {}).get("level_mm_stale"):
+            # the last packet had no valid level (probe error): the shown level is old
+            # and the target stop would not work – same rule as the automatic refill
+            return False, "Poslední měření nemá platnou hladinu (chyba sondy) – dopouštění nelze bezpečně spustit."
         target_pct = min(float(target_pct), float(node["max_refill_pct"]))
         need_l = target_pct / 100.0 * lv.max_volume_l - lv.volume_l
         if need_l <= max(50.0, model.deadband_l(node)):
@@ -766,29 +911,51 @@ class Core:
         return True, f"Dopouštění spuštěno (cíl {target_pct:.0f} %, nejdéle {seconds // 60} min)."
 
     async def refill_stop(self, nid: int, reason: str, user: str = "system", ip: str = "",
-                          call_api: bool = True) -> tuple[bool, str]:
+                          call_api: bool = True, timed_out: bool = False) -> tuple[bool, str]:
         async with self._refill_lock:
-            return await self._refill_stop(nid, reason, user, ip, call_api)
+            return await self._refill_stop(nid, reason, user, ip, call_api, timed_out)
 
-    async def _refill_stop(self, nid: int, reason: str, user: str, ip: str, call_api: bool) -> tuple[bool, str]:
+    async def _refill_stop(self, nid: int, reason: str, user: str, ip: str, call_api: bool,
+                           timed_out: bool = False) -> tuple[bool, str]:
+        """timed_out: the refill ran for its whole planned time (only then a level that
+        did not rise means a fault – an early stop proves nothing)."""
         node = self.nodes.get(nid)
         ok, msg = True, "OK"
         prov = self._provider(node, for_stop=True) if node else None
         if call_api and prov:
             ok, msg = await prov[1]()
-        r = self.refills.pop(nid, None)
         name = node["name"] if node else f"{nid:04X}"
+        r = self.refills.get(nid)
+        if r and not ok:
+            # the valve did not confirm: keep the refill open, refill_tick retries the
+            # stop; the row is closed after a successful stop or when the provider's
+            # own timer has surely closed the valve (planned end + margin)
+            first = not r.get("stop_retry")
+            r["stop_retry"] = True
+            r.setdefault("stop_reason", reason)
+            r.setdefault("stop_user", (user, ip))
+            self.refill_notes[nid] = f"{r['stop_reason']} – ventil nepotvrdil zastavení, opakuje se"
+            if first:
+                self.audit("REFILL_ERROR", f"{name}: ventil nepotvrdil zastavení ({msg}) – opakuje se", user, ip)
+            self.invalidate()
+            return False, msg
+        r = self.refills.pop(nid, None)
         if r:
+            if r.get("stop_retry"):
+                reason = r.get("stop_reason") or reason
+                user, ip = r.get("stop_user") or (user, ip)
             lv = self.level_now(nid)
             end_l = int(lv.volume_l) if lv else None
             self.db.execute("UPDATE refills SET end_ts=?, end_l=?, result=? WHERE id=?",
                             (int(time.time()), end_l, reason, r["id"]))
             self.audit("AUTO_REFILL" if r["mode"] == "auto" else "MANUAL_REFILL",
-                       f"Ukončeno ({name}): {reason}" + ("" if ok else f" (ventil: {msg})"), user, ip)
+                       f"Ukončeno ({name}): {reason}", user, ip)
             if r["mode"] == "auto":
                 self._auto_block_until[nid] = time.time() + AUTO_COOLDOWN_S
-            if end_l is not None and r["start_l"] is not None and end_l - r["start_l"] < 20 \
-                    and time.time() - r["start_ts"] > 600:
+            last = self.last.get(nid) or {}
+            fresh = lv is not None and self.data_age(nid) <= FRESH_S and not last.get("level_mm_stale")
+            if timed_out and not r.get("stop_retry") and fresh and r["start_l"] is not None \
+                    and end_l - r["start_l"] < 20 and time.time() - r["start_ts"] > 600:
                 self._auto_block_until[nid] = time.time() + NO_RISE_LOCK_S
                 self.audit("REFILL_FAULT", f"{name}: hladina během dopouštění nestoupla – automatika "
                                            f"pozastavena na 24 h")
@@ -809,6 +976,8 @@ class Core:
             if lv is None or last.get("level_mm_stale"):
                 return
             r = self.refills.get(nid)
+            if r and r.get("stop_retry"):
+                return                               # stop already requested, refill_tick retries it
             if r:
                 el = time.time() - r["start_ts"]
                 rise = lv.volume_l - (r["start_l"] or lv.volume_l)
@@ -894,10 +1063,22 @@ class Core:
     async def refill_tick(self) -> None:
         """Every 30 s: timer expiry and stale-data safety stop, for every running refill."""
         for nid, r in list(self.refills.items()):
-            if time.time() > r["start_ts"] + (r["planned_s"] or 0) + 60:
-                await self.refill_stop(nid, "Časovač vypršel (cíl nepotvrzen měřením)", call_api=False)
-            elif self.data_age(nid) > FRESH_S:
-                await self.refill_stop(nid, "Bezpečnostní zastavení – výpadek dat z čidla")
+            try:
+                if time.time() > r["start_ts"] + (r["planned_s"] or 0) + STOP_RETRY_MARGIN_S:
+                    if r.get("stop_retry"):
+                        # the provider's own timer has closed the valve by now
+                        r["stop_reason"] = (f"{r.get('stop_reason') or 'Zastaveno'} – zastavení nepotvrzeno, "
+                                            f"ventil zavřel jeho časovač")
+                        await self.refill_stop(nid, r["stop_reason"], call_api=False)
+                    else:
+                        await self.refill_stop(nid, "Časovač vypršel (cíl nepotvrzen měřením)", call_api=False,
+                                               timed_out=True)
+                elif r.get("stop_retry"):
+                    await self.refill_stop(nid, r.get("stop_reason") or "Opakované zastavení ventilu")
+                elif self.data_age(nid) > FRESH_S:
+                    await self.refill_stop(nid, "Bezpečnostní zastavení – výpadek dat z čidla")
+            except Exception:
+                log.exception("refill tick failed for node %04X", nid)
 
     # ======================================================== clock repair
     def time_tick(self) -> None:
@@ -1238,10 +1419,8 @@ class Core:
         self.nodes.reload()
         self.aggregate_hours(since=0)
         for nid in self.nodes.ids():
-            n = self.nodes.get(nid)
             self._restore_node(nid)
-            self._last_ctr[nid] = max(self._last_ctr.get(nid, -1), self.db.scalar(
-                "SELECT MAX(seq) FROM measurements WHERE node_id=? AND ts >= ?", (nid, n.get("paired_at") or 0), -1))
+            self._last_ctr[nid] = max(self._last_ctr.get(nid, -1), self._stored_ctr(nid))
         self.invalidate()
         return stats
 
