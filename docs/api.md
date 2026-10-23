@@ -39,7 +39,9 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | POST | `/api/calibration/point?node=` | admin | `actual_cm` – kalibrační bod z aktuálního napětí sondy |
 | POST | `/api/calibration/recompute?node=` | admin | přepočet historie (kalibrace + vyhlazení) |
 | POST | `/api/calibration/battery?node=` | admin | `actual_v` – korekce měření baterie |
-| POST | `/api/refill/start?node=` · `/api/refill/stop?node=` | admin | `target_pct` – dopouštění dané nádrže |
+| POST | `/api/refill/start?node=` | admin | `target_pct` – spustí dopouštění; bez čerstvé platné hladiny se požadavek uloží a spustí s příštím měřením (`refill.waiting_for_data`, max. 15 min) |
+| POST | `/api/refill/stop?node=` | admin | zastaví / zruší: běžící dopouštění, čekající ruční požadavek i čekání na déšť; zrušené automatické dopouštění pozastaví automatiku na 24 h (`refill.auto_paused_until`) |
+| POST | `/api/refill/resume?node=` | admin | znovu zapne automatiku pozastavenou zrušením |
 | GET | `/api/nodes` · POST `/api/nodes/remove` · `/api/nodes/unpair/cancel` | admin | čidla, slyšená čidla, stav párování, statistiky rádia; `remove` = odpárování s potvrzením čidlem, `{"force": true}` = smazat hned |
 | GET | `/api/pairing` · POST `/api/pairing/start` · `/api/pairing/cancel` | admin | párování (`node_id` hex, `name`) |
 | GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů |

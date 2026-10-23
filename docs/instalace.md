@@ -119,6 +119,7 @@ cat release.key                                                     # zkopírova
 Repozitář musí být **veřejný** (hub se ptá GitHubu bez přihlášení).
 
 ### 5.2 Vydání nové verze
+Podrobný postup (číslování, kontrola, ověření): [vydani.md](vydani.md). Ve zkratce:
 ```bash
 # 1) zvýšit verzi v server/retencka/__init__.py, např. __version__ = "1.0.1"
 git commit -am "Verze 1.0.1"
@@ -164,7 +165,8 @@ v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administ
 | `stav` | všichni | hladina, litry, baterie, „vystačí ~N dní“, dopouštění (s tlačítky) |
 | `graf` | všichni | obrázek hladiny za 7 dní (dopouštění zeleně, déšť modře) |
 | `upozorneni zap` / `vyp` | všichni | upozornění pro tento chat |
-| `dopustit [nádrž] [%]`, `stop [nádrž]` | admin | dopouštění na dálku |
+| `dopustit [nádrž] [%]`, `stop [nádrž]` | admin | dopouštění na dálku; `stop` zruší i čekající nebo automatické dopouštění |
+| `obnovit [nádrž]` | admin | znovu zapne automatiku pozastavenou zrušením |
 | `diag`, `log` | admin | diagnostika (signál, ztráty, rušení, baterie, místo, verze), poslední záznamy |
 | `restart`, `reboot`, `aktualizovat` | admin | restart aplikace / zařízení, kontrola aktualizací (s potvrzením) |
 | `servis zap` / `trvale` / `vyp` | admin | vzdálený servisní přístup (NetBird, viz níže) |

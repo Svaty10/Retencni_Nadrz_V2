@@ -141,6 +141,9 @@ stateDiagram-v2
     VNormě --> ČekáNaMěření: ruční start bez čerstvé platné hladiny
     ČekáNaMěření --> Dopouští: přišlo platné měření (do 15 min)
     ČekáNaMěření --> VNormě: 15 min bez platné hladiny / ruční stop
+    ČekáNaDéšť --> ZrušenoUživatelem: Zastavit / zrušit
+    Dopouští --> ZrušenoUživatelem: Zastavit / zrušit (automatické)
+    ZrušenoUživatelem --> VNormě: po 24 h / Obnovit automatiku
     ČekáNaDéšť --> VNormě: déšť nádrž doplnil
     ČekáNaDéšť --> Dopouští: pokles o > max_drop, déšť nepřišel do termínu,<br/>předpověď už nestačí, hladina hluboko pod prahem
     Dopouští --> VNormě: dosažen cíl / ruční stop / vypršel časovač / chybí data 15 min
@@ -161,9 +164,13 @@ stateDiagram-v2
   měření“) a spustí se s příštím platným měřením, nejdéle do 15 min, jinak propadne (záznam + upozornění).
 - Nepotvrzené zastavení ventilu se opakuje každých 30 s; 24h pozastavení kvůli poruše jen když dopouštění
   doběhlo do konce časovače a hladina (platná) nestoupla.
+- Zrušení (`Core.refill_cancel`, tlačítko *Zastavit / zrušit*, Telegram `stop`) funguje kdykoli: čekající
+  ruční požadavek se zahodí, běžící dopouštění zastaví; u automatiky (běžící i čekání na déšť) se navíc
+  automatika té nádrže pozastaví na 24 h (uloženo v DB, přežije restart), jinak by ji spustilo hned další
+  měření. *Obnovit automatiku* / Telegram `obnovit` pozastavení zruší.
 - `refill_tick` (každých 30 s): pojistky časovače a výpadku dat, propadnutí čekajících požadavků.
 
-### 3.6 Databáze (`db.py`, migrace v1–v5)
+### 3.6 Databáze (`db.py`, migrace v1–v8)
 
 | Tabulka | Obsah |
 |---|---|

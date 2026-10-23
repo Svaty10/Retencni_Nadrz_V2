@@ -734,8 +734,14 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need("admin")
     async def api_refill_stop(request):
         nid = node_of(request)
-        ok, msg = await core.refill_stop(nid, "Manuálně zastaveno", *user_of(request))
+        ok, msg = await core.refill_cancel(nid, "Manuálně zastaveno", *user_of(request))
         return jresp({"ok": ok, "message": msg, "refill": core.refill_info(nid)}, 200 if ok else 502)
+
+    @need("admin")
+    async def api_refill_resume(request):
+        nid = node_of(request)
+        ok, msg = core.refill_resume_auto(nid, *user_of(request))
+        return jresp({"ok": ok, "message": msg, "refill": core.refill_info(nid)}, 200 if ok else 409)
 
     # ----------------------------------------------------------------- users
     @need("admin")
@@ -1046,6 +1052,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/calibration/battery", api_battery_cal)
     r.add_post("/api/refill/start", api_refill_start)
     r.add_post("/api/refill/stop", api_refill_stop)
+    r.add_post("/api/refill/resume", api_refill_resume)
     r.add_get("/api/nodes", api_nodes)
     r.add_get("/api/pairing", api_pairing)
     r.add_post("/api/pairing/start", api_pairing_start)

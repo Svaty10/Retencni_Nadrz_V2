@@ -31,6 +31,8 @@ FRESH_S = 15 * 60                 # data younger than this may drive the valve
 REFILL_WAIT_S = 15 * 60           # manual refill without valid data waits this long for a measurement
 AUTO_COOLDOWN_S = 30 * 60
 NO_RISE_LOCK_S = 24 * 3600
+AUTO_CANCEL_S = 24 * 3600         # user cancelled an automatic refill -> automation paused this long
+AUTO_PAUSE_KEY = "auto_refill_pause"   # settings row: {node_id: until} (survives a restart)
 
 
 PAIR_TARGET_S = 15 * 60
@@ -97,6 +99,7 @@ class Core:
         self.refill_notes: dict[int, str] = {}
         self.refill_wait: dict[int, dict] = {}     # node_id -> manual refill waiting for fresh data
         self._auto_block_until: dict[int, float] = {}
+        self._auto_pause: dict[int, float] = self._load_auto_pause()   # cancelled by the user
         self._rain_wait: dict[int, dict] = {}       # node_id -> {start_pct, since, deadline}
         # start/stop of any valve one at a time: the "already running" checks and the
         # bookkeeping must not interleave with a pending Hydrawise call (double start)
@@ -818,6 +821,8 @@ class Core:
                 "max_pct": node["max_refill_pct"], "auto": node["auto_refill_enabled"],
                 "waiting_for_rain": nid in self._rain_wait,
                 "waiting_for_data": nid in self.refill_wait,
+                "auto_paused_until": (int(self._auto_pause[nid])
+                                      if self._auto_pause.get(nid, 0) > time.time() else None),
                 "flow_lpm": node.get("real_flow_rate_lpm") or node["flow_rate_lpm"]}
         if r:
             info.update(mode=r["mode"], target_pct=r["target_pct"],
@@ -885,6 +890,62 @@ class Core:
                    f"průtok {flow:.1f} L/min", user, ip)
         self.invalidate()
         return True, f"Dopouštění spuštěno (cíl {target_pct:.0f} %, nejdéle {seconds // 60} min)."
+
+    # ---------------------------------------------- user cancel / resume
+    def _load_auto_pause(self) -> dict[int, float]:
+        try:
+            raw = json.loads(self.db.scalar("SELECT value FROM settings WHERE key=?", (AUTO_PAUSE_KEY,), "{}"))
+            now = time.time()
+            return {int(k): float(v) for k, v in raw.items() if float(v) > now}
+        except Exception:
+            return {}
+
+    def _save_auto_pause(self) -> None:
+        try:
+            self.db.execute("INSERT INTO settings(key, value) VALUES(?, ?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                            (AUTO_PAUSE_KEY, json.dumps({str(k): v for k, v in self._auto_pause.items()})))
+        except Exception:
+            log.exception("could not persist the automatic refill pause")
+
+    def _pause_auto(self, nid: int, user: str, ip: str, what: str) -> str:
+        until = time.time() + AUTO_CANCEL_S
+        self._auto_pause[nid] = until
+        self._save_auto_pause()
+        name = (self.nodes.get(nid) or {}).get("name", f"{nid:04X}")
+        hhmm = time.strftime("%d.%m. %H:%M", time.localtime(until))
+        self.audit("AUTO_REFILL", f"{name}: {what} – automatika pozastavena do {hhmm}", user, ip)
+        self.refill_notes[nid] = f"Automatické dopouštění zrušeno – pozastaveno do {hhmm}"
+        self.invalidate()
+        return f"Automatika je pozastavena do {hhmm} (lze obnovit)."
+
+    async def refill_cancel(self, nid: int, reason: str, user: str, ip: str = "") -> tuple[bool, str]:
+        """User's Stop button / Telegram 'stop': cancels whatever is pending or running.
+        Waiting manual request -> dropped; running refill -> valve stopped; automatic
+        refill (running or waiting for rain) -> also pauses the automation for this
+        tank for AUTO_CANCEL_S, otherwise it would start again with the next measurement."""
+        r = self.refills.get(nid)
+        if r is not None:
+            ok, msg = await self.refill_stop(nid, reason, user, ip)
+            if r["mode"] == "auto":
+                msg = f"{msg} {self._pause_auto(nid, user, ip, 'automatické dopouštění zrušeno')}"
+            return ok, msg
+        if nid in self.refill_wait:
+            return await self.refill_stop(nid, reason, user, ip)
+        if self._rain_wait.pop(nid, None) is not None:
+            return True, ("Čekání na déšť zrušeno. "
+                          + self._pause_auto(nid, user, ip, "čekající automatické dopouštění zrušeno"))
+        return await self.refill_stop(nid, reason, user, ip)    # nothing pending: make sure the valve is closed
+
+    def refill_resume_auto(self, nid: int, user: str, ip: str = "") -> tuple[bool, str]:
+        if self._auto_pause.pop(nid, None) is None:
+            return False, "Automatika není pozastavená uživatelem."
+        self._save_auto_pause()
+        name = (self.nodes.get(nid) or {}).get("name", f"{nid:04X}")
+        self.audit("AUTO_REFILL", f"{name}: automatika znovu zapnuta", user, ip)
+        self.refill_notes[nid] = "V normě"
+        self.invalidate()
+        return True, "Automatické dopouštění znovu zapnuto (rozhodne příští měření)."
 
     async def refill_stop(self, nid: int, reason: str, user: str = "system", ip: str = "",
                           call_api: bool = True, timed_out: bool = False) -> tuple[bool, str]:
@@ -987,6 +1048,12 @@ class Core:
                                             f"dopouštění nebylo potřeba")
                 self.refill_notes[nid] = "V normě"
                 return
+            paused = self._auto_pause.get(nid, 0)
+            if paused and time.time() >= paused:
+                self._auto_pause.pop(nid, None)
+                self._save_auto_pause()
+            elif paused:
+                return                               # cancelled by the user (note already set)
             if time.time() < self._auto_block_until.get(nid, 0):
                 self.refill_notes[nid] = "Automatické dopouštění dočasně pozastaveno"
                 return

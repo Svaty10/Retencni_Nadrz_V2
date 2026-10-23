@@ -643,6 +643,7 @@
         $('zoneNote').textContent = zc ? `Tento ventil ovládá nádrž „${zc.name}“.` : '';
         $('refillBox').classList.toggle('ok', !!rf.active);
         $('refillActions').classList.toggle('hidden', !(ME.role === 'admin' && rf.configured));
+        $('refillResumeBtn').classList.toggle('hidden', !rf.auto_paused_until);
         $('manualPctInput').max = rf.max_pct || 100;
         runRefillTimer();
 
@@ -784,6 +785,9 @@
             const v = parseFloat($('manualPctInput').value);
             if (!v || v <= 0) { toast('Zadejte platné procento cílové hladiny.', true); return; }
             action(() => api('POST', '/api/refill/start?node=' + CURRENT_NODE, { target_pct: v }), (r) => r.message).then(pollState);
+        });
+        $('refillResumeBtn').addEventListener('click', () => {
+            action(() => api('POST', '/api/refill/resume?node=' + CURRENT_NODE, {}), (r) => r.message).then(pollState);
         });
         $('refillStopBtn').addEventListener('click', () => {
             action(() => api('POST', '/api/refill/stop?node=' + CURRENT_NODE, {}), (r) => r.message).then(pollState);

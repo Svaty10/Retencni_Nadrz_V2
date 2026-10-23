@@ -42,7 +42,8 @@ COMMANDS = [
     ("stav", "Stav všech nádrží"),
     ("graf", "Graf hladiny za 7 dní"),
     ("dopustit", "Spustit dopouštění (např. dopustit 60)"),
-    ("stop", "Zastavit dopouštění"),
+    ("stop", "Zastavit / zrušit dopouštění"),
+    ("obnovit", "Znovu zapnout automatické dopouštění"),
     ("upozorneni", "Upozornění zap / vyp"),
     ("diag", "Servisní diagnostika"),
     ("pomoc", "Nápověda"),
@@ -286,7 +287,8 @@ class TelegramBot:
         lines = ["<b>Příkazy</b>", "stav – stav nádrží", "graf – hladina za 7 dní",
                  "upozorneni zap / vyp – upozornění"]
         if admin:
-            lines += ["dopustit [nádrž] [%] – spustit dopouštění", "stop [nádrž] – zastavit dopouštění",
+            lines += ["dopustit [nádrž] [%] – spustit dopouštění", "stop [nádrž] – zastavit / zrušit dopouštění (i automatické)",
+                      "obnovit [nádrž] – znovu zapnout zrušenou automatiku",
                       "", "<b>Servis</b>", "diag – diagnostika", "log – poslední záznamy",
                       "restart – restart aplikace", "reboot – restart zařízení",
                       "aktualizovat – zkontrolovat aktualizace",
@@ -351,8 +353,16 @@ class TelegramBot:
             if node is None:
                 await self.send(cid, "Žádná nádrž.")
                 return
-            ok, msg = await self.core.refill_stop(nid, "Zastaveno z Telegramu", who)
+            ok, msg = await self.core.refill_cancel(nid, "Zastaveno z Telegramu", who)
             await self.send(cid, ("⏹ " if ok else "⚠️ ") + f"<b>{html.escape(node['name'])}</b>: {html.escape(msg)}")
+        elif cmd == "obnovit":
+            nid, _ = self._resolve(args)
+            node = self.core.nodes.get(nid) if nid is not None else None
+            if node is None:
+                await self.send(cid, "Žádná nádrž.")
+                return
+            ok, msg = self.core.refill_resume_auto(nid, who)
+            await self.send(cid, ("▶️ " if ok else "⚠️ ") + f"<b>{html.escape(node['name'])}</b>: {html.escape(msg)}")
         elif cmd == "diag":
             await self.send(cid, self._diag())
         elif cmd == "log":

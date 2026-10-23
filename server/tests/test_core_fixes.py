@@ -313,6 +313,52 @@ class RefillFaultTest(RefillBase):
         self.assertEqual(self.calls, [])
 
 
+class RefillCancelTest(RefillBase):
+    def test_cancel_running_auto_pauses_automation(self):
+        ok, msg = self.run_(self.core.refill_start(0x5555, 50, "auto", "system"))
+        self.assertTrue(ok, msg)
+        ok, msg = self.run_(self.core.refill_cancel(0x5555, "Ručně", "admin"))
+        self.assertTrue(ok, msg)
+        self.assertNotIn(0x5555, self.core.refills)
+        self.assertIn("stop", self.calls)
+        self.assertIsNotNone(self.core.refill_info(0x5555)["auto_paused_until"])
+        # the next measurement must not start it again
+        self.core._auto_block_until.clear()
+        self.calls.clear()
+        self.run_(self.core._refill_on_measurement(0x5555))
+        self.assertNotIn(0x5555, self.core.refills)
+        self.assertEqual(self.calls, [])
+        # pause survives a restart, resume lifts it
+        c2 = self.new_core()
+        self.assertIn(0x5555, c2._auto_pause)
+        ok, _ = c2.refill_resume_auto(0x5555, "admin")
+        self.assertTrue(ok)
+        self.assertIsNone(c2.refill_info(0x5555)["auto_paused_until"])
+        self.assertNotIn(0x5555, self.new_core()._auto_pause)
+
+    def test_cancel_rain_wait(self):
+        self.core._rain_wait[0x5555] = {"start_pct": 10, "since": time.time(), "deadline": time.time() + 3600}
+        ok, msg = self.run_(self.core.refill_cancel(0x5555, "Ručně", "admin"))
+        self.assertTrue(ok, msg)
+        self.assertNotIn(0x5555, self.core._rain_wait)
+        self.assertIn(0x5555, self.core._auto_pause)
+        self.assertEqual(self.calls, [])                 # nothing ran, no valve call needed
+
+    def test_cancel_running_manual_does_not_pause_automation(self):
+        self.start()
+        ok, _ = self.run_(self.core.refill_cancel(0x5555, "Ručně", "admin"))
+        self.assertTrue(ok)
+        self.assertNotIn(0x5555, self.core._auto_pause)
+
+    def test_cancel_waiting_manual(self):
+        self.core.last[0x5555]["level_mm_stale"] = True
+        self.run_(self.core.refill_start(0x5555, 50, "manual", "a"))
+        ok, msg = self.run_(self.core.refill_cancel(0x5555, "Ručně", "admin"))
+        self.assertTrue(ok, msg)
+        self.assertNotIn(0x5555, self.core.refill_wait)
+        self.assertEqual(self.calls, [])
+
+
 class NotifyThreadTest(Base):
     def test_audit_from_worker_thread_reaches_loop(self):
         loop = asyncio.new_event_loop()
