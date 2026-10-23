@@ -14,13 +14,23 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
   <img src="docs/img/dashboard.webp" alt="Dashboard jedné nádrže" width="820">
 </p>
 
-```
- ┌──────────── šachta ───────────┐          ┌──────── dům ─────────────────────────────┐
- │ ATtiny1624 + SHT40 + sonda    │  433 MHz │ Pi Zero 2 W + CC1101                      │
- │ 3× Li-FeS2, ~12 µA průměr     │ ───────► │  :80   web (login, grafy)  ◄── Cloudflare │
- │ 23 B šifr. / 5 min (1 min při │          │  :8081 Home Assistant (LAN, token)        │
- │ rychlé změně hladiny)         │          │  Wi-Fi hotspot + portál, mDNS, OTA         │
- └───────────────────────────────┘          └──────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph S["Šachta"]
+        N["Čidlo ATtiny1624 + CC1101<br/>SHT40 + hydrostatická sonda<br/>3× AA, ~12 µA průměrně"]
+    end
+    subgraph D["Dům"]
+        H["Hub Raspberry Pi + CC1101"]
+        W[":80 web – dashboard, grafy"]
+        A[":8081 Home Assistant (LAN, token)"]
+        T["Wi-Fi hotspot + portál, mDNS,<br/>podepsané aktualizace"]
+        H --- W
+        H --- A
+        H --- T
+    end
+    N -- "433 MHz, AES-128<br/>23 B každých 5 min<br/>(1 min při změně hladiny)" --> H
+    C["Cloudflare Tunnel (volitelně)"] -.- W
+    H -. "Hunter Hydrawise" .-> V["Ventil dopouštění"]
 ```
 
 ## Co umí
