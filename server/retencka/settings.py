@@ -25,7 +25,8 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     # Telegram bot of this installation (token from @BotFather)
     "telegram_token":            ("", "str", 0, 100),
     # battery / node energy model (same hardware for all nodes)
-    "battery_capacity_mah":      (3000.0, "float", 100.0, 100000.0),
+    "battery_capacity_mah":      (3000.0, "float", 100.0, 100000.0),   # 3x AA Li-FeS2
+    "battery_capacity_alk_mah":  (2500.0, "float", 100.0, 100000.0),   # 3x AA alkaline
     "node_cycle_mAs":            (3.3, "float", 0.01, 100.0),
     "node_sleep_uA":             (1.5, "float", 0.0, 1000.0),
     "node_heat_mAs":             (66.0, "float", 0.0, 1000.0),   # one heating = 2 x 110 mW / 1 s
@@ -50,6 +51,7 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "notify_low_pct":     (15.0, "float", 0.0, 100.0),     # Telegram warning below this level (0 = off)
     "runoff_coef":        (0.8, "float", 0.05, 1.0),       # share of roof rain reaching the tank
     "battery_trim":       (1.0, "float", 0.8, 1.2),
+    "battery_type":       ("lifes2", "choice:lifes2,alkaline", None, None),   # discharge curve + capacity
     # refilling of THIS tank – provider "none" | "hydrawise" (more can be added later)
     "refill_provider":        ("none", "choice:none,hydrawise", None, None),
     "hydrawise_relay_id":     ("", "str", 0, 32),

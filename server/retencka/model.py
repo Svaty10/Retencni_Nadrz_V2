@@ -176,13 +176,23 @@ _LIFES2_CELL = [
     (1.45, 35.0), (1.48, 50.0), (1.52, 65.0), (1.57, 80.0), (1.63, 92.0), (1.70, 98.0),
     (1.78, 100.0),
 ]
+# Alkaline (LR6) cell at very light load: the voltage falls steadily over the whole
+# life (about 1.30 V/cell at half capacity), so a Li-FeS2 curve would report "low"
+# at half life. 1.0 V/cell is practically empty here too (the node's cut-off).
+_ALKALINE_CELL = [
+    (1.00, 0.0), (1.05, 2.0), (1.10, 5.0), (1.15, 10.0), (1.20, 20.0), (1.25, 35.0),
+    (1.30, 50.0), (1.35, 65.0), (1.40, 78.0), (1.45, 88.0), (1.50, 95.0), (1.55, 99.0),
+    (1.60, 100.0),
+]
+BATTERY_CURVES = {"lifes2": _LIFES2_CELL, "alkaline": _ALKALINE_CELL}
+BATTERY_SELF_DISCHARGE = {"lifes2": 0.02, "alkaline": 0.03}   # share of capacity per year
 BATTERY_LOW_PCT = 5.0
 BATTERY_CUTOFF_MV = 3000          # node switches itself off below this (uzel/include/config.h)
 
 
-def battery_percent(vbat_v: float, cells: int = 3) -> float:
+def battery_percent(vbat_v: float, cells: int = 3, kind: str = "lifes2") -> float:
     v = vbat_v / cells
-    pts = _LIFES2_CELL
+    pts = BATTERY_CURVES.get(kind, _LIFES2_CELL)
     if v <= pts[0][0]:
         return 0.0
     if v >= pts[-1][0]:
@@ -194,15 +204,16 @@ def battery_percent(vbat_v: float, cells: int = 3) -> float:
 
 
 def battery_days_left(percent: float, cycles_per_day: float, s: dict,
-                      heats_per_day: float = 0.0) -> Optional[float]:
+                      heats_per_day: float = 0.0, kind: str = "lifes2") -> Optional[float]:
     """Remaining runtime from an energy model (voltage trends of Li-FeS2 are useless).
     Uses the real measurement rate and the real heater use of the last days."""
-    nominal_mas = float(s["battery_capacity_mah"]) * 3600.0
+    cap_key = "battery_capacity_alk_mah" if kind == "alkaline" else "battery_capacity_mah"
+    nominal_mas = float(s.get(cap_key) or s["battery_capacity_mah"]) * 3600.0
     cap_mas = nominal_mas * percent / 100.0
     per_day = (cycles_per_day * float(s["node_cycle_mAs"])      # measure + transmit
                + heats_per_day * float(s.get("node_heat_mAs", 66.0))   # SHT40 heater
                + float(s["node_sleep_uA"]) * 86.4               # sleep current
-               + nominal_mas * 0.02 / 365.0)                     # self-discharge ~2 %/year
+               + nominal_mas * BATTERY_SELF_DISCHARGE.get(kind, 0.02) / 365.0)   # self-discharge
     if per_day <= 0:
         return None
     return cap_mas / per_day

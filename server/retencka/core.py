@@ -622,10 +622,11 @@ class Core:
         if not last or not node or last.get("vbat_mv") is None:
             return {"voltage": None, "percent": None, "low": False, "days_left": None, "off": False}
         v = last["vbat_mv"] / 1000.0 * float(node["battery_trim"])
-        pct = model.battery_percent(v)
+        kind = node.get("battery_type") or "lifes2"
+        pct = model.battery_percent(v, kind=kind)
         cpd = self.cached(f"cpd:{nid}", 3600, lambda: self._cycles_per_day(nid))
         heats = self.cached(f"heat:{nid}", 3600, lambda: self._heats_per_day(nid))
-        days = model.battery_days_left(pct, cpd, self.settings.all(), heats) if cpd else None
+        days = model.battery_days_left(pct, cpd, self.settings.all(), heats, kind) if cpd else None
         low = pct < model.BATTERY_LOW_PCT or bool(last["flags"] & model.FLAG_BAT_LOW)
         sag = last.get("vbat_sag_mv")
         # the node switches itself off below the cut-off (at rest or under TX load)
@@ -634,7 +635,7 @@ class Core:
         off = worst_mv < model.BATTERY_CUTOFF_MV and self.status(nid) != "online"
         return {"voltage": round(v, 3), "percent": round(pct, 1), "low": low or off,
                 "days_left": 0 if off else (None if days is None else round(days)), "off": off,
-                "sag_mv": sag, "heats_per_day": round(heats, 2)}
+                "sag_mv": sag, "heats_per_day": round(heats, 2), "type": kind}
 
     def _cycles_per_day(self, nid: int) -> float:
         since = int(time.time()) - 7 * 86400

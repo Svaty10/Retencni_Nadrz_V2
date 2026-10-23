@@ -125,7 +125,10 @@ async def main_async() -> None:
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, stop.set)
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:      # Windows (development only): Ctrl+C ends asyncio.run
+            pass
 
     sd_notify("READY=1\nSTATUS=running")
     wd_usec = int(os.environ.get("WATCHDOG_USEC", "0"))

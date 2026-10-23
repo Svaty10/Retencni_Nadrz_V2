@@ -116,7 +116,7 @@ sequenceDiagram
 | filtr | medián posledních 3 → změna < 2× mrtvé pásmo: EMA α = 0,3, jinak skok; **během dopouštění bez vyhlazení** (surová hodnota) | mm |
 | spotřeba / přítok | hystereze na vyhlazeném objemu s ½ mrtvého pásma (min. 5 L); stoupání při dopouštění = „refill“, jinak „rain“ | L |
 | přítok z deště | `srážky_mm · plocha_střechy_m² · odtokový_součinitel` (1 mm na 1 m² = 1 L) | L |
-| baterie % | křivka Li-FeS2 na článek (3 články), 1,0 V = 0 % | % |
+| baterie % | vybíjecí křivka na článek (3 články) podle typu baterie u čidla: Li-FeS2 (plochá, 1,48 V ≈ 50 %) nebo alkalická (klesá průběžně, 1,30 V ≈ 50 %); 1,0 V = 0 % | % |
 | výdrž baterie | `kapacita · % / (cykly/den · mAs/cyklus + µA_spánek · 86,4 + 2 %/rok samovybíjení)` | dny |
 | výhled | `objem / průměrná denní spotřeba (posledních ≤ 7 celých dní)` | dny |
 

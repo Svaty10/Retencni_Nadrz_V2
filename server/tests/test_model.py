@@ -85,6 +85,21 @@ class BatteryTest(unittest.TestCase):
         self.assertEqual(model.battery_percent(5.4), 100)
         self.assertEqual(model.battery_percent(2.9), 0)
 
+    def test_battery_alkaline(self):
+        # alkaline: half capacity at ~1.30 V/cell, where the Li-FeS2 curve would say "low"
+        self.assertAlmostEqual(model.battery_percent(3.9, kind="alkaline"), 50.0)
+        self.assertLess(model.battery_percent(3.9), model.BATTERY_LOW_PCT + 5)
+        self.assertEqual(model.battery_percent(4.8, kind="alkaline"), 100)
+        self.assertEqual(model.battery_percent(3.0, kind="alkaline"), 0)
+        vals = [model.battery_percent(v / 100, kind="alkaline") for v in range(280, 500, 5)]
+        self.assertEqual(vals, sorted(vals))
+        s = {"battery_capacity_mah": 3000.0, "battery_capacity_alk_mah": 2500.0, "node_cycle_mAs": 3.3,
+             "node_sleep_uA": 1.5}
+        li = model.battery_days_left(100, 288, s)
+        alk = model.battery_days_left(100, 288, s, kind="alkaline")
+        self.assertGreater(alk, 365)                    # a year easily
+        self.assertLess(alk, li)                        # smaller capacity, more self-discharge
+
 
 class InflowTest(unittest.TestCase):
     def test_rain_interval(self):

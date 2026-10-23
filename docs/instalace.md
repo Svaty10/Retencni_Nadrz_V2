@@ -59,6 +59,11 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
 
 ### Výměna baterie čidla
+Do čidla patří 3× AA. Doporučené jsou **lithiové Li-FeS2** (Energizer Ultimate Lithium): 10+ let,
+nevytékají, snesou mráz. Jdou i **alkalické** (vydrží několik let) – pak u čidla nastavte
+*Nastavení → nádrž → Baterie v čidle → Alkalické*, jinak hub ukazuje špatná procenta a hlásí slabou
+baterii už v polovině životnosti. Alkalické vyměňte včas, vybité mohou vytéct.
+
 Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem; **nic potvrzovat nemusíte**.
 Totéž platí po nahrání nového firmwaru: klíč je v EEPROM, kterou nahrávání nepřepisuje (fuse `EESAVE`),
 takže čidlo zůstane spárované se svým hubem.
