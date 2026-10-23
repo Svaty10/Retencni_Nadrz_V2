@@ -51,7 +51,8 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 SystemCallArchitectures=native
 DevicePolicy=closed
-DeviceAllow=char-spidev rw
+# spidev registers its char major as "spi" (/proc/devices), not "spidev"
+DeviceAllow=char-spi rw
 DeviceAllow=char-gpiochip rw
 UMask=0027
 

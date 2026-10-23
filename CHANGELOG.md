@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.2.1] - 2026-10-23
+
+### Opraveno
+- **Hub nepřijímal data z čidel** („Přijímač: nedostupný“): služba neměla přístup k SPI rádia – povolení zařízení `DeviceAllow` uvádělo třídu `spidev`, ovladač se ale hlásí jako `spi` (chyba od 1.0.0).
+
 ## [1.2.0] - 2026-10-23
 
 ### Přidáno
