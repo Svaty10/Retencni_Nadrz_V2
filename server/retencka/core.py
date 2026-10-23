@@ -314,18 +314,22 @@ class Core:
         return self.nodes.primary()
 
     def _migrate_v2(self) -> None:
-        """Move the single-node settings of the first v3 build into the nodes table."""
-        if self.nodes.ids():
-            return
+        """Move the single-node settings of the first v3 build into the nodes table.
+
+        One-time: the legacy key is deleted afterwards (and whenever nodes already exist),
+        otherwise a sensor the user removed would come back on the next start."""
         old = {r["key"]: json.loads(r["value"]) for r in self.db.query("SELECT key, value FROM settings")}
         paired = old.get("paired_node_id")
         if paired is None:
             return
-        cfg = {k: old[k] for k in NODE_SCHEMA if k in old}
-        try:
-            self.nodes.add(int(paired), "Retenční nádrž", cfg)
-        except Exception:
-            log.exception("migration of the paired node failed")
+        if not self.nodes.ids():
+            cfg = {k: old[k] for k in NODE_SCHEMA if k in old}
+            try:
+                self.nodes.add(int(paired), "Retenční nádrž", cfg)
+            except Exception:
+                log.exception("migration of the paired node failed")
+                return
+        self.db.execute("DELETE FROM settings WHERE key='paired_node_id'")
 
     def _restore(self) -> None:
         for nid in self.nodes.ids():

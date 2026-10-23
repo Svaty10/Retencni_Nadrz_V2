@@ -70,6 +70,16 @@ class Base(unittest.TestCase):
 
 
 class PairingTest(Base):
+    def test_removed_node_does_not_come_back_from_legacy_key(self):
+        # first single-node build left "paired_node_id" in settings
+        self.core.db.execute("INSERT INTO settings(key, value) VALUES('paired_node_id', ?)", (str(0xBF1C),))
+        c2 = self.new_core()
+        self.assertIsNotNone(c2.nodes.get(0xBF1C))          # migrated once
+        c2.forget_node(0xBF1C, "NODE_REMOVED", "test")
+        c3 = self.new_core()                                 # restart / update
+        self.assertIsNone(c3.nodes.get(0xBF1C))
+        self.assertIsNone(c3.db.scalar("SELECT value FROM settings WHERE key='paired_node_id'"))
+
     def test_pairing_needs_confirmation(self):
         # empty hub: neither the own nor a foreign sensor attaches itself
         self.assertIsNone(Node(self.core, 0x1234).try_pair())

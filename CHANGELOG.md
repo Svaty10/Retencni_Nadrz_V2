@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.2.3] - 2026-10-23
+
+### Opraveno
+- **Smazané čidlo se po restartu nebo aktualizaci vracelo** jako „Retenční nádrž“: migrace z první jednonádržové verze se spouštěla při každém startu s prázdným seznamem čidel. Proběhne teď jen jednou a starý údaj `paired_node_id` se smaže. (Nešlo o automatické párování – nové čidlo se bez potvrzení nespáruje.)
+
 ## [1.2.2] - 2026-10-23
 
 ### Opraveno
