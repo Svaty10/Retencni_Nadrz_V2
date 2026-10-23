@@ -52,8 +52,9 @@ Na desce čidla hledejte plošky / konektor **UPDI – GND**; pokud nejsou, je U
 **Proč odpor (nebo dioda) nesmí chybět:** Arduino posílá signál s napětím 5 V, čidlo pracuje s 3,3 V.
 Bez omezení by napětí protékalo vstupem čipu do celého čidla (CC1101 a SHT40 snesou nejvýš 3,6 V).
 Odpor proud omezí na neškodných ~0,2 mA, dioda 5 V nepustí vůbec.
-**Čidlo mějte při programování napájené z baterie** (připojit baterii dřív než drát UPDI, odpojit
-UPDI dřív než baterii) – nenapájené čidlo by Arduino přes vstup UPDI částečně napájelo.
+**Čidlo mějte při programování napájené** – z Arduina Una (3,3 V, možnost B v bodě 3) nebo z baterie:
+napájení připojit dřív než drát UPDI a odpojit UPDI dřív než napájení. Nenapájené čidlo by Arduino
+přes vstup UPDI částečně napájelo.
 
 ## 3. Napájení čidla – vyberte JEDNU možnost (nikdy obě najednou)
 

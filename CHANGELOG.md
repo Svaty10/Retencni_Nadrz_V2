@@ -13,7 +13,7 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
 ### Změněno
 - Karty v Nastavení se skládají do sloupců podle výšky a končí v jedné rovině.
-- Návod k programování čidla: odpor 4,7 kΩ, čidlo napájené z baterie (baterii připojit před drátem UPDI).
+- Návod k programování čidla: odpor 4,7 kΩ, čidlo při programování napájené z Arduina Una (3,3 V) nebo z baterie – napájení připojit před drátem UPDI.
 
 ## [1.1.2] - 2026-10-23
 
