@@ -37,8 +37,18 @@ napevno na pinech 0/1 a ty signál na UPDI nepustí. Nevíte-li, zkuste A; skrip
 - 4,7 kΩ na straně čidla drží linku v klidu na 3,3 V **z napájení čidla**, 10 kΩ na straně Arduina
   dělá totéž pro vstup Arduina (5 V, ale za diodou – do čidla neprojde).
 
-Nouzově (bez diody): jen odpor 4,7 kΩ mezi pin 6 a UPDI. Funguje, ale čidlo **musí být napájené**
-– jinak ho Arduino přes vstup UPDI částečně napájí (viz níže).
+**Jen s odpory (bez diody)** – nouzové zapojení, dva odpory 4,7 kΩ:
+```
+ pin 6 ──────[ 4,7 kΩ ]────────────────────────────────── UPDI  (pin 10)
+                               VCC čidla ──[ 4,7 kΩ ]──── GND čidla   (zátěž jen na dobu programování)
+ GND ──────────────────────────────────────────────────── GND   (pin 14)
+```
+1. Nejdřív GND, pak **napájení čidla** (baterie), teprve potom drát UPDI.
+2. Zátěž 4,7 kΩ mezi 3,3 V a GND čidla (např. na kontaktech kondenzátoru u regulátoru) spotřebuje
+   ~0,7 mA – víc, než kolik proteče z Arduina přes UPDI (~0,2 mA), takže napětí v čidle nemůže stoupnout
+   nad 3,3 V ani mezi programováním, kdy čip spí.
+3. Po nahrání **nejdřív odpojit drát UPDI**, pak zátěž a baterii. Drát UPDI nikdy nepřipojujte
+   k nenapájenému čidlu – tam to bez diody ochránit nejde.
 
 ### A) Arduino jako převodník – piny 0 a 1 (originální Uno s čipem 16U2, převodníky)
 
