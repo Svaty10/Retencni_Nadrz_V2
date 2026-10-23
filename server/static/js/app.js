@@ -1356,9 +1356,9 @@
         });
     }
 
-    async function startPairing(id, name) {
+    async function startPairing(id, name, msg) {
         const r = await action(() => api('POST', '/api/pairing/start', { node_id: id, name: name || '' }),
-            'Čekám na čidlo…');
+            msg || 'Čekám na čidlo…');
         if (r) await refreshNodes();
         return !!r;
     }
@@ -1399,7 +1399,7 @@
             if (n.unpairing) {
                 btn('Zrušit', 'btn-outline', () => action(() => api('POST', '/api/nodes/unpair/cancel', { node_id: n.id }), 'Odpárování zrušeno.').then(done));
                 btn('Odebrat bez čidla', 'btn-danger', () => {
-                    if (!confirm(`Odebrat čidlo ${n.id} bez potvrzení?\nJen pro ztracené nebo zničené čidlo – pokud se najde, bude nutné ho přeprogramovat.`)) return;
+                    if (!confirm(`Odebrat čidlo ${n.id} bez potvrzení?\nJen pro ztracené nebo zničené čidlo. Hub si jeho klíč uschová – když se čidlo najde, stačí u něj v „Čidla v dosahu“ kliknout „Spárovat znovu“ a vyjmout a vložit baterii.`)) return;
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id, force: true }), 'Čidlo odebráno.').then(done);
                 });
             } else {
@@ -1422,19 +1422,25 @@
         }
         pr.forEach((q) => {
             const tr = document.createElement('tr');
-            const foreign = q.node_paired && !q.known;   // paired to another hub – cannot be taken over
+            // paired, but not to this hub: another hub's sensor (cannot be taken over), or one
+            // removed here whose key the hub still keeps (archive) – that one can be re-paired
+            const foreign = q.node_paired && !q.known && !q.archived;
             const state = q.answered ? 'čekám na data'
                 : q.target ? 'páruji…'
                 : foreign ? 'patří jinému hubu'
-                : q.known ? (q.node_paired ? 'výměna baterie' : 'bez klíče')
+                : (q.node_paired && !q.known) ? 'odebrané čidlo (klíč v archivu)'
+                : q.known ? (q.node_paired ? 'výměna baterie' : 'čidlo ztratilo klíč')
                 : 'nové';
             tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${num(q.rssi, 0, ' dBm')}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td class="td-actions"></td>`;
             if (!q.target && !foreign) {
                 const b = document.createElement('button');
-                b.type = 'button'; b.className = 'btn btn-primary btn-sm'; b.textContent = q.known ? 'Znovu spárovat' : 'Spárovat';
+                b.type = 'button'; b.className = 'btn btn-primary btn-sm';
+                b.textContent = q.known ? 'Znovu spárovat' : (q.node_paired ? 'Spárovat znovu' : 'Spárovat');
                 b.addEventListener('click', () => {
                     let name = '';
-                    if (!q.known) {
+                    if (!q.known && q.node_paired) {
+                        if (!confirm(`Spárovat znovu čidlo ${q.id}? Hub ho uvolní uschovaným klíčem a dá mu nový.`)) return;
+                    } else if (!q.known) {
                         name = prompt(`Název pro čidlo ${q.id} (např. Jímka). Ověřte, že ID souhlasí se štítkem čidla:`, '');
                         if (name === null) return;
                     } else if (!confirm(`Znovu spárovat čidlo ${q.id}? Starý klíč se zruší a vygeneruje se nový.`)) return;
@@ -1442,6 +1448,17 @@
                 });
                 tr.lastElementChild.appendChild(b);
             }
+            pb.appendChild(tr);
+        });
+        ((d.pairing && d.pairing.pending) || []).filter((p) => !pr.some((q) => q.id === p.id)).forEach((p) => {
+            // PAIR_ACK sent, the first data did not arrive yet: accepted for up to 24 h
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td><code>${esc(p.id)}</code> ${esc(p.name || '')}</td><td>–</td><td>–</td>
+                <td>čekám na první data (${Math.max(1, Math.ceil(p.expires_in / 3600))} h)</td><td class="td-actions"></td>`;
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = 'Zrušit';
+            b.addEventListener('click', () => action(() => api('POST', '/api/pairing/cancel', { node_id: p.id })).then(refreshNodes));
+            tr.lastElementChild.appendChild(b);
             pb.appendChild(tr);
         });
         targets.filter((t) => !pr.some((q) => q.id === t.id)).forEach((t) => {
@@ -1458,12 +1475,30 @@
         const hb = $('heardBody');
         hb.textContent = '';
         if (!d.heard.length) {
-            hb.innerHTML = '<tr><td colspan="5" class="muted">Zatím nic nepřijato.</td></tr>';
+            hb.innerHTML = '<tr><td colspan="6" class="muted">Zatím nic nepřijato.</td></tr>';
         }
+        const targetIds = new Set(targets.map((t) => t.id));
         d.heard.forEach((h) => {
             const tr = document.createElement('tr');
+            const foreign = h.kind !== 'pair' && !h.added;
             tr.innerHTML = `<td><code>${esc(h.id)}</code>${h.added ? ico('check', 'ico-sm') : ''}</td><td>${num(h.rssi, 0, ' dBm')}</td>
-                <td>${fmtAgo(h.age_s)}</td><td>${esc(h.count)}</td><td class="muted small">${h.kind === 'pair' ? 'nabízí párování' : (h.added ? 'data' : 'cizí čidlo')}</td>`;
+                <td>${fmtAgo(h.age_s)}</td><td>${esc(h.count)}</td><td class="muted small">${h.kind === 'pair' ? 'nabízí párování' : (h.added ? 'data' : 'cizí čidlo')}</td><td class="td-actions"></td>`;
+            const cell = tr.lastElementChild;
+            if (foreign && targetIds.has(h.id)) {
+                cell.innerHTML = '<span class="muted small">Vyjměte a vložte do čidla baterii.</span>';
+            } else if (foreign && h.archived) {
+                // removed here (or its first data were lost): the hub still holds its key
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'btn btn-primary btn-sm'; b.textContent = 'Spárovat znovu';
+                b.title = h.key_match ? 'Čidlo vysílá s klíčem uschovaným v hubu' : 'Hub má uschovaný starší klíč tohoto ID';
+                b.addEventListener('click', () => {
+                    if (!confirm(`Spárovat znovu čidlo ${h.id}${h.archived_name ? ' (' + h.archived_name + ')' : ''}?\nPak do čidla vyjměte a vložte baterii – hub ho uvolní uschovaným klíčem a spáruje s novým.`)) return;
+                    startPairing(h.id, '', 'Vyjměte a vložte do čidla baterii.');
+                });
+                cell.appendChild(b);
+            } else if (foreign) {
+                cell.innerHTML = '<span class="muted small">Čidlo patří jinému hubu nebo bylo spárované před přeinstalací – smažte párování v čidle (4-smazat-parovani.cmd).</span>';
+            }
             hb.appendChild(tr);
         });
     }

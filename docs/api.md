@@ -43,8 +43,8 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | POST | `/api/refill/start?node=` | admin | `target_pct` – spustí dopouštění; bez čerstvé platné hladiny se požadavek uloží a spustí s příštím měřením (`refill.waiting_for_data`, max. 15 min) |
 | POST | `/api/refill/stop?node=` | admin | zastaví / zruší: běžící dopouštění, čekající ruční požadavek i čekání na déšť; zrušené automatické dopouštění pozastaví automatiku na 24 h (`refill.auto_paused_until`) |
 | POST | `/api/refill/resume?node=` | admin | znovu zapne automatiku pozastavenou zrušením |
-| GET | `/api/nodes` · POST `/api/nodes/remove` · `/api/nodes/unpair/cancel` | admin | čidla, slyšená čidla, stav párování, statistiky rádia; `remove` = odpárování s potvrzením čidlem, `{"force": true}` = smazat hned |
-| GET | `/api/pairing` · POST `/api/pairing/start` · `/api/pairing/cancel` | admin | párování (`node_id` hex, `name`) |
+| GET | `/api/nodes` · POST `/api/nodes/remove` · `/api/nodes/unpair/cancel` | admin | čidla, slyšená čidla (`archived` = hub má uschovaný klíč, `key_match` = čidlo s ním vysílá → „Spárovat znovu“), stav párování, statistiky rádia; `remove` = odpárování s potvrzením čidlem, `{"force": true}` = odebrat hned (klíč do archivu) |
+| GET | `/api/pairing` · POST `/api/pairing/start` · `/api/pairing/cancel` | admin | párování (`node_id` hex, `name`); stav: `requests` (+ `archived`), `targets`, `pending` (klíč odeslán, čeká na první data ≤ 24 h); `cancel` zruší i čekající klíč |
 | GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů |
 | GET | `/api/audit?page=&category=&who=&q=&from=&to=` | admin | log: `category` = login/users/settings/refill/sensors/system/problems, `who` = people/system/jméno, `q` = text |
 | GET | `/api/ha` · POST `/api/ha/rotate` | admin | token pro HA |

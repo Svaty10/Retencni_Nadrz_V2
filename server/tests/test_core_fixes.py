@@ -110,11 +110,13 @@ class PairingTest(Base):
         self.core.start_pairing(0x1234, "Nádrž", "admin")
         n = Node(self.core, 0x1234)
         self.assertEqual(n.try_pair(), "paired")
-        k = self.core._pending_keys[0x1234]
-        self.core._pending_keys[0x1234] = (k[0], k[1], time.time() - 1)   # window over
+        for e in self.core._pending_keys[0x1234]:
+            e["ts"] -= core_mod.PENDING_KEY_S + 1          # no DATA for a whole day
         n.send()
         self.assertIsNone(self.core.nodes.get(0x1234))
+        self.core.unpair_tick()
         self.assertNotIn(0x1234, self.core._pending_keys)
+        self.assertTrue(self.core.archive_info(0x1234)["archived"])   # kept for a later UNPAIR
 
 
 class UnpairTest(Base):

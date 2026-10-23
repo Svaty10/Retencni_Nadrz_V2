@@ -72,12 +72,15 @@ class NodeDefaults(unittest.TestCase):
         c = sqlite3.connect(self.path)
         c.execute("INSERT INTO nodes(node_id, name, config, created, sort) VALUES(?,?,?,?,?)",
                   (0xC, "Stará", json.dumps(full), int(time.time()), 2))
+        # back to a v8 database: undo the later migrations' schema changes (v10)
+        c.execute("DROP TABLE node_key_archive")
+        c.execute("ALTER TABLE nodes DROP COLUMN unpair_sent_at")
         c.execute("PRAGMA user_version=8")
         c.commit()
         c.close()
         self.db.close_thread()
-        db = Database(self.path)                                         # applies v9
-        self.assertEqual(db.scalar("PRAGMA user_version"), 9)
+        db = Database(self.path)                                         # applies v9 (and v10)
+        self.assertEqual(db.scalar("PRAGMA user_version"), 10)
         stored = json.loads(db.scalar("SELECT config FROM nodes WHERE node_id=?", (0xC,)))
         self.assertEqual({k for k in stored if k in INHERITABLE}, {"notify_low_pct", "rain_wait_enabled"})
         n = Nodes(db).get(0xC)

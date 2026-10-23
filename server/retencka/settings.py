@@ -225,7 +225,7 @@ class Nodes:
     def reload(self) -> None:
         defaults = self._load_defaults()
         nodes = {}
-        for r in self.db.query("SELECT node_id, name, config, sort, secret, paired_at, unpair_at FROM nodes ORDER BY sort, node_id"):
+        for r in self.db.query("SELECT node_id, name, config, sort, secret, paired_at, unpair_at, unpair_sent_at FROM nodes ORDER BY sort, node_id"):
             cfg = {k: v[0] for k, v in NODE_SCHEMA.items()}
             cfg.update(defaults)
             try:
@@ -242,6 +242,7 @@ class Nodes:
             cfg["paired_at"] = r["paired_at"]
             cfg["_secret"] = r["secret"]
             cfg["_unpair"] = r["unpair_at"]
+            cfg["_unpair_sent"] = r["unpair_sent_at"]
             nodes[r["node_id"]] = cfg
         with self._lock:
             self._cache = nodes
@@ -296,9 +297,16 @@ class Nodes:
         self.reload()
 
     def set_unpair(self, node_id: int, pending: bool) -> None:
-        """Mark the node for unpairing (hub ignores its data until the sensor confirms)."""
-        self.db.execute("UPDATE nodes SET unpair_at=? WHERE node_id=?",
+        """Mark the node for unpairing (hub ignores its data until the sensor confirms).
+        Either way a previously sent UNPAIR is forgotten (a new request starts over)."""
+        self.db.execute("UPDATE nodes SET unpair_at=?, unpair_sent_at=NULL WHERE node_id=?",
                         (int(time.time()) if pending else None, node_id))
+        self.reload()
+
+    def set_unpair_sent(self, node_id: int, ts: Optional[float]) -> None:
+        """Persist the time of the last UNPAIR sent to the sensor (survives a restart)."""
+        self.db.execute("UPDATE nodes SET unpair_sent_at=? WHERE node_id=?",
+                        (None if ts is None else int(ts), node_id))
         self.reload()
 
     def public(self, node_id: int) -> Optional[dict]:

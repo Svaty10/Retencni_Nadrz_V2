@@ -182,6 +182,29 @@ MIGRATIONS: list[str] = [
     UPDATE nodes SET config = json_remove(config, '$.max_refill_minutes') WHERE json_extract(config, '$.max_refill_minutes') = 120;
     UPDATE nodes SET config = json_remove(config, '$.flow_rate_lpm') WHERE json_extract(config, '$.flow_rate_lpm') = 41.6
     """,
+    # --- v10: robust pairing. Keys the hub gave up while the sensor may still hold
+    # them (removed sensor, pairing key never proven by DATA) are archived, so the hub
+    # can still release the sensor with a signed UNPAIR (no UPDI erase). reason:
+    # 'pending' = PAIR_ACK sent after the user's confirmation, accepted on the first
+    # DATA for core.PENDING_KEY_S after removed_at; 'removed' / 'unpaired' / 'expired' /
+    # 'cancelled' = archive only (never accepted for data). seen_at = last DATA frame
+    # authenticated with that key (the sensor really holds it).
+    # nodes.unpair_sent_at = last UNPAIR sent (unpairing survives a hub restart).
+    """
+    CREATE TABLE node_key_archive (
+        id         INTEGER PRIMARY KEY,
+        node_id    INTEGER NOT NULL,
+        k_enc      TEXT NOT NULL,
+        k_mac      TEXT NOT NULL,
+        removed_at INTEGER NOT NULL,
+        reason     TEXT NOT NULL,
+        name       TEXT,
+        username   TEXT,
+        seen_at    INTEGER
+    );
+    CREATE INDEX idx_key_archive_node ON node_key_archive(node_id);
+    ALTER TABLE nodes ADD COLUMN unpair_sent_at INTEGER;
+    """,
 ]
 
 

@@ -100,21 +100,29 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
    každou minutu, po prvním dni každých 5 min. Uživatel v hubu u daného ID klikne **Spárovat** (ověří
    ID se štítkem) → PAIR_ACK. Nový klíč začne na hubu platit po prvním ověřeném DATA rámci.
    Bez potvrzení uživatelem hub nepřijme žádnou nabídku (ani první čidlo při instalaci).
+   Když se první DATA ztratí, hub klíč z potvrzeného PAIR_ACK přijme ještě **24 h** (i po restartu),
+   pak ho přesune do archivu klíčů (bod 6).
 3. **Odpárování:** v hubu *Odpárovat* → hub okamžitě přestane přijímat data čidla (klíč si zatím nechá).
    Pořadí nevadí – kdykoli potom (nebo předtím, dokud běží 10min okno) se vloží baterie: čidlo pošle
    PAIR_REQ se stavem „spárováno“, hub odpoví UNPAIR, čidlo ověří podpis svým klíčem, klíč smaže a
    pošle PAIR_REQ „nespárováno“ = potvrzení → hub smaže klíč i čidlo (naměřená data zůstanou).
-   Bez potvrzení hub čeká libovolně dlouho, dá se zrušit.
+   Potvrzení platí jen po odeslaném UNPAIR (čas je uložen v DB, přežije restart hubu) a jen když se čidlo
+   do 20 s znovu neozve jako spárované. Bez potvrzení hub čeká libovolně dlouho, dá se zrušit.
 4. **Znovu spárovat** (nový klíč, stejný hub) = UNPAIR + PAIR_ACK v jednom okně; nastavení i historie zůstanou.
 5. **Výměna baterie** bez akce v hubu nic nemění – čidlo pokračuje se starým klíčem.
-6. **Ztracené / zničené čidlo:** *Odebrat bez čidla* smaže klíč hned. Kdyby se čidlo našlo, zůstane
-   zamčené na smazaný klíč – obnova jen smazáním EEPROM přes UPDI (`uzel/4-smazat-parovani.cmd`).
+6. **Ztracené / zničené čidlo:** *Odebrat bez čidla* čidlo hned odebere. Jeho klíč hub uschová v
+   **archivu klíčů** (`node_key_archive`): data s ním nikdy nepřijme, ale když se čidlo najde, v *Čidla v
+   dosahu* je u něj **Spárovat znovu** – po vložení baterie ho hub uvolní podepsaným UNPAIR archivním
+   klíčem a spáruje s novým (název se převezme). Do archivu jde klíč i po každém jiném odebrání čidla a
+   nepotvrzený klíč z párování (bod 2). Smazání EEPROM přes UPDI (`uzel/4-smazat-parovani.cmd`) je
+   potřeba jen u čidla, jehož klíč hub nemá: spárované s jiným hubem, nebo před přeinstalací hubu bez zálohy.
 7. **Ochrana proti přehrání UNPAIR:** podpis zahrnuje veřejný klíč z aktuálního PAIR_REQ, který čidlo
    generuje po každém zapnutí znovu – nahraný UNPAIR z dřívějška je neplatný.
 8. Výpočet X25519 trvá na ATtiny ~9 s (CPU dočasně na 10 MHz, jen když má baterie při startu ≥ 3,1 V – 10 MHz smí až od 2,7 V; jinak 5 MHz, ~18 s), jednou po vložení baterie. Entropie: šum ADC
    (teplotní čidlo), jitter mezi 32kHz a hlavním oscilátorem, sériové číslo, pool uložený v EEPROM.
-9. **Záloha:** klíče čidel jsou jen v DB hubu (`/var/lib/retencka`). Při ztrátě SD karty bez zálohy
-   zůstanou čidla zamčená (UPDI) – zálohovat DB.
+9. **Záloha:** klíče čidel (i archiv klíčů) jsou jen v DB hubu (`/var/lib/retencka`). Při ztrátě SD karty
+   bez zálohy zůstanou čidla zamčená (UPDI) – zálohovat DB.
+10. Stavy a všechny okrajové případy (ztracené rámce, restart hubu, cizí hub): `docs/architektura.md` 3.9.
 
 ### 1.7 Baterie
 - Pod 3,3 V flag BAT_LOW (varování, ~1 % kapacity). **Pod 3,0 V (1,0 V/článek, v klidu nebo při vysílání)** potvrzeno 3 hodinovými měřeními

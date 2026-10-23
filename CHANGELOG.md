@@ -3,6 +3,18 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.3.0] - 2026-10-23
+
+### Přidáno
+- **Archiv klíčů odebraných čidel:** čidlo odebrané z hubu (*Odebrat bez čidla*) jde znovu spárovat bez programátoru – v *Čidla v dosahu* tlačítko *Spárovat znovu*, hub čidlo uvolní podepsaným UNPAIR starým klíčem (stačí vložit baterii). Smazání EEPROM (`4-smazat-parovani.cmd`) je potřeba jen u hubu bez zálohy. Archiv je součástí zálohy.
+- Popis všech stavů párování a odpárování s koncovými situacemi v `docs/architektura.md` (3.9).
+
+### Opraveno
+- Ztracená první data po spárování: hub nový klíč drží 24 h (i přes restart) a čidlo se nestane „cizím“.
+- Restart hubu během odpárování: odpárování se dokončí (čas odeslání UNPAIR se ukládá); pozdní potvrzení z čidla se už nezahodí. Zrušení párování nezruší probíhající odpárování.
+- Čidlo, které ztratilo klíč (smazaná EEPROM), je v *Čidla v dosahu* označené „čidlo ztratilo klíč“ s *Znovu spárovat* – historie i nastavení zůstanou.
+- Každá situace párování / odpárování má test se simulovaným čidlem (`server/tests/test_pairing_scenarios.py`).
+
 ## [1.2.3] - 2026-10-23
 
 ### Opraveno

@@ -171,13 +171,14 @@ stateDiagram-v2
   měření. *Obnovit automatiku* / Telegram `obnovit` pozastavení zruší.
 - `refill_tick` (každých 30 s): pojistky časovače a výpadku dat, propadnutí čekajících požadavků.
 
-### 3.6 Databáze (`db.py`, migrace v1–v8)
+### 3.6 Databáze (`db.py`, migrace v1–v10)
 
 | Tabulka | Obsah |
 |---|---|
 | `measurements` | jedno měření = jeden řádek: `ts, node_id, seq, flags, vbat_mv, temp_x100, hum_x100, probe_100uv, level_mm, level_raw_mm, volume_l, rssi_x2, lqi, refilling, time_ok` |
 | `hourly` | hodinové agregace na čidlo (grafy nad 45 dní, zůstávají i po mazání podrobných dat) |
-| `nodes` | čidla: název, JSON konfigurace (geometrie, kalibrace, dopouštění), klíče, stav párování |
+| `nodes` | čidla: název, JSON konfigurace (geometrie, kalibrace, dopouštění), klíče, stav párování (`unpair_at`, `unpair_sent_at`), `last_ctr` |
+| `node_key_archive` | čekající klíče z párování a klíče odebraných čidel (jen pro podpis UNPAIR, viz 3.9) |
 | `settings` | globální nastavení (klíč → JSON) |
 | `refills` | každé dopouštění: start/konec, cíl, litry, plánovaný čas, výsledek |
 | `users`, `sessions` | účty (scrypt), session (hash tokenu, CSRF token) |
@@ -221,6 +222,45 @@ Převod parametrů z původního prototypu (Flask + ESP32):
 | `measurement_tolerance_pct` | `probe_accuracy_pct` × `probe_range_cm` | mrtvé pásmo podle datasheetu sondy |
 | `battery_multiplier` | `battery_trim` (±20 %) | dělič přepočítává už uzel |
 | `interval_*`, `night_*`, `wakeup_mode`, `sync_*`, `active_polling_interval_sec`, `warmup_window_sec`, `sensor_samples`, `esp_api_key`, `calibration_mode`, `update_mode` | — | relikty ESP32/Wi-Fi, nahrazeno rádiem a pevným časováním uzlu |
+
+### 3.9 Párování a odpárování – stavy a scénáře
+
+Klíče hubu k jednomu ID čidla (`core.py`):
+
+| Klíč | Kde | Přijímá data? | K čemu |
+|---|---|---|---|
+| aktuální | `nodes.secret` | ano | běžný provoz |
+| čekající (*pending*) | `node_key_archive`, `reason='pending'` + paměť | ano, první ověřený DATA ho potvrdí (`_commit_pairing`) | klíč z PAIR_ACK po potvrzení uživatelem; platí `PENDING_KEY_S` = 24 h i po zavření okna párování a přežije restart |
+| archivní | `node_key_archive` (`removed` / `unpaired` / `expired` / `cancelled`) | **nikdy** | jen podpis UNPAIR, aby šlo čidlo, které klíč ještě drží, uvolnit bez UPDI; `seen_at` = čidlo s ním ještě vysílá |
+
+Pravidla hubu:
+- PAIR_ACK jen pro ID potvrzené uživatelem (`start_pairing`, 15 min), nikdy automaticky.
+- UNPAIR jen na *spárovaný* PAIR_REQ a jen když uživatel o ID požádal (odpárování nebo párování).
+  Hub neví, který klíč čidlo drží (PAIR_REQ není podepsaný): střídá aktuální → klíč viděný v datech →
+  nejnovější čekající/archivní, jeden na každý dotaz (čidlo se ptá každých 5 s po 10 min).
+- Nespárovaný PAIR_REQ potvrzuje odpárování jen poté, co hub poslal UNPAIR (čas uložen v
+  `nodes.unpair_sent_at`, přežije restart). Klíč se smaže až po `UNPAIR_SETTLE_S` bez spárovaného
+  dotazu; i pak skončí v archivu, takže ani podvržené potvrzení čidlo nezamkne.
+- Při změně klíče (`_commit_pairing`) se anti-replay čítač vynuluje; nic jiného ho nemění (neověřené
+  rámce ani PAIR_REQ). Čekající i archivní klíče daného ID se smažou.
+
+| # | Situace | Čidlo | Hub | Výsledek / obnova |
+|---|---|---|---|---|
+| – | nové čidlo, uživatel potvrdí ID | nespárované: PAIR_REQ 5 s (10 min), pak 1 min, po dni 5 min | PAIR_ACK → klíč čekající; první DATA → aktuální | spárováno |
+| 1 | *Odebrat bez čidla* (`forget_node`), čidlo se najde | drží klíč, vysílá DATA | klíč v archivu, data nebere, v „Čidla v dosahu“ cizí čidlo + **Spárovat znovu** | Spárovat znovu + vyjmout/vložit baterii → UNPAIR archivním klíčem → PAIR_ACK → DATA; název z archivu |
+| 2 | ztracený první DATA po PAIR_ACK | spárované novým klíčem, vysílá DATA (60 s, pak 300 s) | klíč čekající 24 h (i po restartu) | první doručený DATA spáruje; po 24 h klíč do archivu → jako 1 |
+| 3 | restart hubu během odpárování | po UNPAIR nespárované, PAIR_REQ 5 s / 1 min | `unpair_sent_at` z DB | nespárovaný dotaz potvrdí, po 20 s odebráno |
+| 4 | čidlo ztratilo klíč (smazaná EEPROM, nový čip se stejným ID) | nespárovaný PAIR_REQ | ID známé, „čidlo ztratilo klíč“ + **Znovu spárovat**; bez potvrzení nic nemění | potvrzení → PAIR_ACK → DATA; název, nastavení i historie zůstanou |
+| 5 | odpárování, čidlo neodpoví (baterie, porucha) | – | data blokována | *Zrušit* (data zase platí) nebo *Odebrat bez čidla* (→ archiv, jako 1) |
+| 6 | znovu spárovat spárované čidlo | po vložení baterie spárovaný PAIR_REQ | UNPAIR aktuálním klíčem, pak PAIR_ACK; běžící odpárování se zruší, nečeká se na 20 s | ztracený UNPAIR / PAIR_ACK: čidlo se za 5 s zeptá znovu, odpověď je stejná (stejný klíč) |
+| 7 | na PAIR_ACK odpověděl dřív jiný hub | spárované s cizím hubem | data neověří (žádné čítače chyb, žádná upozornění), čekající klíč po 24 h do archivu bez `seen_at` | čidlo patří tomu hubu; tady jen „cizí čidlo“ |
+| 8 | výměna baterie jiného čidla během párování | spárovaný PAIR_REQ jiného ID | bez potvrzení toho ID žádná odpověď | nic se nemění |
+| 9 | podvržený DATA / PAIR_REQ | – | neověřený rámec nemění čítač ani klíče | – |
+| – | čidlo spárované s jiným hubem / před přeinstalací hubu bez zálohy | drží klíč, který hub nezná | cizí čidlo bez archivu: nápověda | jen smazání párování přes UPDI (`uzel/4-smazat-parovani.cmd`) |
+
+Zálohy: `node_key_archive` je v DB, takže je ve stažené záloze; import (`_merge`) archivní klíče přidá
+(čekající z cizí zálohy jen jako archivní – data s nimi nikdy neplatí). Starší záloha bez tabulky jde
+importovat beze změny.
 
 ## 4. Systémová vrstva (`system/`)
 

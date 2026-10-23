@@ -76,11 +76,22 @@ takže čidlo zůstane spárované se svým hubem.
 2. Vyndat a vložit do čidla baterii (může být i v opačném pořadí, do 10 minut). Čidlo smaže klíč a hub ho odebere.
 3. Čidlo teď nabízí párování – spárovat v novém hubu.
 
-Čidlo spárované s jiným hubem se v seznamu zobrazí jako „spárované s jiným hubem“ a převzít ho nelze.
-Ztracené čidlo: *Odebrat bez čidla*. **Zálohujte `/var/lib/retencka`** – bez klíčů v DB jdou čidla
-odemknout jen smazáním párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
-[programovani_uzlu.md](programovani_uzlu.md#smazání-párování-4-smazat-parovanicmd)). Hub takové čidlo
-ukazuje v *Čidla v dosahu* jako „cizí čidlo“.
+Čidlo spárované s jiným hubem se v seznamu zobrazí jako „patří jinému hubu“ a převzít ho nelze.
+
+Čidlo neodpovídá (vybitá baterie, porucha): u čidla *Zrušit* (data se zase přijímají) nebo
+*Odebrat bez čidla*. Odebrané čidlo si hub pamatuje (archiv klíčů): když se najde, ukáže se v
+*Čidla v dosahu* jako „cizí čidlo“ s tlačítkem **Spárovat znovu** – kliknout a do čidla vyjmout a
+vložit baterii; hub ho uvolní a spáruje znovu (bez UPDI). Stejně se obnoví čidlo, kterému se po
+spárování ztratila první data a hub je do 24 h neviděl.
+
+Čidlo, které hub opravdu nezná (patří jinému hubu, nebo bylo spárované před přeinstalací hubu bez
+zálohy), ukazuje *Čidla v dosahu* jako „cizí čidlo“ s nápovědou – odemknout ho jde jen smazáním
+párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
+[programovani_uzlu.md](programovani_uzlu.md#smazání-párování-4-smazat-parovanicmd)).
+**Zálohujte `/var/lib/retencka`** – záloha obsahuje klíče čidel i archiv klíčů.
+
+Čidlo ztratilo klíč (smazaná EEPROM, vyměněný čip se stejným ID): u jeho ID je „čidlo ztratilo klíč“ a
+**Znovu spárovat** – název, nastavení i historie zůstanou.
 
 ### Záloha a obnova
 - Hub dělá každou noc zálohu na kartu (7 dní zpět). Proti odumření karty: *Nastavení → Záloha →

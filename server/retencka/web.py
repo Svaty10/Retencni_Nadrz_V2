@@ -566,8 +566,14 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     async def api_nodes(request):
         now = int(time.time())
         configured = set(core.nodes.ids())
-        heard = [{"id": f"{h['node_id']:04X}", "rssi": h["rssi"], "age_s": now - h["ts"], "count": h["count"],
-                  "added": h["node_id"] in configured, "kind": h.get("kind")} for h in reversed(core.heard.values())]
+        heard = []
+        for h in reversed(list(core.heard.values())):
+            arch = core.archive_info(h["node_id"])
+            heard.append({"id": f"{h['node_id']:04X}", "rssi": h["rssi"], "age_s": now - h["ts"], "count": h["count"],
+                          "added": h["node_id"] in configured, "kind": h.get("kind"),
+                          # cizí čidlo: the hub still holds an old key of it -> can be re-paired
+                          "archived": arch["archived"], "key_match": bool(h.get("key_match")),
+                          "archived_name": arch["archived_name"]})
         radio = core.radio
         return jresp({
             "nodes": [node_public(n) for n in core.nodes.all()],
@@ -614,8 +620,9 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need("admin")
     async def api_nodes_remove(request):
         """Unpair a sensor. Default: two-step (the sensor must confirm after a battery
-        re-insertion). force=true deletes the key at once – for a lost or broken
-        sensor, which then stays locked to the forgotten key (re-flash via UPDI)."""
+        re-insertion). force=true removes the sensor at once – for a lost or broken
+        sensor; its key is archived, so if it turns up, pairing its ID again releases
+        it with a signed UNPAIR (no UPDI erase needed)."""
         data = await read_json(request)
         nid = parse_node_id(data.get("node_id"))
         node = core.nodes.get(nid)
