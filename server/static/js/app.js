@@ -636,7 +636,7 @@
 
         const rf = s.refill || {};
         refillEndsAt = rf.active ? rf.ends_at : null;
-        $('txtRefillStatus').textContent = rf.active ? 'Dopouští' : rf.waiting_for_rain ? 'Čeká na déšť' : 'Nedopouští';
+        $('txtRefillStatus').textContent = rf.active ? 'Dopouští' : rf.waiting_for_data ? 'Čeká na měření' : rf.waiting_for_rain ? 'Čeká na déšť' : 'Nedopouští';
         const zc = rf.zone_controlled_by;
         $('txtRefillTime').textContent = zc ? `Ventil ovládá nádrž „${zc.name}“` : (rf.status || '–');
         $('zoneNote').classList.toggle('hidden', !zc);

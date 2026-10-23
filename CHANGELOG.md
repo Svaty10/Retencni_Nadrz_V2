@@ -11,9 +11,9 @@ Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle 
 - Na konci souhrn (adresa, hotspot, heslo) a kontrola OK/CHYBA; opakovaná instalace bez okamžiku s neplatnou verzí, odmítne downgrade (`--force`), doplní nové klíče do `/etc/default/retencka`.
 
 ### Opravy – hub
-- Párování: automatické spárování prvního čidla jen jednou (odpárované čidlo ani cizí čidlo se do prázdného hubu samo nespáruje); podvržený požadavek nemůže dokončit odpárování; čekající klíče mají platnost.
+- Párování vždy jen po potvrzení uživatelem (zrušeno automatické spárování prvního čidla – cizí ani odpárované čidlo se k hubu samo nepřipojí); podvržený požadavek nemůže dokončit odpárování; čekající klíče mají platnost.
 - Ochrana proti přehrání: poslední čítač rámce se ukládá k čidlu (přežije restart i promazání dat).
-- Dopouštění: nepovedené zavření ventilu se opakuje; chyba u jedné nádrže nezastaví kontroly ostatních; porucha ventilu (24h blokace) jen po doběhnutí časovače; bez platné hladiny se dopouštění nespustí.
+- Dopouštění: nepovedené zavření ventilu se opakuje; chyba u jedné nádrže nezastaví kontroly ostatních; porucha ventilu (24h blokace) jen po doběhnutí časovače; ruční dopouštění bez čerstvé platné hladiny počká na příští měření a spustí se samo (nejdéle 15 min), automatika bez platné hladiny nestartuje.
 - Kalibrace se dvěma body se stejným napětím už neztrácí měření.
 - Upozornění z vláken údržby (málo místa) se doručí do Telegramu.
 - Telegram: vlákno se po chybě spojení samo obnoví; `dopustit` kontroluje rozsah 1–100 %.
@@ -22,6 +22,7 @@ Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle 
 - Počasí: při výpadku internetu se nestahuje při každém obnovení stránky.
 
 ### Opravy – systém
+- Aktualizace: bez stabilního Release (zatím jen firmware čidla) to už není chyba kontroly; veřejný klíč se vezme i z nainstalované verze; srozumitelné chyby při sestavení podepsaného balíku; návod na klíč a vydání verze (docs/instalace.md, oddíl 5).
 - Pi připojené kabelem nespouští hotspot; `retencka.local` ukazuje na adresu aktivního rozhraní.
 - Identita zařízení se nevytvoří z nulové MAC adresy (dříve hrozilo `retencka-0000`).
 - Aktualizace: správné řazení předběžných verzí (`1.2.0-beta1` < `1.2.0`), kontrola verze v balíku, návrat i systemd jednotek při rollbacku, port kontroly zdraví z konfigurace; release s pomlčkou je *pre-release*.

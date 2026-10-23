@@ -28,6 +28,7 @@ from .settings import NODE_SCHEMA, Nodes, Settings
 log = logging.getLogger("retencka.core")
 
 FRESH_S = 15 * 60                 # data younger than this may drive the valve
+REFILL_WAIT_S = 15 * 60           # manual refill without valid data waits this long for a measurement
 AUTO_COOLDOWN_S = 30 * 60
 NO_RISE_LOCK_S = 24 * 3600
 
@@ -39,7 +40,6 @@ PAIR_TARGET_S = 15 * 60
 # when the sensor did not come back with a paired request (lost UNPAIR) meanwhile.
 UNPAIR_CONFIRM_S = 30             # unpaired request this soon after UNPAIR = confirmation
 UNPAIR_SETTLE_S = 20              # no paired request for this long after it -> key deleted
-AUTO_PAIR_KEY = "auto_pair_done"  # settings row: first-install auto pairing used up
 STOP_RETRY_MARGIN_S = 60          # refill row closed this long after the planned end at latest
 LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
 BACKUP_KEEP = 7                   # nightly local backups kept
@@ -89,13 +89,13 @@ class Core:
         self._unpair_sent: dict[int, float] = {}   # node_id -> last UNPAIR reply sent
         self._unpair_confirm: dict[int, float] = {}  # node_id -> unpaired request after UNPAIR
         self._last_ctr: dict[int, int] = {}
-        self._auto_pair_done = False
         self._bad_cal_logged: set[int] = set()
         self._tasks: set[asyncio.Task] = set()     # fire-and-forget tasks (keep a reference)
 
         # refill controller state, per node
         self.refills: dict[int, dict] = {}         # node_id -> open row of the refills table
         self.refill_notes: dict[int, str] = {}
+        self.refill_wait: dict[int, dict] = {}     # node_id -> manual refill waiting for fresh data
         self._auto_block_until: dict[int, float] = {}
         self._rain_wait: dict[int, dict] = {}       # node_id -> {start_pct, since, deadline}
         # start/stop of any valve one at a time: the "already running" checks and the
@@ -112,7 +112,6 @@ class Core:
 
         self._migrate_v2()
         self._restore()
-        self._init_auto_pair()
 
     # ================================================================ helpers
     def audit(self, action: str, detail: str = "", user: str = "system", ip: str = "") -> None:
@@ -166,29 +165,6 @@ class Core:
             asyncio.run_coroutine_threadsafe(coro, self.loop)
         else:
             coro.close()
-
-    # ------------------------------------------------- persistent hub flags
-    def _init_auto_pair(self) -> None:
-        """The first-install auto pairing is available exactly once: an existing
-        install (nodes or data present) counts as used."""
-        row = self.db.scalar("SELECT value FROM settings WHERE key=?", (AUTO_PAIR_KEY,), None)
-        done = False
-        if row is not None:
-            try:
-                done = bool(json.loads(row))
-            except ValueError:
-                done = True
-        if not done and (self.nodes.ids() or self.db.scalar("SELECT 1 FROM measurements LIMIT 1", (), None)):
-            self._mark_auto_pair_done()
-        self._auto_pair_done = self._auto_pair_done or done
-
-    def _mark_auto_pair_done(self) -> None:
-        self._auto_pair_done = True
-        try:
-            self.db.execute("INSERT INTO settings(key, value) VALUES(?, 'true') "
-                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (AUTO_PAIR_KEY,))
-        except Exception:
-            log.exception("could not persist the auto-pair flag")
 
     def watch_tick(self) -> None:
         """Every minute: notify state changes that have no event of their own
@@ -342,10 +318,10 @@ class Core:
         node asks only after its battery was re-inserted, so unpairing needs both the
         hub login and physical access to the sensor.
 
-        An unpaired node gets a PAIR_ACK when the user wants it paired. Without any
-        registered node (first installation) the first request is accepted
-        automatically. New keys become valid only after the node proves them with
-        its first authenticated DATA frame."""
+        An unpaired node gets a PAIR_ACK only when the user confirmed it here
+        (start_pairing for that node id) – never automatically, so a sensor cannot
+        attach itself to a hub by accident (e.g. a neighbour's). New keys become
+        valid only after the node proves them with its first authenticated DATA frame."""
         req = crypto.parse_pair_req(payload)
         if req is None:
             return None
@@ -366,16 +342,8 @@ class Core:
                 return None
             if node is not None and node.get("_unpair"):
                 return None                         # being unpaired: no new key until removed
-            # first installation only (one-time, persisted): once any node was paired
-            # or removed, pairing needs the explicit pairing window
-            first = not self._auto_pair_done and not self.nodes.ids() and not self.pair_targets
-            auto = first or (node is not None and not node.get("_secret"))
-            if t is None and auto:
-                # first installation, or a registered node that never had a key (migration)
-                t = {"priv": None, "pub": None, "expires": time.time() + PAIR_TARGET_S,
-                     "name": "Retenční nádrž", "user": "system (automaticky)"}
-                self.pair_targets[nid] = t
-            if t is None:
+            if t is None:                           # not confirmed by the user
+
                 return None
             if t["priv"] is None:
                 t["priv"], t["pub"] = crypto.x25519_keypair()
@@ -477,7 +445,6 @@ class Core:
         if new:
             self.nodes.add(nid, t.get("name") or "")
         self.nodes.set_keys(nid, keys[0], keys[1])
-        self._mark_auto_pair_done()
         self._last_ctr[nid] = -1                    # new key: the counter starts over
         self._save_ctr(nid, None)
         self.audit("NODE_PAIRED", f"Čidlo {nid:04X} {'spárováno' if new else 'znovu spárováno (nový klíč)'}",
@@ -537,7 +504,6 @@ class Core:
         """Delete the node and its key (measured data stay in the database)."""
         self.cancel_pairing(nid)
         self.nodes.remove(nid)
-        self._mark_auto_pair_done()                # an emptied hub does not auto-pair again
         self.last.pop(nid, None)
         self.filters.pop(nid, None)
         self._last_ctr.pop(nid, None)
@@ -851,6 +817,7 @@ class Core:
                 "active": r is not None, "status": self.refill_notes.get(nid, "V normě"),
                 "max_pct": node["max_refill_pct"], "auto": node["auto_refill_enabled"],
                 "waiting_for_rain": nid in self._rain_wait,
+                "waiting_for_data": nid in self.refill_wait,
                 "flow_lpm": node.get("real_flow_rate_lpm") or node["flow_rate_lpm"]}
         if r:
             info.update(mode=r["mode"], target_pct=r["target_pct"],
@@ -880,12 +847,21 @@ class Core:
         if busy:
             return False, "Tento ventil už dopouští pro jinou nádrž."
         lv = self.level_now(nid)
-        if lv is None or self.data_age(nid) > FRESH_S:
-            return False, "Chybí čerstvá data o hladině – dopouštění nelze bezpečně spustit."
-        if (self.last.get(nid) or {}).get("level_mm_stale"):
-            # the last packet had no valid level (probe error): the shown level is old
-            # and the target stop would not work – same rule as the automatic refill
-            return False, "Poslední měření nemá platnou hladinu (chyba sondy) – dopouštění nelze bezpečně spustit."
+        if (lv is None or self.data_age(nid) > FRESH_S
+                or (self.last.get(nid) or {}).get("level_mm_stale")):
+            # no fresh valid level (old data, or the probe reported an error): the
+            # valve must not run blind – a manual request waits for the next valid
+            # measurement and starts then (_refill_on_measurement)
+            if mode != "manual":
+                return False, "Chybí čerstvá platná hladina – dopouštění nelze bezpečně spustit."
+            self.refill_wait[nid] = {"target_pct": float(target_pct), "user": user, "ip": ip,
+                                     "until": time.time() + REFILL_WAIT_S}
+            self.refill_notes[nid] = "Čeká na nové měření z čidla, pak se dopouštění spustí"
+            self.audit("MANUAL_REFILL", f"Požadavek ({node['name']}): čeká na nové měření z čidla", user, ip)
+            self.invalidate()
+            return True, (f"Čeká se na nové měření z čidla – dopouštění se pak spustí samo "
+                          f"(nejdéle {REFILL_WAIT_S // 60} min).")
+        self.refill_wait.pop(nid, None)
         target_pct = min(float(target_pct), float(node["max_refill_pct"]))
         need_l = target_pct / 100.0 * lv.max_volume_l - lv.volume_l
         if need_l <= max(50.0, model.deadband_l(node)):
@@ -912,6 +888,11 @@ class Core:
 
     async def refill_stop(self, nid: int, reason: str, user: str = "system", ip: str = "",
                           call_api: bool = True, timed_out: bool = False) -> tuple[bool, str]:
+        if nid not in self.refills and self.refill_wait.pop(nid, None) is not None:
+            self.refill_notes[nid] = "Čekající dopouštění zrušeno"
+            self.audit("MANUAL_REFILL", f"Čekající požadavek zrušen: {reason}", user, ip)
+            self.invalidate()
+            return True, "Čekající dopouštění zrušeno."
         async with self._refill_lock:
             return await self._refill_stop(nid, reason, user, ip, call_api, timed_out)
 
@@ -974,6 +955,15 @@ class Core:
             lv = self.level_now(nid)
             last = self.last.get(nid) or {}
             if lv is None or last.get("level_mm_stale"):
+                return
+            w = self.refill_wait.pop(nid, None)
+            if w is not None and nid not in self.refills and time.time() <= w["until"]:
+                # a manual request was waiting for exactly this: fresh, valid data
+                ok, msg = await self.refill_start(nid, w["target_pct"], "manual", w["user"], w["ip"])
+                if not ok:
+                    self.refill_notes[nid] = f"Dopouštění nespuštěno: {msg}"
+                    self.audit("REFILL_ERROR", f"{node['name']}: čekající dopouštění nespuštěno – {msg}",
+                               w["user"], w["ip"])
                 return
             r = self.refills.get(nid)
             if r and r.get("stop_retry"):
@@ -1062,6 +1052,14 @@ class Core:
 
     async def refill_tick(self) -> None:
         """Every 30 s: timer expiry and stale-data safety stop, for every running refill."""
+        for nid, w in list(self.refill_wait.items()):
+            if time.time() > w["until"]:
+                self.refill_wait.pop(nid, None)
+                name = (self.nodes.get(nid) or {}).get("name", f"{nid:04X}")
+                self.refill_notes[nid] = "Dopouštění nespuštěno – čidlo neposlalo platnou hladinu"
+                self.audit("REFILL_ERROR", f"{name}: dopouštění nespuštěno – čidlo do {REFILL_WAIT_S // 60} min "
+                           f"neposlalo platnou hladinu", w["user"], w["ip"])
+                self.invalidate()
         for nid, r in list(self.refills.items()):
             try:
                 if time.time() > r["start_ts"] + (r["planned_s"] or 0) + STOP_RETRY_MARGIN_S:

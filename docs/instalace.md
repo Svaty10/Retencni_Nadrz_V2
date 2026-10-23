@@ -55,11 +55,13 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    výchozí přístup se tím zruší.
 6. *Nastavení → Kalibrace*: rozměry nádrže, výška sondy nade dnem, přesnost a rozsah sondy a 2 kalibrační
    body („skutečná hladina je teď X cm“ – ideálně jednou při nízké a jednou při vysoké hladině).
-   První čidlo se při úplně první instalaci spáruje samo (jen jednou – po odpárování už ne); další přes *Nastavení → Čidla a rádio → Spárovat*
-   (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem).
+   Čidlo se páruje vždy jen po potvrzení: *Nastavení → Čidla a rádio → Spárovat* u jeho ID
+   (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
 
 ### Výměna baterie čidla
 Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem; **nic potvrzovat nemusíte**.
+Totéž platí po nahrání nového firmwaru: klíč je v EEPROM, kterou nahrávání nepřepisuje (fuse `EESAVE`),
+takže čidlo zůstane spárované se svým hubem.
 
 ### Odpárování / přesun čidla k jinému hubu
 1. Ve starém hubu *Nastavení → Čidla a rádio → Odpárovat* (hub hned přestane brát data).
@@ -93,22 +95,58 @@ odemknout jen přeprogramováním.
 | Bez internetu | web, grafy i HA běží dál (vše lokálně); čas drží `fake-hwclock`, dashboard upozorní |
 
 ## 5. Aktualizace z GitHubu
-- Kontrola 1× denně (03:30 + náhodné zpoždění) a tlačítkem *Nastavení → Systém*.
-- Instalují se jen **podepsané** releasy (Ed25519). Data a nastavení zůstávají v `/var/lib/retencka/data`.
-- Jednorázová příprava klíče (na PC, soukromý klíč nikdy do gitu):
-  ```bash
-  openssl genpkey -algorithm ed25519 -out release.key
-  openssl pkey -in release.key -pubout -out system/keys/release.pub   # tento commitnout
-  ```
-  Obsah `release.key` vložte do GitHub secretu `RELEASE_SIGNING_KEY`.
-- Vydání verze: zvýšit `__version__` v `server/retencka/__init__.py`, commit, `git tag v1.0.1 && git push --tags`.
-  GitHub Action sestaví a podepíše balík. Ručně: `tools/make-release.sh release.key`.
-- Kanál (`stable`/`beta`) a vypnutí automatiky: `/etc/default/retencka`. Kanál `beta` nabídne i
-  předběžné verze (tag s pomlčkou, např. `v1.3.0-beta1` – GitHub Release se označí jako *pre-release*);
-  předběžná verze je vždy starší než finální (`1.3.0-beta1` < `1.3.0`), takže se z bety po vydání
-  finální verze přejde automaticky.
-- Při nepovedené aktualizaci se vrací i systemd jednotky; adresa kontroly zdraví se řídí
-  `RETENCKA_HA_PORT` / `RETENCKA_BIND` z `/etc/default/retencka`.
+Hub se 1× denně (03:30 + náhodné zpoždění) nebo tlačítkem *Nastavení → Systém* podívá na GitHub
+Releases a nainstaluje jen **podepsaný** balík (Ed25519). Data a nastavení (`/var/lib/retencka/data`)
+se nemění; když nová verze do 2 min nenaběhne, vrátí se předchozí i se systemd jednotkami.
+
+### 5.1 Jednorázová příprava podpisového klíče
+Na PC (Windows: **Git Bash**, OpenSSL je jeho součástí), **mimo** složku repozitáře a mimo OneDrive:
+```bash
+cd ~ && mkdir -p retencka-klic && cd retencka-klic
+openssl genpkey -algorithm ed25519 -out release.key                 # SOUKROMÝ klíč – nikdy do gitu
+openssl pkey -in release.key -pubout -out release.pub               # veřejný klíč
+cat release.key                                                     # zkopírovat celý text vč. BEGIN/END
+```
+1. **GitHub → repozitář → Settings → Secrets and variables → Actions → New repository secret**:
+   název `RELEASE_SIGNING_KEY`, hodnota = celý obsah `release.key` (od `-----BEGIN PRIVATE KEY-----`
+   po `-----END PRIVATE KEY-----`).
+2. `release.pub` zkopírovat do repozitáře jako `system/keys/release.pub`, commitnout a pushnout.
+3. `release.key` uložit bezpečně (správce hesel / šifrovaný disk). Bez něj nejde vydat další aktualizaci,
+   kterou by stávající huby přijaly.
+4. Huby nainstalované **před** přidáním klíče ho ještě nemají – jednou na nich spusťte znovu instalaci
+   (stejný příkaz `curl … | sudo bash` z oddílu 2). Nové instalace ho mají rovnou.
+
+Repozitář musí být **veřejný** (hub se ptá GitHubu bez přihlášení).
+
+### 5.2 Vydání nové verze
+```bash
+# 1) zvýšit verzi v server/retencka/__init__.py, např. __version__ = "1.0.1"
+git commit -am "Verze 1.0.1"
+git tag v1.0.1                      # tag = "v" + přesně __version__
+git push && git push --tags
+```
+GitHub Action *release* spustí testy, sestaví `retencka-1.0.1.tar.gz`, podepíše ho a vytvoří Release.
+Průběh: záložka **Actions**. Huby si ho stáhnou do 24 h (nebo hned tlačítkem *Zkontrolovat aktualizace*).
+Ručně (bez Actions): `tools/make-release.sh ~/retencka-klic/release.key` a oba soubory z `dist/`
+nahrát k Release s tagem `v1.0.1`.
+
+### 5.3 Když aktualizace neprojde
+| Hláška / chyba | Příčina a řešení |
+|---|---|
+| Action: *Tag v… != verze …* | tag neodpovídá `__version__` – smazat tag (`git tag -d v1.0.1 && git push --delete origin v1.0.1`), opravit, znovu |
+| Action: *Soukromý klíč … chybí* | chybí secret `RELEASE_SIGNING_KEY` |
+| Action: *Chybí system/keys/release.pub* / *Podpis nesedí* | veřejný klíč není commitnutý, nebo nepatří k secretu |
+| Hub: *chybí veřejný klíč release.pub* | hub instalovaný před přidáním klíče – spustit instalaci znovu (5.1 bod 4) |
+| Hub: *NEPLATNÝ PODPIS* | balík podepsaný jiným klíčem než má hub |
+| Hub: *Verze … nenaběhla – vráceno* | nová verze na hubu nenastartovala; je zablokovaná, opravte a vydejte vyšší verzi |
+| Hub: *Aktuální verze …* | na GitHubu není novější podepsaný Release (pozor: Release musí obsahovat `.tar.gz` i `.sig`) |
+
+Stav poslední kontroly je v *Nastavení → Systém*, podrobně `journalctl -u retencka-update`.
+
+### 5.4 Kanál a automatika
+V `/etc/default/retencka`: `RETENCKA_CHANNEL=stable|beta`, `RETENCKA_AUTO_UPDATE=1|0`. Kanál `beta`
+bere i předběžné verze (tag s pomlčkou, např. `v1.3.0-beta1` → GitHub *pre-release*). Předběžná verze
+je vždy starší než finální (`1.3.0-beta1` < `1.3.0`), takže z bety se po vydání finální verze přejde samo.
 
 ## 6. Telegram – upozornění a ovládání z telefonu
 Zdarma, bez veřejné IP a bez otevřených portů (hub se k Telegramu jen sám připojuje).

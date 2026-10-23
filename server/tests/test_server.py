@@ -155,8 +155,11 @@ class ServerTest(unittest.TestCase):
         self.core.ip_limiter.success("127.0.0.1")
 
         h = self.login()
-        # first node pairs automatically (no node registered yet)
+        # pairing needs the user's confirmation, even for the very first sensor
         n1 = FakeNode(self.core, 0x1234)
+        self.assertIsNone(n1.try_pair())
+        st, js, _ = self.req("POST", "/api/pairing/start", {"node_id": "1234", "name": "Nádrž"}, headers=h)
+        self.assertEqual(st, 200, js)
         self.assertEqual(n1.try_pair(), "paired")
         n1.send(7000)
         time.sleep(0.3)
@@ -166,7 +169,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(js["node"]["id"], "1234")
         self.assertIsNotNone(js["water_level_cm"])
 
-        # a second node is NOT auto-paired any more, forged / replayed frames are dropped
+        # a second node is not paired without confirmation, forged / replayed frames are dropped
         n2 = FakeNode(self.core, 0x9999)
         self.assertIsNone(n2.try_pair())
         frame = n1.send(7100)

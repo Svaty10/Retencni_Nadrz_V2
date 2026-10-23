@@ -103,7 +103,8 @@ Při napájení 3,3 V smí ATtiny1624 běžet nejvýš na **10 MHz** (20 MHz až
 
 ## 5. Po nahrání
 1. Čidlo 10 minut nabízí párování. Na hubu: *Nastavení → Čidla → Přidat čidlo*
-   (první čidlo se spáruje samo). ID porovnejte se štítkem.
+   → u nalezeného ID klikněte **Spárovat** (ID porovnejte se štítkem). Bez potvrzení se čidlo
+   nespáruje nikdy – ani první, ani k cizímu hubu.
 2. Při napájení z Arduina (možnost B): po spárování odpojte Arduino a vložte baterie –
    čidlo pokračuje se stejným hubem.
 3. Na štítek čidla napište jeho **ID** (ukáže ho hub).

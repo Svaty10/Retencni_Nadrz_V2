@@ -99,7 +99,7 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
 2. **Nové / nespárované čidlo** nabízí párování, dokud ho někdo nespáruje: v okně každých 5 s, pak
    každou minutu, po prvním dni každých 5 min. Uživatel v hubu u daného ID klikne **Spárovat** (ověří
    ID se štítkem) → PAIR_ACK. Nový klíč začne na hubu platit po prvním ověřeném DATA rámci.
-   Hub bez jediného čidla (první instalace) přijme první nabídku automaticky.
+   Bez potvrzení uživatelem hub nepřijme žádnou nabídku (ani první čidlo při instalaci).
 3. **Odpárování:** v hubu *Odpárovat* → hub okamžitě přestane přijímat data čidla (klíč si zatím nechá).
    Pořadí nevadí – kdykoli potom (nebo předtím, dokud běží 10min okno) se vloží baterie: čidlo pošle
    PAIR_REQ se stavem „spárováno“, hub odpoví UNPAIR, čidlo ověří podpis svým klíčem, klíč smaže a

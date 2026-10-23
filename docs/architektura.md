@@ -138,6 +138,9 @@ stateDiagram-v2
     [*] --> VNormě
     VNormě --> ČekáNaDéšť: hladina < práh a předpověď ji dostane nad práh
     VNormě --> Dopouští: hladina < práh (bez deště) / ruční start
+    VNormě --> ČekáNaMěření: ruční start bez čerstvé platné hladiny
+    ČekáNaMěření --> Dopouští: přišlo platné měření (do 15 min)
+    ČekáNaMěření --> VNormě: 15 min bez platné hladiny / ruční stop
     ČekáNaDéšť --> VNormě: déšť nádrž doplnil
     ČekáNaDéšť --> Dopouští: pokles o > max_drop, déšť nepřišel do termínu,<br/>předpověď už nestačí, hladina hluboko pod prahem
     Dopouští --> VNormě: dosažen cíl / ruční stop / vypršel časovač / chybí data 15 min
@@ -153,7 +156,12 @@ stateDiagram-v2
 - Start i stop ventilu jsou serializované (`Core._refill_lock`), ruční a automatický start se nepotkají.
 - Průtok se kalibruje během dopouštění (po ≥ 120 s a ≥ 50 L): `real_flow = 0,7 · staré + 0,3 · naměřené`.
 - Při předpovězeném dešti se dopouští jen část: `cíl' = max(min(cíl, práh + 2), cíl − přírůstek_z_deště)`.
-- `refill_tick` (každých 30 s): pojistky časovače a výpadku dat.
+- Ventil nikdy nejede „naslepo“: start vyžaduje platnou hladinu ne starší 15 min. Automatika se spouští
+  právě po novém měření; ruční start bez platných dat se uloží (`Core.refill_wait`, na webu „Čeká na
+  měření“) a spustí se s příštím platným měřením, nejdéle do 15 min, jinak propadne (záznam + upozornění).
+- Nepotvrzené zastavení ventilu se opakuje každých 30 s; 24h pozastavení kvůli poruše jen když dopouštění
+  doběhlo do konce časovače a hladina (platná) nestoupla.
+- `refill_tick` (každých 30 s): pojistky časovače a výpadku dat, propadnutí čekajících požadavků.
 
 ### 3.6 Databáze (`db.py`, migrace v1–v5)
 

@@ -115,8 +115,13 @@ def find_release(repo: str, channel: str):
                                    "application/vnd.github+json"))
         rels = [r for r in rels if not r.get("draft")]
     else:
-        rels = [json.loads(http_get(f"https://api.github.com/repos/{repo}/releases/latest", 2_000_000,
-                                    "application/vnd.github+json"))]
+        try:
+            rels = [json.loads(http_get(f"https://api.github.com/repos/{repo}/releases/latest", 2_000_000,
+                                        "application/vnd.github+json"))]
+        except urllib.error.HTTPError as e:
+            if e.code == 404:                   # no stable release published yet
+                return None
+            raise
     best = None
     for r in rels:
         ver = r.get("tag_name", "").lstrip("v")
@@ -127,10 +132,18 @@ def find_release(repo: str, channel: str):
     return best
 
 
+def pubkey() -> Path:
+    """/etc/retencka/release.pub (copied by install.sh); fallback: the key shipped in
+    the currently installed release – installed by root from the trusted checkout."""
+    for p in (PUBKEY, CURRENT / "system" / "keys" / "release.pub"):
+        if p.is_file():
+            return p
+    raise RuntimeError("chybí veřejný klíč release.pub (viz docs/instalace.md, Aktualizace)")
+
+
 def verify(tar_path: Path, sig_path: Path) -> bool:
-    if not PUBKEY.exists():
-        raise RuntimeError(f"missing public key {PUBKEY}")
-    res = subprocess.run(["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(PUBKEY), "-rawin",
+    key = pubkey()
+    res = subprocess.run(["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(key), "-rawin",
                           "-in", str(tar_path), "-sigfile", str(sig_path)],
                          capture_output=True, text=True, timeout=60)
     return res.returncode == 0 and "Signature Verified Successfully" in res.stdout

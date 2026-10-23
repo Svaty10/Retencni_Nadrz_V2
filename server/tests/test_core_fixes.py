@@ -1,4 +1,4 @@
-"""Hub core: one-time auto pairing, safe unpairing, refill stop retry / fault lock,
+"""Hub core: pairing only after confirmation, safe unpairing, refill stop retry / fault lock,
 broken calibration, thread-safe notifications, replay watermark."""
 import asyncio
 import os
@@ -69,30 +69,35 @@ class Base(unittest.TestCase):
         self.tmp.cleanup()
 
 
-class AutoPairTest(Base):
-    def test_first_install_only_once(self):
+class PairingTest(Base):
+    def test_pairing_needs_confirmation(self):
+        # empty hub: neither the own nor a foreign sensor attaches itself
+        self.assertIsNone(Node(self.core, 0x1234).try_pair())
+        self.assertIsNone(self.core.nodes.get(0x1234))
+        # the user confirms the ID from the label -> paired
+        self.core.start_pairing(0x1234, "Nádrž", "admin")
         n = Node(self.core, 0x1234)
         self.assertEqual(n.try_pair(), "paired")
         n.send()
         self.assertTrue(self.core.nodes.keys(0x1234))
+        # removed node is not taken back on its own, not even after a restart
         self.core.forget_node(0x1234, "NODE_REMOVED", "test")
-        # the emptied hub must not take the (same or a foreign) node again on its own
         self.assertIsNone(Node(self.core, 0x1234).try_pair())
-        self.assertIsNone(Node(self.core, 0x5678).try_pair())
-        # also not after a restart
         c2 = self.new_core()
         self.assertIsNone(Node(c2, 0x5678).try_pair())
-        # explicit pairing window still works
-        c2.start_pairing(0x5678, "Nová", "admin")
-        self.assertEqual(Node(c2, 0x5678).try_pair(), "paired")
 
-    def test_existing_install_counts_as_used(self):
-        self.core.db.execute("INSERT INTO measurements(ts, node_id, seq, flags) VALUES(?,?,?,0)",
-                             (int(time.time()), 1, 1))
-        c2 = self.new_core()
-        self.assertIsNone(Node(c2, 0x1111).try_pair())
+    def test_battery_swap_keeps_pairing(self):
+        self.core.start_pairing(0x1234, "Nádrž", "admin")
+        n = Node(self.core, 0x1234)
+        self.assertEqual(n.try_pair(), "paired")
+        n.send(ctr=1)
+        # battery re-inserted: paired request, hub does not answer, the key stays valid
+        self.assertIsNone(n.try_pair())
+        n.send(ctr=1025)
+        self.assertEqual(self.core.db.scalar("SELECT COUNT(*) FROM measurements"), 2)
 
     def test_pending_key_expires(self):
+        self.core.start_pairing(0x1234, "Nádrž", "admin")
         n = Node(self.core, 0x1234)
         self.assertEqual(n.try_pair(), "paired")
         k = self.core._pending_keys[0x1234]
@@ -106,6 +111,7 @@ class UnpairTest(Base):
     def setUp(self):
         super().setUp()
         self.n = Node(self.core, 0x2222)
+        self.core.start_pairing(0x2222, "Nádrž", "admin")
         self.assertEqual(self.n.try_pair(), "paired")
         self.n.send()
         self.core.request_unpair(0x2222, "admin")
@@ -138,6 +144,7 @@ class UnpairTest(Base):
 class WatermarkTest(Base):
     def test_survives_retention(self):
         n = Node(self.core, 0x3333)
+        self.core.start_pairing(0x3333, "Nádrž", "admin")
         self.assertEqual(n.try_pair(), "paired")
         n.send(ctr=50)
         self.core.db.execute("DELETE FROM measurements")
@@ -160,6 +167,7 @@ class CalibrationTest(Base):
 
     def test_level_error_keeps_sample(self):
         n = Node(self.core, 0x4444)
+        self.core.start_pairing(0x4444, "Nádrž", "admin")
         self.assertEqual(n.try_pair(), "paired")
         with mock.patch.object(model, "compute_level", side_effect=ZeroDivisionError):
             n.send(ctr=1)
@@ -267,11 +275,41 @@ class RefillFaultTest(RefillBase):
         self.assertNotIn(0x5555, self.core.refills)
         self.assertEqual(self.faults(), 0)
 
-    def test_start_refused_with_stale_level(self):
+    def test_manual_start_waits_for_valid_data(self):
         self.core.last[0x5555]["level_mm_stale"] = True
         ok, msg = self.run_(self.core.refill_start(0x5555, 50, "manual", "a"))
+        self.assertTrue(ok, msg)
+        self.assertIn("Čeká se", msg)
+        self.assertEqual(self.calls, [])                 # valve untouched while data is invalid
+        self.assertIn(0x5555, self.core.refill_wait)
+        self.assertTrue(self.core.refill_info(0x5555)["waiting_for_data"])
+        self.run_(self.core._refill_on_measurement(0x5555))   # still a probe error -> keeps waiting
+        self.assertEqual(self.calls, [])
+        self.core.last[0x5555]["level_mm_stale"] = False      # fresh valid measurement arrives
+        self.run_(self.core._refill_on_measurement(0x5555))
+        self.assertIn(0x5555, self.core.refills)
+        self.assertNotIn(0x5555, self.core.refill_wait)
+
+    def test_auto_start_refused_with_stale_level(self):
+        self.core.last[0x5555]["level_mm_stale"] = True
+        ok, _ = self.run_(self.core.refill_start(0x5555, 50, "auto", "system"))
         self.assertFalse(ok)
-        self.assertIn("chyba sondy", msg)
+        self.assertEqual(self.calls, [])
+        self.assertNotIn(0x5555, self.core.refill_wait)
+
+    def test_waiting_request_expires_or_is_cancelled(self):
+        self.core.last[0x5555]["level_mm_stale"] = True
+        self.run_(self.core.refill_start(0x5555, 50, "manual", "a"))
+        ok, msg = self.run_(self.core.refill_stop(0x5555, "Ručně"))
+        self.assertTrue(ok, msg)
+        self.assertNotIn(0x5555, self.core.refill_wait)
+        self.run_(self.core.refill_start(0x5555, 50, "manual", "a"))
+        self.core.refill_wait[0x5555]["until"] = time.time() - 1
+        self.run_(self.core.refill_tick())
+        self.assertNotIn(0x5555, self.core.refill_wait)
+        self.core.last[0x5555]["level_mm_stale"] = False
+        self.run_(self.core._refill_on_measurement(0x5555))
+        self.assertNotIn(0x5555, self.core.refills)          # expired request never starts the valve
         self.assertEqual(self.calls, [])
 
 

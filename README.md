@@ -93,7 +93,7 @@ Podrobně v [docs/instalace.md](docs/instalace.md).
 ## Firmware čidla
 ```bash
 cd uzel
-make                 # build/firmware.hex  (~9 kB flash z 16 kB)
+make                 # build/firmware.hex  (~11 kB flash z 16 kB)
 make test            # self-test kryptografie proti oficiálním vektorům (na PC)
 make fuses PORT=COM3 # jednou na čip
 make flash PORT=COM3 # SerialUPDI
