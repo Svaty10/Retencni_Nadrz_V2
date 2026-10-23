@@ -58,7 +58,7 @@ ho v předběžném vydání `uzel-latest` (odtud si ho bere `uzel/nahraj.ps1`).
 
 ## 4. Ověření
 1. Release `v1.0.1` na GitHubu má soubory `retencka-1.0.1.tar.gz` **a** `retencka-1.0.1.tar.gz.sig`.
-2. Na testovacím hubu: *Nastavení → Systém → Zkontrolovat aktualizace* → do ~2 min „Aktualizováno 1.0.0 → 1.0.1“.
+2. Na testovacím hubu: *Nastavení → Obecné → Systém → Zkontrolovat aktualizace* → do ~2 min „Aktualizováno 1.0.0 → 1.0.1“.
    Podrobnosti: `journalctl -u retencka-update -n 50`.
 3. Ostatní huby si verzi stáhnou samy do 24 h (03:30 + náhodné zpoždění).
 

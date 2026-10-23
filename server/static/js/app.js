@@ -146,7 +146,7 @@
         try { sessionStorage.setItem('tab', id); } catch (e) { /* ignore */ }
         if (lastState) renderNodeBar(lastState.nodes || []);
         if (id === 'dashboard') loadAllCharts();
-        if (id === 'nastaveni') { setSettingsScope(SET_ALL); loadSettingsTab(); }
+        if (id === 'nastaveni') { setSettingsScope(SET_SCOPE); loadSettingsTab(); }
         if (id === 'logovani') loadAuditLog(1);
         if (id === 'uzivatele') loadUsers();
         if (id === 'heslo') loadTelegramMine();
@@ -854,17 +854,18 @@
         });
     }
 
-    // Nastavení: „Všechny nádrže“ (společné) + záložka každé nádrže (jen ta nádrž)
-    let SET_ALL = true;
-    try { SET_ALL = sessionStorage.getItem('setAll') !== '0'; } catch (e) { /* ignore */ }
+    // Nastavení: záložky „Obecné“ (celý systém) | „Všechny nádrže“ (čidla + výchozí hodnoty)
+    // | jedna záložka na nádrž. Poslední volba se pamatuje v rámci relace.
+    let SET_SCOPE = 'general';
+    try { SET_SCOPE = sessionStorage.getItem('setScope') || 'general'; } catch (e) { /* ignore */ }
+    if (!['general', 'all', 'tank'].includes(SET_SCOPE)) SET_SCOPE = 'general';
 
-    function setSettingsScope(all) {
-        SET_ALL = !!all || !CURRENT_NODE;
-        try { sessionStorage.setItem('setAll', SET_ALL ? '1' : '0'); } catch (e) { /* ignore */ }
-        document.body.classList.toggle('set-all', SET_ALL);
-        document.body.classList.toggle('set-tank', !SET_ALL);
+    function setSettingsScope(scope) {
+        SET_SCOPE = scope === 'tank' && !CURRENT_NODE ? 'all' : scope;
+        try { sessionStorage.setItem('setScope', SET_SCOPE); } catch (e) { /* ignore */ }
+        ['general', 'all', 'tank'].forEach((k) => document.body.classList.toggle('set-' + k, SET_SCOPE === k));
         if (lastState) renderSettingsBar(lastState.nodes || []);
-        if (!SET_ALL) applyNode(currentNodeCfg());
+        if (SET_SCOPE === 'tank') applyNode(currentNodeCfg());
         layoutSettingsColumns();
     }
 
@@ -882,11 +883,12 @@
             b.addEventListener('click', fn);
             bar.appendChild(b);
         };
-        tab('Všechny nádrže', SET_ALL, () => setSettingsScope(true), 'all');
+        tab('Obecné', SET_SCOPE === 'general', () => setSettingsScope('general'), 'all');
+        tab('Všechny nádrže', SET_SCOPE === 'all', () => setSettingsScope('all'), 'all');
         nodes.forEach((n) => {
-            tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, !SET_ALL && n.id === CURRENT_NODE, () => {
+            tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, SET_SCOPE === 'tank' && n.id === CURRENT_NODE, () => {
                 if (n.id !== CURRENT_NODE) selectNode(n.id);
-                setSettingsScope(false);
+                setSettingsScope('tank');
             });
         });
     }
@@ -989,7 +991,7 @@
         return g ? g.querySelector('label') : null;
     }
     function renderInheritTags(form, n) {
-        form.querySelectorAll('.inh').forEach((t) => t.remove());
+        document.querySelectorAll('#nastaveni .scope-tank .inh, #' + form.id + ' .inh').forEach((t) => t.remove());
         const inherited = new Set(n.inherited || []), own = new Set(n.overrides || []);
         Array.from(form.elements).forEach((el) => {
             if (!el.name || !(inherited.has(el.name) || own.has(el.name))) return;
@@ -1029,6 +1031,7 @@
         $('calNodeId').value = n.id;
         fillForm($('calForm'), n);
         renderInheritTags($('calForm'), n);
+        renderZoneInfo(n);
         renderCalPoints(n.cal_points);
         $('batTrim').textContent = num(n.battery_trim, 4);
         $('deadbandInfo').textContent = `±${num(n.deadband_cm, 1)} cm (≈ ${num(n.deadband_l, 0)} L)`;
@@ -1036,7 +1039,9 @@
     }
 
     function applySettings(s) {
-        fillForm($('sysForm'), s);
+        document.querySelectorAll('#nastaveni form.settings-form').forEach((f) => fillForm(f, s));
+        const name = (s.location_name || '').trim();
+        $('locName').textContent = name || `${num(s.latitude, 4)}, ${num(s.longitude, 4)} (bez názvu)`;
     }
 
     function setAdvanced(on) {
@@ -1047,44 +1052,188 @@
         layoutSettingsColumns();
     }
 
-    // Karty „Všechny nádrže“ ve sloupcích: každá karta do nejkratšího sloupce (v pořadí),
-    // poslední karta sloupce se roztáhne → spodky všech sloupců na jedné lince.
-    // 1 sloupec pod 1280 px, 2 do 1700 px, jinak 3. Spouští se při změně šířky/režimu/obsahu.
-    let colsKey = '';
+    // Karty aktuální záložky ve sloupcích: každá karta do nejkratšího sloupce (v pořadí),
+    // poslední karta sloupce se roztáhne → spodky všech sloupců na jedné lince. Karty jiných
+    // záložek čekají skryté v #setPark. 1 sloupec pod 1280 px, 2 do 1700 px, jinak 3.
     function layoutSettingsColumns() {
-        const host = $('setCols');
-        if (!host) return;
-        const cards = Array.from(document.querySelectorAll('#nastaveni .col-card'))
+        const host = $('setCols'), park = $('setPark');
+        if (!host || !park) return;
+        const all = Array.from(document.querySelectorAll('#nastaveni .col-card'))
             .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
+        const mine = all.filter((c) => c.classList.contains('scope-' + SET_SCOPE));
+        all.forEach((c) => { if (!mine.includes(c)) park.appendChild(c); });
         const n = window.innerWidth >= 1700 ? 3 : window.innerWidth >= 1280 ? 2 : 1;
         let cols = Array.from(host.children);
         if (cols.length !== n) {
+            mine.forEach((c) => park.appendChild(c));
             host.textContent = '';
             cols = [];
             for (let i = 0; i < n; i++) { const c = document.createElement('div'); c.className = 'set-col'; host.appendChild(c); cols.push(c); }
-            colsKey = '';
         }
         host.dataset.cols = String(n);
-        if (!$('nastaveni').classList.contains('active') || !SET_ALL) return;    // skryté: změřit nejde
-        // změřit výšky v jednom sloupci (stejná šířka jako ve výsledku)
-        const heights = cards.map((c) => {
-            cols[0].appendChild(c);                     // v původním pořadí
+        if (!$('nastaveni').classList.contains('active')) { renderSetNav(); return; }   // skryté: změřit nejde
+        // změřit výšky v jednom sloupci (stejná šířka jako ve výsledku), v původním pořadí
+        const heights = mine.map((c) => {
+            cols[0].appendChild(c);
             c.classList.remove('fill');
             return c.offsetHeight;
         });
         const sum = new Array(n).fill(0), plan = [];
-        cards.forEach((c, i) => {
+        mine.forEach((c, i) => {
             let k = 0;
             for (let j = 1; j < n; j++) if (sum[j] < sum[k] - 1) k = j;
             plan.push(k);
-            sum[k] += heights[i] + 16;
+            if (heights[i]) sum[k] += heights[i] + 16;
         });
-        cards.forEach((c, i) => { cols[plan[i]].appendChild(c); });
+        mine.forEach((c, i) => { cols[plan[i]].appendChild(c); });
         cols.forEach((col) => {
             const vis = Array.from(col.children).filter((c) => c.offsetParent !== null);
             if (vis.length) vis[vis.length - 1].classList.add('fill');
         });
-        colsKey = plan.join(',');
+        host.classList.toggle('hidden', !mine.length);
+        renderSetNav();
+    }
+
+    // Rychlá navigace po kartách aktuální záložky (lepivá pod hlavičkou)
+    function renderSetNav() {
+        const nav = $('setNav');
+        if (!nav) return;
+        nav.textContent = '';
+        const cards = Array.from(document.querySelectorAll('#nastaveni .card[data-nav]'))
+            .filter((c) => c.offsetParent !== null)
+            .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
+        cards.forEach((c) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'set-chip';
+            b.textContent = c.dataset.nav;
+            b.addEventListener('click', () => {
+                c.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+                const h = c.querySelector('h2');
+                if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+            });
+            nav.appendChild(b);
+        });
+        nav.classList.toggle('hidden', cards.length < 2);
+    }
+
+    // Poloha: hledání obce (geocoding přes hub), poloha zařízení (jen HTTPS), ruční souřadnice (pokročilé)
+    function savePlace(lat, lon, name) {
+        return action(() => api('POST', '/api/settings', { latitude: lat, longitude: lon, location_name: name }),
+            name ? `Poloha nastavena: ${name}` : 'Poloha nastavena.')
+            .then((r) => { if (r) { applySettings(r.settings); pollState(); } return r; });
+    }
+
+    async function geoSearch() {
+        const q = $('geoQ').value.trim();
+        const list = $('geoResults');
+        if (q.length < 2) { toast('Zadejte aspoň 2 znaky.', true); return; }
+        list.textContent = '';
+        list.classList.remove('hidden');
+        const wait = document.createElement('li');
+        wait.className = 'muted';
+        wait.textContent = 'Hledám…';
+        list.appendChild(wait);
+        let r = null;
+        try { r = await api('GET', '/api/geocode?q=' + encodeURIComponent(q)); } catch (e) { wait.textContent = e.message; return; }
+        list.textContent = '';
+        if (!r.results.length) {
+            const li = document.createElement('li');
+            li.className = 'muted';
+            li.textContent = 'Nic nenalezeno – zkuste jen název obce.';
+            list.appendChild(li);
+        }
+        r.results.forEach((g) => {
+            const li = document.createElement('li');
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'geo-item';
+            const label = [g.name, g.admin1].filter(Boolean).join(', ');
+            const strong = document.createElement('strong');
+            strong.textContent = label;
+            const meta = document.createElement('span');
+            meta.className = 'muted small';
+            meta.textContent = ` ${g.country || ''} · ${num(g.lat, 3)}, ${num(g.lon, 3)}`;
+            b.append(strong, meta);
+            b.addEventListener('click', () => savePlace(g.lat, g.lon, label).then((ok) => {
+                if (ok) { list.classList.add('hidden'); $('geoQ').value = ''; layoutSettingsColumns(); }
+            }));
+            li.appendChild(b);
+            list.appendChild(li);
+        });
+        layoutSettingsColumns();
+    }
+
+    function bindPlaceAndHydrawise() {
+        $('geoSearch').addEventListener('click', geoSearch);
+        $('geoQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); geoSearch(); } });
+        const secure = window.isSecureContext && 'geolocation' in navigator;
+        $('geoHere').classList.toggle('hidden', !secure);
+        $('geoNote').textContent = secure ? '' : 'Poloha zařízení funguje jen přes zabezpečené připojení (HTTPS); tady vyhledejte obec.';
+        $('geoHere').addEventListener('click', () => {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => savePlace(Math.round(pos.coords.latitude * 1e5) / 1e5, Math.round(pos.coords.longitude * 1e5) / 1e5, 'Poloha zařízení'),
+                (err) => toast(err.code === 1 ? 'Přístup k poloze byl zamítnut.' : 'Polohu se nepodařilo zjistit.', true),
+                { timeout: 15000, maximumAge: 600000 });
+        });
+
+        // Hydrawise: test klíče účtu (klíč se do prohlížeče nikdy nevrací)
+        $('hwTest').addEventListener('click', async () => {
+            const out = $('hwTestResult');
+            const typed = $('hwForm').querySelector('[name=hydrawise_api_key]').value.trim();
+            out.className = 'small field-note muted';
+            out.textContent = 'Zkouším spojení…';
+            try {
+                const r = await api('POST', '/api/hydrawise/test', typed ? { api_key: typed } : {});
+                out.className = 'small field-note ok-text';
+                out.textContent = 'Připojeno' + (r.controllers && r.controllers.length ? ' – ovladač: ' + r.controllers.join(', ') : '.')
+                    + (typed ? ' Klíč nezapomeňte uložit.' : '');
+            } catch (e) {
+                out.className = 'small field-note bad-text';
+                out.textContent = e.message;
+            }
+            layoutSettingsColumns();
+        });
+
+        // Zóny: výběr podle názvu, uloží se relay_id
+        $('zoneLoad').addEventListener('click', async () => {
+            const sel = $('zoneSelect');
+            $('zoneInfo').textContent = 'Načítám zóny…';
+            let r;
+            try { r = await api('GET', '/api/hydrawise/zones?' + nq()); } catch (e) { $('zoneInfo').textContent = e.message; return; }
+            const relay = $('calForm').elements.namedItem('hydrawise_relay_id');
+            sel.textContent = '';
+            const none = document.createElement('option');
+            none.value = ''; none.textContent = '– bez zóny –';
+            sel.appendChild(none);
+            r.zones.forEach((z) => {
+                const o = document.createElement('option');
+                o.value = z.relay_id;
+                o.textContent = (z.number != null ? z.number + ' · ' : '') + z.name;
+                sel.appendChild(o);
+            });
+            sel.value = relay.value && r.zones.some((z) => z.relay_id === relay.value) ? relay.value : '';
+            $('zoneInfo').textContent = r.zones.length ? `Načteno ${r.zones.length} zón – vyberte a uložte.` : 'Účet nemá žádné zóny.';
+        });
+        $('zoneSelect').addEventListener('change', () => {
+            const relay = $('calForm').elements.namedItem('hydrawise_relay_id');
+            relay.value = $('zoneSelect').value;
+            relay.dispatchEvent(new Event('input'));
+            $('zoneInfo').textContent = $('zoneSelect').value ? `Zóna ${$('zoneSelect').selectedOptions[0].textContent} – nezapomeňte uložit.` : 'Bez zóny – nezapomeňte uložit.';
+        });
+    }
+
+    function renderZoneInfo(n) {
+        const sel = $('zoneSelect');
+        if (!Array.from(sel.options).some((o) => o.value === n.hydrawise_relay_id)) {
+            sel.textContent = '';
+            const o = document.createElement('option');
+            o.value = n.hydrawise_relay_id || '';
+            o.textContent = n.hydrawise_relay_id ? `Relay ID ${n.hydrawise_relay_id}` : '– nenačteno –';
+            sel.appendChild(o);
+        }
+        sel.value = n.hydrawise_relay_id || '';
+        $('zoneInfo').textContent = n.hydrawise_relay_id ? '' : 'Zónu načtete z účtu Hydrawise tlačítkem vedle.';
     }
 
     function renderBackups(d) {
@@ -1206,13 +1355,14 @@
         if (st) applySettings(st.settings);
         if (ha) renderHa(ha);
         if (sys) renderSystem(sys);
-        if (!CURRENT_NODE && !SET_ALL) setSettingsScope(true);
+        if (!CURRENT_NODE && SET_SCOPE === 'tank') setSettingsScope('all');
         layoutSettingsColumns();
     }
 
     const nq = () => 'node=' + encodeURIComponent(CURRENT_NODE || '');
 
     function bindSettings() {
+        document.querySelectorAll('#nastaveni .card').forEach((c, i) => { c.dataset.order = String(i); });
         let adv = false;
         try { adv = localStorage.getItem('advSettings') === '1'; } catch (e) { /* ignore */ }
         setAdvanced(adv);
@@ -1255,7 +1405,6 @@
                 loadSettingsTab(); pollState(); histCache.clear(); flowsCache.clear();
             });
         });
-        document.querySelectorAll('#nastaveni .col-card').forEach((c, i) => { c.dataset.order = String(i); });
         let resizeT = null;
         window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(layoutSettingsColumns, 150); });
         $('defForm').addEventListener('submit', (e) => {
@@ -1267,16 +1416,19 @@
                 loadSettingsTab(); pollState(); histCache.clear(); flowsCache.clear();
             });
         });
-        $('sysForm').addEventListener('submit', (e) => {
+        document.querySelectorAll('#nastaveni form.settings-form').forEach((f) => f.addEventListener('submit', (e) => {
             e.preventDefault();
-            action(() => api('POST', '/api/settings', formData(e.target))).then((r) => {
+            const data = formData(e.target);
+            if (e.target.id === 'sysForm') data.location_name = '';     // ručně zadané souřadnice: bez názvu místa
+            action(() => api('POST', '/api/settings', data)).then((r) => {
                 if (!r) return;
                 applySettings(r.settings);
                 toast(r.changed.length ? 'Nastavení uloženo.' : 'Beze změn.');
                 pollState();
                 if (r.changed.includes('telegram_token')) setTimeout(loadSettingsTab, 4000);   // bot se připojuje
             });
-        });
+        }));
+        bindPlaceAndHydrawise();
         $('tgChangeBtn').addEventListener('click', () => {
             TG_EDIT = !TG_EDIT;
             $('tgSetup').classList.toggle('hidden', !TG_EDIT);
@@ -1403,7 +1555,7 @@
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id, force: true }), 'Čidlo odebráno.').then(done);
                 });
             } else {
-                btn('Nastavit', 'btn-outline', () => { selectNode(n.id); setSettingsScope(false); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+                btn('Nastavit', 'btn-outline', () => { selectNode(n.id); setSettingsScope('tank'); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
                 btn('Odpárovat', 'btn-danger', () => {
                     if (!confirm(`Odpárovat čidlo ${n.name} (${n.id})?\nDokončí se po vyjmutí a vložení baterie do čidla. Naměřená data zůstanou.`)) return;
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id }), (r) => r.removed ? 'Čidlo odebráno.' : 'Vyjměte a vložte do čidla baterii.').then(done);

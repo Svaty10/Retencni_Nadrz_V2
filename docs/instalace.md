@@ -54,17 +54,31 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
 5. První přihlášení: jméno **admin** + **heslo ze štítku** → vytvořit vlastní účet (jiné jméno i heslo);
    výchozí přístup se tím zruší. *Nastavení*, *Správa uživatelů*, *Logování* i *Můj účet* jsou v menu
    pod ikonou účtu vpravo nahoře.
-6. *Nastavení → Nádrž → Kalibrace*: rozměry nádrže, výška sondy nade dnem, přesnost a rozsah sondy a 2 kalibrační
-   body („skutečná hladina je teď X cm“ – ideálně jednou při nízké a jednou při vysoké hladině).
-   Čidlo se páruje vždy jen po potvrzení: *Nastavení → Čidla → Spárovat* u jeho ID
+
+   *Nastavení* má záložky **Obecné** (celý systém: poloha, Hunter Hydrawise, Telegram a vzdálený servis,
+   Home Assistant, záloha a data, systém), **Všechny nádrže** (čidla, párování, výchozí nastavení nádrží)
+   a **jednu záložku na každou nádrž** (všechny její parametry). Řádek s kartami pod záložkami vede rovnou
+   na danou kartu.
+6. *Nastavení → Obecné → Poloha*: do pole *Obec / adresa* napsat obec a vybrat ji ze seznamu (souřadnice
+   pro předpověď počasí se doplní samy; přes HTTPS jde i *Použít polohu tohoto zařízení*, ruční
+   souřadnice jsou v pokročilém režimu).
+7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Všechny nádrže → Čidla → Spárovat* u jeho ID
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
-7. Dopouštění (volitelné): *Nastavení → Nádrž → Dopouštění → Ventil: Hunter Hydrawise* + zóna a API klíč
-   v *Obecné*. Dokud ventil není nastavený, dashboard o dopouštění nic neukazuje (stav, tlačítka, graf).
+8. *Nastavení → ‹nádrž›*: *Nádrž* (název, rozměry), *Kalibrace* (2 body „skutečná hladina je teď X cm“ –
+   ideálně jednou při nízké a jednou při vysoké hladině), *Sonda* (výška nade dnem, přesnost, rozsah –
+   pokročilé), *Baterie*, *Upozornění*. Hodnoty označené **výchozí** se berou z *Všechny nádrže →
+   Výchozí nastavení nádrží*; po změně u nádrže jsou **vlastní** (zpět tlačítkem *↺ výchozí*).
+9. Dopouštění (volitelné): API klíč účtu do *Nastavení → Obecné → Hunter Hydrawise* (*Otestovat připojení*
+   ukáže název ovladače), pak *Nastavení → ‹nádrž› → Dopouštění → Ventil: Hunter Hydrawise* →
+   *Načíst zóny z Hydrawise* a vybrat zónu podle názvu (ruční Relay ID jen v pokročilém režimu; do pole
+   zóny nepatří API klíč – hub ho odmítne). Dokud ventil není nastavený, dashboard o dopouštění nic
+   neukazuje (stav, tlačítka, graf).
 
 ### Výměna baterie čidla
 Do čidla patří 3× AA. Doporučené jsou **lithiové Li-FeS2** (Energizer Ultimate Lithium): 10+ let,
 nevytékají, snesou mráz. Jdou i **alkalické** (vydrží několik let) – pak u čidla nastavte
-*Nastavení → Nádrž → Baterie v čidle → Alkalické*, jinak hub ukazuje špatná procenta a hlásí slabou
+*Nastavení → ‹nádrž› → Baterie → Baterie v čidle → Alkalické* (pro všechny nádrže najednou ve
+*Všechny nádrže → Výchozí nastavení nádrží*; tam i kapacita baterií), jinak hub ukazuje špatná procenta a hlásí slabou
 baterii už v polovině životnosti. Alkalické vyměňte včas, vybité mohou vytéct.
 
 Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem; **nic potvrzovat nemusíte**.
@@ -72,7 +86,7 @@ Totéž platí po nahrání nového firmwaru: klíč je v EEPROM, kterou nahráv
 takže čidlo zůstane spárované se svým hubem.
 
 ### Odpárování / přesun čidla k jinému hubu
-1. Ve starém hubu *Nastavení → Čidla → Odpárovat* (hub hned přestane brát data).
+1. Ve starém hubu *Nastavení → Všechny nádrže → Čidla → Odpárovat* (hub hned přestane brát data).
 2. Vyndat a vložit do čidla baterii (může být i v opačném pořadí, do 10 minut). Čidlo smaže klíč a hub ho odebere.
 3. Čidlo teď nabízí párování – spárovat v novém hubu.
 
@@ -94,9 +108,9 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 **Znovu spárovat** – název, nastavení i historie zůstanou.
 
 ### Záloha a obnova
-- Hub dělá každou noc zálohu na kartu (7 dní zpět). Proti odumření karty: *Nastavení → Záloha →
+- Hub dělá každou noc zálohu na kartu (7 dní zpět). Proti odumření karty: *Nastavení → Obecné → Záloha a data →
   Stáhnout zálohu* a soubor uložit do PC / cloudu (občas, např. po přidání čidla).
-- **Obnova (např. nová karta):** nainstalovat podle bodu 2, přihlásit se, *Nastavení → Záloha → Nahrát zálohu*
+- **Obnova (např. nová karta):** nainstalovat podle bodu 2, přihlásit se, *Nastavení → Obecné → Záloha a data → Nahrát zálohu*
   (zaškrtnout „včetně nastavení a uživatelů“). Data se přidají k současným, duplicity se přeskočí – import
   lze bezpečně opakovat. Vrátí se měření, čidla i s klíči (hned pokračují), nastavení, token HA a uživatelé.
 - Data se nemažou (8GB karta vystačí na desítky let); retenci lze nastavit v pokročilém nastavení.
@@ -121,7 +135,7 @@ Hub instaluje jen **podepsaný** balík z GitHub Releases (Ed25519). Data a nast
 i se systemd jednotkami.
 
 **Ručně z webu – zkontrolovat → vybrat → nainstalovat:**
-1. *Nastavení → Systém → Zkontrolovat aktualizace* otevře dialog „Hledám aktualizace…“.
+1. *Nastavení → Obecné → Systém → Zkontrolovat aktualizace* otevře dialog „Hledám aktualizace…“.
    Kontrola **nikdy nic neinstaluje**.
 2. Výsledek: „Máte nejnovější verzi X“, nebo nová verze s datem vydání a poznámkami
    z `CHANGELOG.md` (všechny verze mezi nainstalovanou a novou), nebo chyba se „Zkusit znovu“.
@@ -189,11 +203,11 @@ nahrát k Release s tagem `v1.0.1`.
 | Hub: *Máte nejnovější verzi …* | na GitHubu není novější podepsaný Release (pozor: Release musí obsahovat `.tar.gz` i `.sig`) |
 | Web: *Služba aktualizací na žádost nereaguje* | neběží `retencka-update.path` – `sudo systemctl enable --now retencka-update.path`, viz `journalctl -u retencka-update` |
 
-Stav poslední kontroly je v *Nastavení → Systém*, podrobně `journalctl -u retencka-update`.
+Stav poslední kontroly je v *Nastavení → Obecné → Systém*, podrobně `journalctl -u retencka-update`.
 
 ### 5.4 Kanál a automatika
 Přepínač automatiky a volba kanálu (*Stabilní* / *Beta*) jsou v dialogu aktualizací a v kartě
-*Nastavení → Systém* (uloží se do `data/update-prefs.json`). Dokud je web nezměnil, platí
+*Nastavení → Obecné → Systém* (uloží se do `data/update-prefs.json`). Dokud je web nezměnil, platí
 `/etc/default/retencka`: `RETENCKA_CHANNEL=stable|beta`, `RETENCKA_AUTO_UPDATE=1|0`. Kanál `beta`
 bere i předběžné verze (tag s pomlčkou, např. `v1.3.0-beta1` → GitHub *pre-release*). Předběžná verze
 je vždy starší než finální (`1.3.0-beta1` < `1.3.0`), takže z bety se po vydání finální verze přejde samo.
@@ -201,7 +215,7 @@ je vždy starší než finální (`1.3.0-beta1` < `1.3.0`), takže z bety se po 
 ## 6. Telegram – upozornění a ovládání z telefonu
 Zdarma, bez veřejné IP a bez otevřených portů (hub se k Telegramu jen sám připojuje).
 
-**Při instalaci (technik nebo zákazník, přímo z webu):** *Nastavení → Všechny nádrže → Telegram a vzdálený
+**Při instalaci (technik nebo zákazník, přímo z webu):** *Nastavení → Obecné → Telegram a vzdálený
 servis*. Dokud bot není nastavený, karta ukazuje návod:
 1. V Telegramu otevřete [@BotFather](https://t.me/BotFather),
 2. pošlete `/newbot`, zvolte název (např. „Nádrž Novákovi“) a uživatelské jméno končící na `bot`,
@@ -239,7 +253,7 @@ NetBird je zdarma do 5 uživatelů a 100 zařízení a je open source (lze provo
 2. *Access Control*: pravidlo „skupina `servis` (vaše PC/telefon) → skupina `retencka`, TCP 22 a 80“ a **žádné**
    pravidlo `retencka → retencka` (huby se navzájem nevidí). Výchozí pravidlo „All“ smažte.
 3. Instalace na hubu – jedna z možností:
-   * **z webu:** *Nastavení → Všechny nádrže → Telegram a vzdálený servis → Nainstalovat vzdálený servis*:
+   * **z webu:** *Nastavení → Obecné → Telegram a vzdálený servis → Nainstalovat vzdálený servis*:
      vložit setup key (vlastní server: pole *Vlastní server (URL)* v pokročilém režimu, jen `https://`).
      Karta ukazuje průběh instalace a výsledek. Klíč se nikam neukládá ani nezapisuje do záznamů.
    * **při instalaci hubu:** `cd /opt/retencka-src && sudo ./system/install.sh --netbird-setup-key <KLÍČ>`
@@ -248,7 +262,7 @@ NetBird je zdarma do 5 uživatelů a 100 zařízení a je open source (lze provo
    Obě cesty dělají totéž (`system/bin/retencka-netbird-install.sh`): repozitář NetBird s podpisovým
    klíčem, instalace balíku, `netbird service install/start` a `netbird up --setup-key …`.
 4. Po instalaci je přístup povolen **24 hodin**, pak se sám vypne. Zákazník (nebo technik s jeho souhlasem)
-   ho zapíná v *Nastavení → Telegram a vzdálený servis* (vypnuto / na 24 h / trvale) nebo příkazem
+   ho zapíná v *Nastavení → Obecné → Telegram a vzdálený servis* (vypnuto / na 24 h / trvale) nebo příkazem
    `servis zap` v Telegramu. Každá změna je v záznamech a administrátorům přijde zpráva.
 5. Připojení: web `http://<NetBird-IP>`, SSH `ssh <uživatel>@<NetBird-IP>` – doporučeno jen klíčem
    (`PasswordAuthentication no` v `/etc/ssh/sshd_config`).

@@ -205,6 +205,24 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_key_archive_node ON node_key_archive(node_id);
     ALTER TABLE nodes ADD COLUMN unpair_sent_at INTEGER;
     """,
+    # --- v11: battery capacity per tank (inheritable). A global value that differs from
+    # the schema default (3000 / 2500 mAh) becomes the shared tank default; the old
+    # global rows stay untouched (ignored by the app). Nothing else changes.
+    """
+    INSERT INTO settings(key, value) SELECT 'node_defaults', '{}'
+        WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'node_defaults')
+        AND EXISTS (SELECT 1 FROM settings WHERE
+            (key = 'battery_capacity_mah' AND CAST(value AS REAL) != 3000.0) OR
+            (key = 'battery_capacity_alk_mah' AND CAST(value AS REAL) != 2500.0));
+    UPDATE settings SET value = json_set(value, '$.battery_capacity_mah',
+            (SELECT CAST(s.value AS REAL) FROM settings s WHERE s.key = 'battery_capacity_mah'))
+        WHERE key = 'node_defaults' AND EXISTS (SELECT 1 FROM settings s
+            WHERE s.key = 'battery_capacity_mah' AND CAST(s.value AS REAL) != 3000.0);
+    UPDATE settings SET value = json_set(value, '$.battery_capacity_alk_mah',
+            (SELECT CAST(s.value AS REAL) FROM settings s WHERE s.key = 'battery_capacity_alk_mah'))
+        WHERE key = 'node_defaults' AND EXISTS (SELECT 1 FROM settings s
+            WHERE s.key = 'battery_capacity_alk_mah' AND CAST(s.value AS REAL) != 2500.0)
+    """,
 ]
 
 

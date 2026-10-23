@@ -3,6 +3,17 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.4.0] - 2026-10-23
+
+### Změněno
+- **Nastavení ve třech záložkách:** *Obecné* (poloha, Hunter Hydrawise, Telegram a servis, Home Assistant, záloha a data, systém), *Všechny nádrže* (čidla, párování, výchozí nastavení nádrží) a záložka pro každou nádrž (nádrž, kalibrace, sonda, baterie, upozornění, dopouštění). Každá skupina je samostatná karta s nadpisem a popisem, nahoře rychlá navigace.
+- **Kapacita baterie** se nastavuje u nádrže (výchozí hodnota ve *Výchozí nastavení nádrží*); dosavadní hodnota se převede.
+
+### Přidáno
+- **Poloha bez souřadnic:** vyhledání obce / adresy (Open-Meteo), případně poloha zařízení (jen přes HTTPS). Souřadnice zůstávají v pokročilém nastavení.
+- **Výběr zóny Hydrawise:** *Načíst zóny z Hydrawise* u nádrže – zóna se vybere podle jména, relay_id netřeba hledat. Klíč účtu je v *Obecné* s tlačítkem *Otestovat připojení*.
+- Pole Zóna přijme jen číslo a vložený API klíč odmítne s vysvětlením, kam patří.
+
 ## [1.3.0] - 2026-10-23
 
 ### Přidáno

@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from retencka.db import Database  # noqa: E402
+from retencka.db import MIGRATIONS, Database  # noqa: E402
 from retencka.settings import INHERITABLE, NODE_SCHEMA, Nodes, SettingsError, strip_schema_defaults  # noqa: E402
 
 
@@ -67,7 +67,8 @@ class NodeDefaults(unittest.TestCase):
             self.nodes.set_defaults({"refill_threshold_pct": 40})       # B: target 30 <= 40
 
     def test_migration_of_old_full_config(self):
-        full = {k: v[0] for k, v in NODE_SCHEMA.items()}
+        # a 1.1.x node config (battery capacity was global then)
+        full = {k: v[0] for k, v in NODE_SCHEMA.items() if not k.startswith("battery_capacity")}
         full.update(notify_low_pct=33.0, rain_wait_enabled=False, tank_area_m2=4.2)
         c = sqlite3.connect(self.path)
         c.execute("INSERT INTO nodes(node_id, name, config, created, sort) VALUES(?,?,?,?,?)",
@@ -80,7 +81,7 @@ class NodeDefaults(unittest.TestCase):
         c.close()
         self.db.close_thread()
         db = Database(self.path)                                         # applies v9 (and v10)
-        self.assertEqual(db.scalar("PRAGMA user_version"), 10)
+        self.assertEqual(db.scalar("PRAGMA user_version"), len(MIGRATIONS))
         stored = json.loads(db.scalar("SELECT config FROM nodes WHERE node_id=?", (0xC,)))
         self.assertEqual({k for k in stored if k in INHERITABLE}, {"notify_low_pct", "rain_wait_enabled"})
         n = Nodes(db).get(0xC)
@@ -95,6 +96,59 @@ class NodeDefaults(unittest.TestCase):
         out = strip_schema_defaults(full)
         self.assertEqual({k for k in out if k in INHERITABLE}, {"runoff_coef"})
         self.assertIn("tank_area_m2", out)
+
+    def test_battery_capacity_per_tank(self):
+        from retencka import model
+        self.assertIn("battery_capacity_mah", INHERITABLE)
+        self.nodes.set_defaults({"battery_capacity_mah": 3500})
+        self.nodes.update(0xA, {"battery_capacity_mah": 2000})
+        a, b = self.nodes.get(0xA), self.nodes.get(0xB)
+        self.assertEqual((a["battery_capacity_mah"], b["battery_capacity_mah"]), (2000, 3500))
+        energy = {"node_cycle_mAs": 3.3, "node_sleep_uA": 1.5, "node_heat_mAs": 66.0}
+        da = model.battery_days_left(80, 288, {**energy, "battery_capacity_mah": a["battery_capacity_mah"]})
+        db_ = model.battery_days_left(80, 288, {**energy, "battery_capacity_mah": b["battery_capacity_mah"]})
+        self.assertLess(da, db_)
+
+    def test_migration_v11_global_capacity(self):
+        c = sqlite3.connect(self.path)
+        c.execute("DELETE FROM settings WHERE key='node_defaults'")
+        c.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('battery_capacity_mah', '3400.0')")
+        c.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('battery_capacity_alk_mah', '2500.0')")
+        c.execute("PRAGMA user_version=10")
+        c.commit()
+        c.close()
+        self.db.close_thread()
+        db = Database(self.path)                                         # applies v11
+        d = json.loads(db.scalar("SELECT value FROM settings WHERE key='node_defaults'"))
+        self.assertEqual(d, {"battery_capacity_mah": 3400.0})            # alkaline = default: inherited
+        n = Nodes(db)
+        self.assertEqual(n.get(0xA)["battery_capacity_mah"], 3400.0)
+        self.assertEqual(n.get(0xA)["battery_capacity_alk_mah"], 2500.0)
+        db.close_thread()
+
+    def test_migration_v11_defaults_left_alone(self):
+        self.nodes.set_defaults({"notify_low_pct": 33})
+        c = sqlite3.connect(self.path)
+        c.execute("PRAGMA user_version=10")
+        c.commit()
+        c.close()
+        self.db.close_thread()
+        db = Database(self.path)                                         # no global capacity rows
+        self.assertEqual(json.loads(db.scalar("SELECT value FROM settings WHERE key='node_defaults'"))["notify_low_pct"], 33)
+        self.assertEqual(Nodes(db).get(0xA)["battery_capacity_mah"], 3000.0)
+        db.close_thread()
+
+    def test_relay_id_validation(self):
+        self.assertEqual(self.nodes.update(0xA, {"hydrawise_relay_id": " 12345 "}), ["hydrawise_relay_id"])
+        self.assertEqual(self.nodes.get(0xA)["hydrawise_relay_id"], "12345")
+        with self.assertRaises(SettingsError) as cm:
+            self.nodes.update(0xA, {"hydrawise_relay_id": "A1B2C3D4E5F6A7B8"})        # pasted API key
+        self.assertIn("API klíč", str(cm.exception))
+        with self.assertRaises(SettingsError):
+            self.nodes.update(0xA, {"hydrawise_relay_id": "zona1"})
+        with self.assertRaises(SettingsError):
+            self.nodes.update(0xA, {"hydrawise_relay_id": "１２"})          # non-ASCII digits
+        self.assertEqual(self.nodes.update(0xA, {"hydrawise_relay_id": ""}), ["hydrawise_relay_id"])
 
 
 if __name__ == "__main__":

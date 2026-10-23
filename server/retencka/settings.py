@@ -18,16 +18,15 @@ from .db import Database
 
 # key: (default, type, min, max) – type in {"float", "int", "bool", "str", "points", "json"}
 SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
-    # weather
+    # weather (place picked on the web: name from the geocoder, or typed coordinates)
     "latitude":                  (50.0755, "float", -90.0, 90.0),
     "longitude":                 (14.4378, "float", -180.0, 180.0),
+    "location_name":             ("", "str", 0, 120),
     # Hydrawise account key (shared by all nodes unless a node has its own)
     "hydrawise_api_key":         ("", "str", 0, 128),
     # Telegram bot of this installation (token from @BotFather)
     "telegram_token":            ("", "str", 0, 100),
-    # battery / node energy model (same hardware for all nodes)
-    "battery_capacity_mah":      (3000.0, "float", 100.0, 100000.0),   # 3x AA Li-FeS2
-    "battery_capacity_alk_mah":  (2500.0, "float", 100.0, 100000.0),   # 3x AA alkaline
+    # node energy model (same hardware for all nodes); battery capacity is per tank
     "node_cycle_mAs":            (3.3, "float", 0.01, 100.0),
     "node_sleep_uA":             (1.5, "float", 0.0, 1000.0),
     "node_heat_mAs":             (66.0, "float", 0.0, 1000.0),   # one heating = 2 x 110 mW / 1 s
@@ -53,6 +52,8 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "runoff_coef":        (0.8, "float", 0.05, 1.0),       # share of roof rain reaching the tank
     "battery_trim":       (1.0, "float", 0.8, 1.2),
     "battery_type":       ("lifes2", "choice:lifes2,alkaline", None, None),   # discharge curve + capacity
+    "battery_capacity_mah":     (3000.0, "float", 100.0, 100000.0),   # 3x AA Li-FeS2
+    "battery_capacity_alk_mah": (2500.0, "float", 100.0, 100000.0),   # 3x AA alkaline
     # refilling of THIS tank – provider "none" | "hydrawise" (more can be added later)
     "refill_provider":        ("none", "choice:none,hydrawise", None, None),
     "hydrawise_relay_id":     ("", "str", 0, 32),
@@ -75,6 +76,7 @@ NODE_INTERNAL_KEYS = {"real_flow_rate_lpm"}
 # Keys with a shared default for all tanks ("Výchozí nastavení nádrží"); a tank may override
 # them. Everything else in NODE_SCHEMA is the tank's own (geometry, calibration, valve …).
 INHERITABLE = ("probe_accuracy_pct", "probe_range_cm", "notify_low_pct", "runoff_coef", "battery_type",
+               "battery_capacity_mah", "battery_capacity_alk_mah",
                "refill_threshold_pct", "auto_refill_target_pct", "max_refill_pct",
                "rain_wait_enabled", "rain_wait_hours", "rain_wait_max_below_pct", "rain_wait_max_drop_pct",
                "max_refill_minutes", "flow_rate_lpm")
@@ -355,7 +357,7 @@ class Nodes:
                     raise SettingsError(f"Nastavení {k} nelze měnit")
                 if k in NODE_SECRET_KEYS and isinstance(raw, str) and raw.startswith("•"):
                     continue
-                v = coerce(NODE_SCHEMA, k, raw)
+                v = check_relay_id(raw) if k == "hydrawise_relay_id" else coerce(NODE_SCHEMA, k, raw)
                 if k in INHERITABLE and k not in stored:
                     if v != cur[k]:              # edited inherited value → own override
                         stored[k] = v
@@ -379,6 +381,18 @@ class Nodes:
     def remove(self, node_id: int) -> None:
         self.db.execute("DELETE FROM nodes WHERE node_id=?", (node_id,))
         self.reload()
+
+
+def check_relay_id(raw: Any) -> str:
+    """Hydrawise zone (relay_id) is a number; a long pasted string is usually the API key."""
+    v = str(raw if raw is not None else "").strip()
+    if v and not (v.isascii() and v.isdigit()):
+        if len(v) >= 12:
+            raise SettingsError("Tohle vypadá jako API klíč – klíč patří do karty Hunter Hydrawise, sem číslo zóny.")
+        raise SettingsError("Zóna (Relay ID) je číslo – vyberte ji tlačítkem Načíst zóny z Hydrawise.")
+    if len(v) > 32:
+        raise SettingsError("Zóna (Relay ID) je příliš dlouhá.")
+    return v
 
 
 def schema_defaults() -> dict[str, Any]:

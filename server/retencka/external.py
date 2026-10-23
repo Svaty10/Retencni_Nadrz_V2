@@ -171,3 +171,95 @@ class Hydrawise:
                 msg = "Hydrawise není dostupný."
             await asyncio.sleep(2 * (attempt + 1))
         return False, msg
+
+
+class HydrawiseAccount:
+    """Read-only Hydrawise calls for the settings page: controller name, zones."""
+    BASE = "https://api.hydrawise.com/api/v1/"
+
+    def __init__(self, http: Http):
+        self.http = http
+
+    async def _get(self, endpoint: str, api_key: str) -> tuple[Optional[dict], str]:
+        try:
+            status, text = await self.http.get(self.BASE + endpoint, {"api_key": api_key})
+        except Exception as e:
+            log.warning("Hydrawise %s failed: %s", endpoint, type(e).__name__)
+            return None, "Hydrawise není dostupný (zkontrolujte připojení k internetu)."
+        if status in (401, 403) or (status == 200 and '"error"' in text[:400] and "relays" not in text[:2000]):
+            return None, "Hydrawise klíč odmítl – zkontrolujte API klíč (Hydrawise → Account Details)."
+        if status == 404:
+            return None, "Hydrawise k tomuto klíči nenašel účet (HTTP 404) – zkontrolujte API klíč."
+        if status != 200:
+            return None, f"Hydrawise odpověděl chybou (HTTP {status})."
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return None, "Neplatná odpověď Hydrawise."
+        if not isinstance(data, dict):
+            return None, "Neplatná odpověď Hydrawise."
+        if data.get("error_msg") or data.get("error"):
+            return None, "Hydrawise: " + str(data.get("error_msg") or data.get("error"))[:120]
+        return data, ""
+
+    async def controller(self, api_key: str) -> tuple[bool, str, list[str]]:
+        """(ok, message, controller names) – customerdetails.php."""
+        data, err = await self._get("customerdetails.php", api_key)
+        if data is None:
+            return False, err, []
+        names = [str(c.get("name"))[:60] for c in (data.get("controllers") or [])
+                 if isinstance(c, dict) and c.get("name")]
+        if not names and data.get("current_controller"):
+            names = [str(data["current_controller"])[:60]]
+        return True, "Připojeno.", names
+
+    async def zones(self, api_key: str) -> tuple[Optional[list[dict]], str]:
+        """[{relay_id, name, number}] of the current controller – statusschedule.php."""
+        data, err = await self._get("statusschedule.php", api_key)
+        if data is None:
+            return None, err
+        out = []
+        for r in data.get("relays") or []:
+            if not isinstance(r, dict) or r.get("relay_id") is None:
+                continue
+            rid = str(r["relay_id"]).strip()
+            if not rid.isascii() or not rid.isdigit():
+                continue
+            num = r.get("relay")
+            out.append({"relay_id": rid, "name": str(r.get("name") or f"Zóna {num or rid}")[:60],
+                        "number": num if isinstance(num, int) else None})
+        out.sort(key=lambda z: (z["number"] is None, z["number"] or 0, z["name"]))
+        return out, ""
+
+
+class Geocoder:
+    """Place search (Open-Meteo geocoding, same provider as the forecast)."""
+    URL = "https://geocoding-api.open-meteo.com/v1/search"
+
+    def __init__(self, http: Http):
+        self.http = http
+
+    async def search(self, q: str) -> tuple[Optional[list[dict]], str]:
+        try:
+            status, text = await self.http.get(self.URL, {"name": q, "count": 8, "language": "cs", "format": "json"})
+        except Exception as e:
+            log.warning("geocoding failed: %s", type(e).__name__)
+            return None, "Vyhledávání není dostupné (zkontrolujte připojení k internetu)."
+        if status != 200:
+            return None, f"Vyhledávání odpovědělo chybou (HTTP {status})."
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return None, "Neplatná odpověď vyhledávání."
+        out = []
+        for r in (data.get("results") or [])[:8] if isinstance(data, dict) else []:
+            try:
+                lat, lon = float(r["latitude"]), float(r["longitude"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                continue
+            out.append({"name": str(r.get("name") or "")[:80], "admin1": str(r.get("admin1") or "")[:80],
+                        "country": str(r.get("country") or "")[:60],
+                        "lat": round(lat, 5), "lon": round(lon, 5)})
+        return out, ""

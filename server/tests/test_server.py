@@ -437,6 +437,68 @@ class ServerTest(unittest.TestCase):
         os.remove(req)
         os.remove(os.path.join(self.tmp.name, "netbird-install.json"))
 
+    def test_1e_geocode_and_hydrawise(self):
+        """Place search and Hydrawise zones/test with the network mocked; key never returned."""
+        h = self.login()
+        calls = []
+        replies = {}
+
+        async def fake_get(url, params):
+            calls.append((url, dict(params)))
+            for part, reply in replies.items():
+                if part in url:
+                    return reply
+            return 500, "{}"
+        orig = self.core.http.get
+        self.core.http.get = fake_get
+        try:
+            replies["geocoding-api.open-meteo.com"] = (200, json.dumps({"results": [
+                {"name": "Praha", "admin1": "Hlavní město Praha", "country": "Česko", "latitude": 50.08804,
+                 "longitude": 14.42076, "population": 1165581},
+                {"name": "Broken", "latitude": "x", "longitude": 1}]}))
+            st, js, _ = self.req("GET", "/api/geocode?q=Praha", headers=h)
+            self.assertEqual(st, 200, js)
+            self.assertEqual(js["results"], [{"name": "Praha", "admin1": "Hlavní město Praha", "country": "Česko",
+                                              "lat": 50.08804, "lon": 14.42076}])
+            self.assertEqual(calls[-1][1]["name"], "Praha")
+            self.assertEqual(calls[-1][1]["language"], "cs")
+            for q in ("x", "a" * 81, "%01ab"):
+                st, _, _ = self.req("GET", "/api/geocode?q=" + q, headers=h)
+                self.assertEqual(st, 400, q)
+            st, _, _ = self.req("GET", "/api/geocode?q=Praha", headers={"Cookie": "x"})
+            self.assertEqual(st, 401)
+
+            nid = self.core.nodes.ids()[0]
+            node = f"{nid:04X}"
+            self.req("POST", "/api/settings", {"hydrawise_api_key": "SECRETKEY123456"}, headers=h)
+            replies["statusschedule.php"] = (200, json.dumps({"relays": [
+                {"relay_id": 2222, "relay": 2, "name": "Zahrada"}, {"relay_id": 1111, "relay": 1, "name": "Trávník"},
+                {"relay_id": "evil<script>", "relay": 3, "name": "x"}]}))
+            st, js, _ = self.req("GET", f"/api/hydrawise/zones?node={node}", headers=h)
+            self.assertEqual(st, 200, js)
+            self.assertEqual(js["zones"], [{"relay_id": "1111", "name": "Trávník", "number": 1},
+                                           {"relay_id": "2222", "name": "Zahrada", "number": 2}])
+            # the tank's own key wins over the account key
+            self.assertEqual(calls[-1][1]["api_key"], self.core.nodes.get(nid)["hydrawise_api_key"] or "SECRETKEY123456")
+            replies["customerdetails.php"] = (200, json.dumps({"controllers": [{"name": "HC u domu", "controller_id": 9}]}))
+            st, js, _ = self.req("POST", "/api/hydrawise/test", {}, headers=h)
+            self.assertEqual(st, 200, js)
+            self.assertEqual(js["controllers"], ["HC u domu"])
+            self.assertNotIn("SECRETKEY123456", json.dumps(js))
+            replies["customerdetails.php"] = (200, json.dumps({"error_msg": "unauthorised"}))
+            st, js, _ = self.req("POST", "/api/hydrawise/test", {"api_key": "OTHERKEY99999"}, headers=h)
+            self.assertEqual(st, 502)
+            self.assertEqual(calls[-1][1]["api_key"], "OTHERKEY99999")
+            # the pasted key in the zone field is refused with a clear message
+            st, js, _ = self.req("POST", f"/api/node?node={node}", {"hydrawise_relay_id": "SECRETKEY123456"}, headers=h)
+            self.assertEqual(st, 400)
+            self.assertIn("API klíč", js["error"])
+            st, js, _ = self.req("GET", "/api/settings", headers=h)
+            self.assertNotIn("SECRETKEY123456", json.dumps(js))
+        finally:
+            self.core.http.get = orig
+            self.req("POST", "/api/settings", {"hydrawise_api_key": ""}, headers=h)
+
     def test_1c_node_defaults_api(self):
         h = self.login()
         st, js, _ = self.req("GET", "/api/node-defaults", headers=h)

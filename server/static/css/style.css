@@ -918,8 +918,6 @@ body.modal-open { overflow: hidden; }
 .modal-backdrop.busy .modal-prefs { display: none; }
 
 /* --- Nastavení: přepínač Všechny nádrže / nádrž, sloupce se zarovnanými spodky ---- */
-body.set-all #nastaveni .scope-tank,
-body.set-tank #nastaveni .scope-all { display: none !important; }
 .set-cols { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .set-cols[data-cols="2"] { --cols: 2; }
 .set-cols[data-cols="3"] { --cols: 3; }
@@ -945,3 +943,69 @@ body.set-tank #nastaveni .scope-all { display: none !important; }
 .setup-steps li { margin: 3px 0; }
 .setup-box .inline-actions > .unified-input { max-width: none; flex: 1 1 260px; }
 #nbResult { margin: 8px 0 12px; }
+
+/* --- Nastavení: tři druhy záložek, karty s hlavičkou, rychlá navigace ---------- */
+body.set-general #nastaveni .scope-all, body.set-general #nastaveni .scope-tank,
+body.set-all #nastaveni .scope-general, body.set-all #nastaveni .scope-tank,
+body.set-tank #nastaveni .scope-general, body.set-tank #nastaveni .scope-all { display: none !important; }
+.hidden-form { display: none; }
+
+#nastaveni .card { scroll-margin-top: 112px; }
+.card-title {
+    display: flex; align-items: flex-start; gap: 12px;
+    margin: -4px 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+}
+.card-title h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.card-title h2:focus { outline: none; }
+.card-desc { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.card-ico {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 34px; height: 34px; border-radius: var(--radius-sm);
+    background: var(--accent-soft); color: var(--accent);
+}
+.card-ico .ico { width: 18px; height: 18px; }
+/* podskupiny v kartě: zřetelná dělicí čára */
+#nastaveni .sub { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--line-strong); }
+#nastaveni .card-title + .sub { margin-top: 0; padding-top: 0; border-top: 0; }
+#nastaveni .sub > h3:first-child, #nastaveni .card > .config-form > h3:first-child { margin-top: 0; }
+#nastaveni .card > form.config-form { border-top: 0; padding-top: 0; margin-top: 0; }
+#nastaveni .card > form.config-form.sub { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--line-strong); }
+
+.set-nav {
+    position: sticky; top: 60px; z-index: 30;
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+    margin: -4px 0 14px; padding: 8px 0;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.set-nav::-webkit-scrollbar { display: none; }
+.set-chip {
+    flex-shrink: 0; min-height: 32px; padding: 0 12px;
+    border: 1px solid var(--line); border-radius: 16px;
+    background: var(--surface); color: var(--ink-2); font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.set-chip:hover { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 640px) {
+    .set-nav { top: 56px; }
+    #nastaveni .card { scroll-margin-top: 104px; }
+    .card-ico { width: 30px; height: 30px; }
+}
+@media (pointer: coarse) { .set-chip { min-height: 40px; } }
+
+.zone-pick { display: flex; gap: 8px; flex-wrap: wrap; }
+.zone-pick .unified-select { flex: 1 1 180px; width: auto; }
+.field-note { margin: 6px 0 0; }
+.ok-text { color: var(--green); }
+.bad-text { color: var(--red); }
+.loc-now { font-size: 15px; margin: 0 0 12px; }
+.loc-now strong { font-size: 16px; }
+.geo-search > .unified-input { flex: 1 1 220px; max-width: none; }
+.geo-results { list-style: none; margin: 10px 0 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.geo-results li + li { border-top: 1px solid var(--line); }
+.geo-results li.muted { padding: 10px 12px; font-size: 14px; }
+.geo-item {
+    display: block; width: 100%; text-align: left; padding: 10px 12px; min-height: 44px;
+    border: 0; background: none; color: var(--ink); cursor: pointer; font-size: 14px;
+}
+.geo-item:hover, .geo-item:focus-visible { background: var(--surface-2); }
+.geo-here { margin-top: 12px; }
+.geo-here p { margin: 6px 0 0; }

@@ -43,7 +43,7 @@ FIELD_LABELS = {
     "max_refill_pct": "nejvýš dopustit na", "flow_rate_lpm": "průtok", "max_refill_minutes": "nejdelší dopouštění",
     "rain_wait_enabled": "čekat na déšť", "rain_wait_hours": "výhled deště",
     "rain_wait_max_below_pct": "nečekat pod prahem o", "rain_wait_max_drop_pct": "přestat čekat po poklesu o",
-    "latitude": "poloha", "longitude": "poloha", "battery_capacity_mah": "kapacita baterie", "battery_capacity_alk_mah": "kapacita alkalické baterie",
+    "latitude": "poloha", "longitude": "poloha", "location_name": "poloha", "battery_capacity_mah": "kapacita baterie", "battery_capacity_alk_mah": "kapacita alkalické baterie",
     "retention_days": "mazání starých dat", "stale_timeout_s": "limit zpoždění dat",
     "telegram_token": "Telegram bot", "notify_low_pct": "upozornit pod",
 }
@@ -668,6 +668,49 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                                       "probe_accuracy_pct", "probe_range_cm"})
         return jresp({"ok": True, "changed": changed, "recalc_suggested": recalc, "node": node_public(node)})
 
+    # ------------------------------------------- place search, Hydrawise helpers
+    @need("admin")
+    async def api_geocode(request):
+        q = " ".join(str(request.query.get("q") or "").split())
+        if not 2 <= len(q) <= 80 or any(ord(ch) < 32 for ch in q):
+            return jerr("Zadejte název obce nebo adresu (2–80 znaků).")
+        res, err = await core.geocoder.search(q)
+        if res is None:
+            return jerr(err, 502)
+        return jresp({"results": res})
+
+    def hydrawise_key(nid: Optional[int] = None) -> str:
+        node = core.nodes.get(nid) if nid is not None else None
+        return str((node or {}).get("hydrawise_api_key") or settings.get("hydrawise_api_key") or "").strip()
+
+    @need("admin")
+    async def api_hydrawise_test(request):
+        """Test the account key (or a key typed but not saved yet); the key is never returned."""
+        data = await read_json(request)
+        typed = str(data.get("api_key") or "").strip()
+        key = typed if typed and not typed.startswith("•") else hydrawise_key()
+        if not key:
+            return jerr("Nejdřív zadejte API klíč Hydrawise.")
+        if len(key) > 128 or any(ord(ch) < 33 for ch in key):
+            return jerr("Neplatný API klíč.")
+        ok, msg, names = await core.hydrawise_account.controller(key)
+        if not ok:
+            return jerr(msg, 502)
+        return jresp({"ok": True, "message": msg, "controllers": names})
+
+    @need("admin")
+    async def api_hydrawise_zones(request):
+        nid = node_of(request)
+        if nid is None:
+            return jerr("Neznámé čidlo.", 404)
+        key = hydrawise_key(nid)
+        if not key:
+            return jerr("Chybí API klíč Hydrawise – zadejte ho v Nastavení → Obecné → Hunter Hydrawise.")
+        zones, err = await core.hydrawise_account.zones(key)
+        if zones is None:
+            return jerr(err, 502)
+        return jresp({"zones": zones})
+
     @need("admin")
     async def api_node_defaults_get(request):
         return jresp({"defaults": core.nodes.defaults(), "keys": list(INHERITABLE)})
@@ -1136,6 +1179,9 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/settings", api_settings_post)
     r.add_post("/api/node", api_node_config)
     r.add_get("/api/node-defaults", api_node_defaults_get)
+    r.add_get("/api/geocode", api_geocode)
+    r.add_post("/api/hydrawise/test", api_hydrawise_test)
+    r.add_get("/api/hydrawise/zones", api_hydrawise_zones)
     r.add_post("/api/node-defaults", api_node_defaults_post)
     r.add_post("/api/calibration/point", api_cal_point)
     r.add_post("/api/calibration/recompute", api_cal_recompute)

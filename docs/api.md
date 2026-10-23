@@ -1,7 +1,7 @@
 # REST API
 
 ## Home Assistant – port 8081 (jen LAN)
-Hlavička `Authorization: Bearer <token>` (token: *Nastavení → Home Assistant*).
+Hlavička `Authorization: Bearer <token>` (token: *Nastavení → Obecné → Home Assistant*).
 
 `GET /api/v1/water/state?node=3F2A` (bez `node` = první čidlo) · `GET /api/v1/nodes` (seznam čidel)
 ```json
@@ -34,9 +34,12 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/flows?…` | user | denní spotřeba / přítok ze srážek / dopouštění |
 | GET | `/api/weather` | user | předpověď 7 dní (Open-Meteo, cache 1 h) |
 | GET | `/api/export.csv?…` | admin | CSV (středník, desetinná čárka) |
-| GET/POST | `/api/settings` | admin | globální nastavení (validované; API klíč maskovaný) |
+| GET/POST | `/api/settings` | admin | globální nastavení (validované; API klíč maskovaný): poloha `latitude`, `longitude`, `location_name`, `hydrawise_api_key`, `telegram_token`, `retention_days`, … (kapacita baterií je od verze s migrací v11 u nádrží, viz `/api/node-defaults`) |
+| GET | `/api/geocode?q=obec` | admin | hledání místa (Open-Meteo geocoding přes hub; `q` 2–80 znaků): `{"results": [{name, admin1, country, lat, lon}]}` (max 8); uložení = `POST /api/settings` s `latitude`, `longitude`, `location_name` |
+| POST | `/api/hydrawise/test` | admin | test klíče Hydrawise (uložený klíč účtu, nebo `{"api_key": "…"}` zadaný a neuložený): `{"ok": true, "controllers": ["název ovladače"]}`; klíč se nikdy nevrací |
+| GET | `/api/hydrawise/zones?node=` | admin | zóny z Hydrawise (`statusschedule.php`, klíč nádrže nebo účtu): `{"zones": [{relay_id, name, number}]}`; `relay_id` se ukládá do `hydrawise_relay_id` nádrže (jen číslice, vložený API klíč se odmítne s vysvětlením) |
 | POST | `/api/node?node=` | admin | nastavení čidla (název, rozměry, `cal_points`, přesnost/rozsah sondy, …). Zděditelné klíče (viz `/api/node-defaults`) se uloží jako vlastní hodnota nádrže jen když se liší od zděděné; `{"reset": ["klíč", …]}` vlastní hodnoty zruší (zase platí výchozí). Odpověď i `GET /api/nodes` (`nodes[]`) obsahují efektivní hodnoty + `inherited` / `overrides` (seznamy klíčů) |
-| GET/POST | `/api/node-defaults` | admin | výchozí nastavení všech nádrží: `{"defaults": {…}, "keys": [zděditelné klíče]}`; POST `{klíč: hodnota}` změní výchozí hodnotu u všech nádrží bez vlastní hodnoty (vlastní hodnoty se nemění; odmítne hodnotu, která by u některé nádrže porušila pravidla dopouštění). Zděditelné: přesnost a rozsah sondy, upozornění, odtokový součinitel, typ baterie, hranice/cíl/maximum dopouštění, čekání na déšť (zapnuto, hodiny, odchylky), nejdelší dopouštění, průtok |
+| GET/POST | `/api/node-defaults` | admin | výchozí nastavení všech nádrží: `{"defaults": {…}, "keys": [zděditelné klíče]}`; POST `{klíč: hodnota}` změní výchozí hodnotu u všech nádrží bez vlastní hodnoty (vlastní hodnoty se nemění; odmítne hodnotu, která by u některé nádrže porušila pravidla dopouštění). Zděditelné: přesnost a rozsah sondy, upozornění, odtokový součinitel, typ a kapacita baterie (`battery_capacity_mah`, `battery_capacity_alk_mah`), hranice/cíl/maximum dopouštění, čekání na déšť (zapnuto, hodiny, odchylky), nejdelší dopouštění, průtok |
 | POST | `/api/calibration/point?node=` | admin | `actual_cm` – kalibrační bod z aktuálního napětí sondy |
 | POST | `/api/calibration/recompute?node=` | admin | přepočet historie (kalibrace + vyhlazení) |
 | POST | `/api/calibration/battery?node=` | admin | `actual_v` – korekce měření baterie |

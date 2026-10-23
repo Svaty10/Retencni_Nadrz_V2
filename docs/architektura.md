@@ -198,11 +198,12 @@ nad 45 dní se čte z `hourly`.
 
 ### 3.8 Nastavení
 
-Globální (`settings.SCHEMA`): poloha, Hydrawise API klíč, energetický model baterie, `stale_timeout_s`,
+Globální (`settings.SCHEMA`): poloha (`latitude`, `longitude`, `location_name` z hledání obce),
+Hydrawise API klíč účtu, energetický model čidla (spotřeba měření/spánku/ohřevu), `stale_timeout_s`,
 `retention_days`.
 
 Každé čidlo (`settings.NODE_SCHEMA`): geometrie nádrže, kalibrace a přesnost sondy, střecha,
-korekce baterie a celé dopouštění včetně průtoku z řádu (`flow_rate_lpm`, v UI pod *Pokročilé*).
+typ, kapacita a korekce baterie a celé dopouštění včetně průtoku z řádu (`flow_rate_lpm`, v UI pod *Pokročilé*).
 
 Převod parametrů z původního prototypu (Flask + ESP32):
 

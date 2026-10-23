@@ -24,7 +24,7 @@ from typing import Any, Optional
 from . import crypto, model
 from .auth import IpLimiter, Sessions
 from .db import Database
-from .external import Http, Hydrawise, Weather
+from .external import Geocoder, Http, Hydrawise, HydrawiseAccount, Weather
 from .model import Packet
 from .settings import MAX_NODES, NODE_SCHEMA, Nodes, Settings, strip_schema_defaults
 
@@ -88,6 +88,8 @@ class Core:
         self.http = Http()
         self.weather = Weather(self.http)
         self.hydrawise = Hydrawise(self.http)
+        self.hydrawise_account = HydrawiseAccount(self.http)
+        self.geocoder = Geocoder(self.http)
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.radio = None                     # set by __main__
         self.started = time.time()
@@ -892,7 +894,10 @@ class Core:
         pct = model.battery_percent(v, kind=kind)
         cpd = self.cached(f"cpd:{nid}", 3600, lambda: self._cycles_per_day(nid))
         heats = self.cached(f"heat:{nid}", 3600, lambda: self._heats_per_day(nid))
-        days = model.battery_days_left(pct, cpd, self.settings.all(), heats, kind) if cpd else None
+        # energy model from the global settings, battery capacity of this tank (inheritable)
+        energy = {**self.settings.all(), "battery_capacity_mah": node["battery_capacity_mah"],
+                  "battery_capacity_alk_mah": node["battery_capacity_alk_mah"]}
+        days = model.battery_days_left(pct, cpd, energy, heats, kind) if cpd else None
         low = pct < model.BATTERY_LOW_PCT or bool(last["flags"] & model.FLAG_BAT_LOW)
         sag = last.get("vbat_sag_mv")
         # the node switches itself off below the cut-off (at rest or under TX load)
@@ -1782,12 +1787,28 @@ class Core:
             c.execute("DETACH DATABASE src")
         self.settings.reload()
         self.nodes.reload()
+        if full and src_ver < 11:
+            self._map_old_battery_capacity()
         self.aggregate_hours(since=0)
         for nid in self.nodes.ids():
             self._restore_node(nid)
             self._last_ctr[nid] = max(self._last_ctr.get(nid, -1), self._stored_ctr(nid))
         self.invalidate()
         return stats
+
+    def _map_old_battery_capacity(self) -> None:
+        """Backup from before v11: the global battery capacity (now copied into the
+        settings rows) becomes the shared tank default, like DB migration v11."""
+        changes = {}
+        for key in ("battery_capacity_mah", "battery_capacity_alk_mah"):
+            v = self.settings.get(key)
+            if v is not None and v != NODE_SCHEMA[key][0]:
+                changes[key] = v
+        if changes:
+            try:
+                self.nodes.set_defaults(changes)
+            except Exception:
+                log.exception("mapping the battery capacity of an old backup failed")
 
     def backups(self) -> list[dict]:
         d = self.backup_dir()

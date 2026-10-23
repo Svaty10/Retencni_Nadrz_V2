@@ -208,7 +208,8 @@ def battery_days_left(percent: float, cycles_per_day: float, s: dict,
     """Remaining runtime from an energy model (voltage trends of Li-FeS2 are useless).
     Uses the real measurement rate and the real heater use of the last days."""
     cap_key = "battery_capacity_alk_mah" if kind == "alkaline" else "battery_capacity_mah"
-    nominal_mas = float(s.get(cap_key) or s["battery_capacity_mah"]) * 3600.0
+    # capacity of the tank's battery (settings.NODE_SCHEMA, inheritable); typical 3x AA as fallback
+    nominal_mas = float(s.get(cap_key) or (2500.0 if kind == "alkaline" else 3000.0)) * 3600.0
     cap_mas = nominal_mas * percent / 100.0
     per_day = (cycles_per_day * float(s["node_cycle_mAs"])      # measure + transmit
                + heats_per_day * float(s.get("node_heat_mAs", 66.0))   # SHT40 heater
