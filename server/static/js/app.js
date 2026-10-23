@@ -607,7 +607,7 @@
 
     const barScales = () => ({
         x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 8 } },
-        y: { beginAtZero: true, ticks: { callback: (v) => num(v, 0) + ' L', maxTicksLimit: 6 } }
+        y: { beginAtZero: true, suggestedMax: 100, ticks: { precision: 0, callback: (v) => num(v, 0) + ' L', maxTicksLimit: 6 } }
     });
     const barOpts = () => ({ responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: barScales() });
 
@@ -1331,7 +1331,10 @@
         NODE_BOOT: ['restart', 'Restart čidla', ''],
         TIME_FIXED: ['clock', 'Oprava času', ''], UPDATE_REQUESTED: ['arrow-up', 'Aktualizace', ''],
         BACKUP_DOWNLOADED: ['archive', 'Stažení zálohy', ''], BACKUP_IMPORTED: ['archive', 'Nahrání zálohy', 'warn'],
-        DISK_LOW: ['alert', 'Málo místa na kartě', 'bad']
+        DISK_LOW: ['alert', 'Málo místa na kartě', 'bad'],
+        TELEGRAM_LINKED: ['antenna', 'Telegram propojen', 'ok'], TELEGRAM_UNLINKED: ['antenna', 'Telegram odpojen', ''],
+        SERVICE_ACCESS: ['lock', 'Vzdálený servis', 'warn'], SERVICE_RESTART: ['restart', 'Restart aplikace', ''],
+        SERVICE_REBOOT: ['restart', 'Restart zařízení', 'warn']
     };
     const LOG = { page: 1, cat: '', items: 0 };
     const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];

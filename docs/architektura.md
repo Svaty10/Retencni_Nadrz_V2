@@ -75,6 +75,7 @@ zpět na 300 s po 3 klidných měřeních, max. 90 rychlých cyklů.
 | `auth.py` | uživatelé (scrypt), session v DB, rate limiting |
 | `telegram.py` | Telegram bot: propojení chatů s účty, příkazy, upozornění (long polling ve vlastním vlákně) |
 | `pngchart.py` | graf hladiny do PNG jen se standardní knihovnou (pro Telegram) |
+| `static/` | web bez frameworku: `index.html` (SVG ikony jako sprite), `css/style.css` (barvy jako proměnné, světlý/tmavý režim podle systému), `js/app.js` (vykreslení, grafy Chart.js podle barev motivu); vše lokálně, bez CDN a webových fontů |
 
 ### 3.2 Vlákna
 

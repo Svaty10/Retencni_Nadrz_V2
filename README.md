@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.0.0-38bdf8)
+![verze](https://img.shields.io/badge/verze-1.1.1-2b6cb0)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -11,7 +11,7 @@ teplotu a vlhkost a posílá je šifrovaně rádiem (433 MHz) na Raspberry Pi. P
 na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopouštění přes Hunter Hydrawise.
 
 <p align="center">
-  <img src="docs/img/dashboard.webp" alt="Dashboard jedné nádrže" width="780">
+  <img src="docs/img/dashboard.webp" alt="Dashboard jedné nádrže" width="820">
 </p>
 
 ```
@@ -34,26 +34,29 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 **Hub a web**
 - Více nádrží na jeden hub (až 16), přehled **Všechny nádrže** i detail každé nádrže.
 - Grafy kreslí prohlížeč: hladina s vyznačeným **dopouštěním** a **přítokem z deště** (jemně podbarvené
-  úseky od–do s přerušovanými hranami, v tooltipu litry), spotřeba, dopouštění, klima, počasí, baterie a signál (s vyznačenou výměnou
-  baterie); vlastní rozsah od–do.
+  úseky, v tooltipu litry), spotřeba, dopouštění, klima, počasí, baterie a signál (s vyznačenou výměnou
+  baterie); rozsah 24 h / 7 dní / 30 dní / rok nebo vlastní od–do.
 - **Výhled:** na kolik dní voda vystačí a kolik přiteče z předpovídaného deště.
 - **Chytré dopouštění:** když má brzy pršet a déšť nádrž doplní, hub nedopouští a čeká; když déšť nepřijde
   nebo hladina klesne příliš, dopustí – a jen tolik, kolik déšť nedodá.
 - Dopouštění pro každou nádrž zvlášť (Hydrawise) – automatika, odložení při dešti, pojistky;
   jeden ventil ovládá vždy jen jedna nádrž (nikdy se nedopouští 2×).
-- Přihlášení s rolemi (admin / uživatel), přehledný log s filtry, nastavení **základní / pokročilé**, jen pro admina.
-- Plně funkční na mobilu.
+- Dopouštění jde kdykoli zrušit – před startem i za chodu, ruční i automatické; bez čerstvých dat ventil nepustí.
+- Přihlášení s rolemi (admin / uživatel); menu účtu vpravo nahoře (Můj účet, Nastavení, Správa uživatelů,
+  Logování). Přehledný log s filtry, nastavení **základní / pokročilé**, jen pro admina.
+- Střídmý vzhled, světlý i tmavý režim podle systému; využívá celou šířku monitoru a je plně funkční na mobilu.
 - Home Assistant přes REST (YAML se vygeneruje sám), CSV export.
 - Záloha i obnova přes web (nahraná data se sloučí bez duplicit), noční zálohy. Data se nemažou (~10 MB na čidlo a rok).
 - Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem.
 - Proces ~28–35 MB RAM, bez Dockeru a bez pip – jen standardní knihovna Pythonu.
 
 <p align="center">
-  <img src="docs/img/prehled.webp" alt="Přehled všech nádrží" width="560">
-  <img src="docs/img/mobil.webp" alt="Mobilní zobrazení" width="200">
+  <img src="docs/img/prehled.webp" alt="Přehled všech nádrží" width="600">
+  <img src="docs/img/mobil.webp" alt="Mobilní zobrazení" width="190">
 </p>
 <p align="center">
-  <img src="docs/img/log.webp" alt="Záznamy s filtry" width="780">
+  <img src="docs/img/dashboard-tmavy.webp" alt="Tmavý režim" width="395">
+  <img src="docs/img/log.webp" alt="Záznamy s filtry" width="395">
 </p>
 
 ## Rychlý start
@@ -119,5 +122,6 @@ Proto měří po minutě jen při změně hladiny (dopouštění, déšť). Skut
 cd server
 python3 -m unittest discover -s tests                       # testy serveru (bez hardwaru)
 RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30         # demo data
+RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30 A1C3 --name "Garáž"   # další nádrž
 RETENCKA_DATA=/tmp/rt RETENCKA_MOCK=1 RETENCKA_WEB_PORT=8080 python3 -m retencka
 ```

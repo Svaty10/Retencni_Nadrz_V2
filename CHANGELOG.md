@@ -3,6 +3,16 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.1.1] - 2026-10-23
+
+### Opraveno
+- Dashboard: hodnoty vedle nádrže ve 3 sloupcích bez prázdného místa; karty v přehledu všech nádrží se roztáhnou na celou šířku.
+- Graf dopouštění bez dopouštění neukazuje osu „1 L, 1 L, 0 L“.
+- Záznamy o Telegramu a vzdáleném servisu mají vlastní ikonu a název.
+
+### Dokumentace
+- Nové snímky webu v README (dashboard, přehled, mobil, tmavý režim, záznamy), aktuální cesty v menu.
+
 ## [1.1.0] - 2026-10-23
 
 ### Přidáno

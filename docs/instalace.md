@@ -52,16 +52,17 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
 3. Vybrat domácí síť, zadat heslo → zařízení se připojí, hotspot zmizí.
 4. Telefon zpět na domácí Wi-Fi → `http://retencka.local` (nebo `http://retencka-xxxx.local`).
 5. První přihlášení: jméno **admin** + **heslo ze štítku** → vytvořit vlastní účet (jiné jméno i heslo);
-   výchozí přístup se tím zruší.
-6. *Nastavení → Kalibrace*: rozměry nádrže, výška sondy nade dnem, přesnost a rozsah sondy a 2 kalibrační
+   výchozí přístup se tím zruší. *Nastavení*, *Správa uživatelů*, *Logování* i *Můj účet* jsou v menu
+   pod ikonou účtu vpravo nahoře.
+6. *Nastavení → Nádrž → Kalibrace*: rozměry nádrže, výška sondy nade dnem, přesnost a rozsah sondy a 2 kalibrační
    body („skutečná hladina je teď X cm“ – ideálně jednou při nízké a jednou při vysoké hladině).
-   Čidlo se páruje vždy jen po potvrzení: *Nastavení → Čidla a rádio → Spárovat* u jeho ID
+   Čidlo se páruje vždy jen po potvrzení: *Nastavení → Čidla → Spárovat* u jeho ID
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
 
 ### Výměna baterie čidla
 Do čidla patří 3× AA. Doporučené jsou **lithiové Li-FeS2** (Energizer Ultimate Lithium): 10+ let,
 nevytékají, snesou mráz. Jdou i **alkalické** (vydrží několik let) – pak u čidla nastavte
-*Nastavení → nádrž → Baterie v čidle → Alkalické*, jinak hub ukazuje špatná procenta a hlásí slabou
+*Nastavení → Nádrž → Baterie v čidle → Alkalické*, jinak hub ukazuje špatná procenta a hlásí slabou
 baterii už v polovině životnosti. Alkalické vyměňte včas, vybité mohou vytéct.
 
 Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem; **nic potvrzovat nemusíte**.
@@ -69,7 +70,7 @@ Totéž platí po nahrání nového firmwaru: klíč je v EEPROM, kterou nahráv
 takže čidlo zůstane spárované se svým hubem.
 
 ### Odpárování / přesun čidla k jinému hubu
-1. Ve starém hubu *Nastavení → Čidla a rádio → Odpárovat* (hub hned přestane brát data).
+1. Ve starém hubu *Nastavení → Čidla → Odpárovat* (hub hned přestane brát data).
 2. Vyndat a vložit do čidla baterii (může být i v opačném pořadí, do 10 minut). Čidlo smaže klíč a hub ho odebere.
 3. Čidlo teď nabízí párování – spárovat v novém hubu.
 
@@ -177,7 +178,7 @@ v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administ
 | `servis zap` / `trvale` / `vyp` | admin | vzdálený servisní přístup (NetBird, viz níže) |
 | `odhlasit` | všichni | odpojí chat |
 
-Upozornění: hladina pod nastavenou hranicí (*Nastavení → nádrž → Upozornit pod*), dopouštění spuštěno /
+Upozornění: hladina pod nastavenou hranicí (*Nastavení → Nádrž → Upozornit pod*), dopouštění spuštěno /
 dokončeno / porucha, čekání na déšť, slabá nebo vybitá baterie, čidlo neposílá data a znovu posílá.
 Administrátoři navíc dostávají restarty čidel, párování, málo místa na kartě a změny servisního přístupu.
 
@@ -243,6 +244,7 @@ sudo sqlite3 /var/lib/retencka/data/retencka.db "DELETE FROM users"  # tovární
 cd server
 RETENCKA_DATA=/tmp/rt RETENCKA_WEB_PORT=8080 RETENCKA_HA_PORT=8081 RETENCKA_MOCK=1 python3 -m retencka
 RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30      # 30 dní ukázkových dat
+RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30 A1C3 --name "Garáž"   # další nádrž
 python3 -m unittest discover -s tests
 ```
 Server potřebuje jen Python ≥ 3.11 ze standardní knihovny (+ `python3-spidev`, volitelně `python3-libgpiod`).

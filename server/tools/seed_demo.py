@@ -3,6 +3,7 @@
 
     RETENCKA_DATA=/tmp/rtdata python3 tools/seed_demo.py 30
     python3 tools/seed_demo.py 90 BEEF --backup demo.db.gz   # file for "Nahrát zálohu" in the web UI
+    python3 tools/seed_demo.py 30 A1C3 --name "Garáž"       # more tanks: run again with another ID
 """
 
 import gzip
@@ -25,6 +26,11 @@ from retencka.settings import Nodes, Settings  # noqa: E402
 def main() -> None:
     args = sys.argv[1:]
     backup = None
+    name = None
+    if "--name" in args:
+        i = args.index("--name")
+        name = args[i + 1]
+        del args[i:i + 2]
     if "--backup" in args:
         i = args.index("--backup")
         backup = args[i + 1]
@@ -39,14 +45,14 @@ def main() -> None:
     nodes = Nodes(db)
     nid = int(sys.argv[2], 16) if len(sys.argv) > 2 else 0xBEEF
     if not nodes.get(nid):
-        nodes.add(nid, "Demo nádrž" if nid == 0xBEEF else f"Demo {nid:04X}")
+        nodes.add(nid, name or ("Demo nádrž" if nid == 0xBEEF else f"Demo {nid:04X}"))
     st = nodes.get(nid)
     now = int(time.time())
     t = now - days * 86400
     probe = 900.0
     seq = 0
     rows = []
-    rnd = random.Random(1)
+    rnd = random.Random(nid)                         # every tank its own (repeatable) history
     while t < now:
         hour = time.localtime(t).tm_hour
         # daytime garden use, occasional rain, refill when low
@@ -62,7 +68,7 @@ def main() -> None:
         p100 = int((probe + rnd.gauss(0, 4.0)) * 10)     # noisy probe
         lv = model.compute_level(p100, st)
         temp = int(1100 + 400 * math.sin((t % 86400) / 86400 * 2 * math.pi) + rnd.gauss(0, 20))
-        hum = int(min(10000, 8800 + 700 * math.cos((t % 86400) / 86400 * 2 * math.pi)))
+        hum = int(5800 + 500 * math.cos((t % 86400) / 86400 * 2 * math.pi) + rnd.gauss(0, 60))
         vbat = int(5150 - (now - t) / 86400 * -0.4)
         rows.append((t, nid, seq & 0xFFFF, 0, vbat, temp, hum, p100, int(lv.level_cm * 10),
                      int(lv.volume_l), rnd.randint(-170, -150), 30, refilling, 1))
