@@ -1,13 +1,16 @@
 # Programování čidla – krok za krokem
 
 Do čidla (čip ATtiny1624) se firmware nahrává jedním vodičem **UPDI**. Jako programátor poslouží
-**Arduino Uno nebo Nano** (běžné klony s čipem CH340 jsou v pořádku) a jeden odpor.
+**Arduino Uno nebo Nano** (běžné klony s čipem CH340 jsou v pořádku), jedna dioda a dva odpory.
 Nemusíte nic instalovat ani nic psát do příkazové řádky – stačí dvojklik.
 
 ## 1. Co budete potřebovat
 - Arduino **Uno** nebo **Nano** a jeho USB kabel
   (nefungují typy s USB přímo v hlavním čipu: Leonardo, Micro, Nano Every, Uno R4),
-- **odpor 4,7 kΩ** (jde 1–4,7 kΩ), nebo lépe **Schottkyho diodu** (1N5817, 1N5819, BAT85, BAT43),
+- **diodu** a **2 odpory**: 4,7 kΩ a 10 kΩ (oddělení 5 V Arduina od 3,3 V čidla – viz „Proč dioda“ níže).
+  Nejlepší je Schottkyho (BAT85, BAT43, 1N5817, 1N5819); stačí ale i běžná **1N4148** (úbytek ~0,65 V,
+  čidlo bere jako logickou 0 cokoli pod ~1 V). Usměrňovací 1N4007 ani LED nepoužívejte – jsou pomalé,
+  resp. mají příliš velký úbytek.
 - 4–5 drátů (dupont),
 - **napájení čidla** – vyberte jednu možnost v bodě 3.
 
@@ -22,36 +25,47 @@ napevno na pinech 0/1 a ty signál na UPDI nepustí. Nevíte-li, zkuste A; skrip
 2. Zapojení:
 
 ```
- Arduino                                  Čidlo
- pin 6 ──────[ 4,7 kΩ ]────────────────── UPDI   (pin 10 čipu ATtiny1624)
- GND ──────────────────────────────────── GND    (pin 14)
+ Arduino                                          Čidlo
+ 5V ───[ 10 kΩ ]──┐                     ┌──[ 4,7 kΩ ]── VCC   (3,3 V, pin 1 čipu ATtiny1624)
+                  │                     │
+ pin 6 ───────────┴────────|◄───────────┴─────────────── UPDI  (pin 10)
+                     (proužek diody k Arduinu)
+ GND ──────────────────────────────────────────────────── GND   (pin 14)
  (RESET nezapojovat, kondenzátor není potřeba)
 ```
+- Dioda pustí jen stažení linky k nule – 5 V z Arduina se do čidla nedostane.
+- 4,7 kΩ na straně čidla drží linku v klidu na 3,3 V **z napájení čidla**, 10 kΩ na straně Arduina
+  dělá totéž pro vstup Arduina (5 V, ale za diodou – do čidla neprojde).
+
+Nouzově (bez diody): jen odpor 4,7 kΩ mezi pin 6 a UPDI. Funguje, ale čidlo **musí být napájené**
+– jinak ho Arduino přes vstup UPDI částečně napájí (viz níže).
 
 ### A) Arduino jako převodník – piny 0 a 1 (originální Uno s čipem 16U2, převodníky)
 
 ```
- Arduino                                  Čidlo
+ Arduino                                          Čidlo
  RESET ──┐
  GND  ───┴── drát RESET–GND (Arduino se tím „uspí“ a slouží jen jako převodník USB)
- D0 (RX←) ──[ 4,7 kΩ ]───────┬────────── UPDI   (pin 10 čipu ATtiny1624)
- D1 (TX→) ───────────────────┘
- GND ──────────────────────────────────── GND    (pin 14)
+                                        ┌──[ 4,7 kΩ ]── VCC   (3,3 V, pin 1)
+ D0 (RX←) ───|◄─────────────────────────┼─────────────── UPDI  (pin 10, proužek diody k Arduinu)
+ D1 (TX→) ──────────────────────────────┘
+ GND ──────────────────────────────────────────────────── GND   (pin 14)
 ```
+(Vstup D1 má na desce Una vlastní odpor 1 kΩ a pull-up převodníku, 10 kΩ tu není potřeba.)
 
-S diodou místo odporu (šetrnější – do čidla se nedostane 5 V z Arduina):
-
-```
- D0 (RX←) ───|◄───────────────┬────────── UPDI   (proužek na diodě směrem k Arduinu)
- D1 (TX→) ────────────────────┘
-```
+Nouzově (bez diody): D0 přes odpor 4,7 kΩ na UPDI a D1 přímo na UPDI – jen s napájeným čidlem.
 
 Piny D0 a D1 jsou zapojené „obráceně“ schválně – jsou popsané z pohledu čipu Arduina, který je teď v resetu.
 Na desce čidla hledejte plošky / konektor **UPDI – GND**; pokud nejsou, je UPDI **pin 10**, GND **pin 14**.
 
-**Proč odpor (nebo dioda) nesmí chybět:** Arduino posílá signál s napětím 5 V, čidlo pracuje s 3,3 V.
-Bez omezení by napětí protékalo vstupem čipu do celého čidla (CC1101 a SHT40 snesou nejvýš 3,6 V).
-Odpor proud omezí na neškodných ~0,2 mA, dioda 5 V nepustí vůbec.
+**Proč dioda (a ne jen odpor nebo dělič):** Arduino posílá signál s napětím 5 V, čidlo pracuje s 3,3 V
+(CC1101 a SHT40 snesou nejvýš 3,6 V). Přes samotný odpor teče proud ochrannou diodou vstupu UPDI do
+napájení čidla – u napájeného čidla jen ~0,2 mA, ale **nenapájené čidlo** tím Arduino částečně napájí
+(„backpowering“: CC1101 a SHT40 dostanou nedefinované napětí, čip se může zaseknout v polovičním startu).
+Odporový dělič (např. 1 kΩ / 2,2 kΩ) nepomůže: UPDI je jeden obousměrný vodič, který musí být v klidu
+v logické 1 – spodní odpor děliče ho stahuje k zemi a programátor pak vidí trvalý „break“.
+Dioda + pull-up k 3,3 V čidla tohle řeší: Arduino umí linku jen stáhnout k nule, úroveň 1 dodává
+samo čidlo, takže do čidla se z Arduina nedostane žádné napětí – ani když je vypnuté.
 
 ## 3. Napájení čidla – vyberte JEDNU možnost (nikdy obě najednou)
 
@@ -117,9 +131,9 @@ Aktualizace firmwaru později = `3-aktualizace-firmwaru.cmd`. Párování zůsta
 |---|---|
 | `Nenalezen žádný USB sériový port` | Arduino není připojené, nebo chybí ovladač CH340 (stáhnout z webu výrobce WCH) |
 | `Připojeno víc USB portů` | odpojte ostatní USB zařízení se sériovým portem (např. jiné Arduino) |
-| **„Signál se nevrací“** | odpojte drát UPDI od čidla a test zopakujte. Pak „Arduino OK“ → čidlo drží linku: **nemá napájení** (bod 3) nebo je drát na jiném pinu než UPDI. Pořád nic → zapojení Arduina: RESET–GND, D0 (přes odpor) a D1 spojené v jednom bodě, dráty opravdu na D0/D1 (na Nanu RX0/TX1), kontakty v nepájivém poli. |
+| **„Signál se nevrací“** | odpojte drát UPDI od čidla a test zopakujte. Pak „Arduino OK“ → čidlo drží linku: **nemá napájení** (bod 3) nebo je drát na jiném pinu než UPDI. Pořád nic → zapojení Arduina: RESET–GND, D0 (přes diodu) a D1 spojené v jednom bodě s pull-upem 4,7 kΩ k 3,3 V čidla, dráty opravdu na D0/D1 (na Nanu RX0/TX1), kontakty v nepájivém poli. |
 | **„Arduino neodpovídá ani jako převodník, ani jako jtag2updi“** | klon s CH340: spusťte `0-priprav-arduino.cmd` (bez drátů na Arduinu) a zapojte pin 6 podle varianty B |
-| **„Arduino (jtag2updi) je v pořádku, ale čip neodpovídá“** | drát z pinu 6 přes odpor na UPDI (pin 10), GND, napájení čidla; na Arduinu nesmí být drát RESET–GND |
+| **„Arduino (jtag2updi) je v pořádku, ale čip neodpovídá“** | drát z pinu 6 přes diodu (proužek k Arduinu) na UPDI (pin 10), pull-upy 10 kΩ a 4,7 kΩ, GND, napájení čidla; na Arduinu nesmí být drát RESET–GND |
 | **„Čip v čidle neodpovídá“** | Arduino je v pořádku, chyba je u čidla: napájení (bod 3), UPDI na pin 10, GND; zkuste `.
 ahraj.ps1 -Test -Baud 57600` |
 | `could not open port` | zavřete Arduino IDE (sériový monitor drží port) |
