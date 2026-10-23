@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 """Signed over-the-air updates from GitHub Releases with automatic rollback.
 
+What a run does depends on how it was started:
+  * web / Telegram request (/var/lib/retencka/data/update-request, JSON):
+      {"action": "check"}                       – only look, never install
+      {"action": "install", "version": "1.2.0"} – install exactly that version, if it is
+                                                  still the newest signed release
+      empty / old-style file                    – treated as "check"
+  * timer (no request file) – install only when automatic updates are enabled
+    (update-prefs.json written by the web, fallback /etc/default/retencka),
+    otherwise just record that a new version is available.
+
+Install steps:
   1. ask GitHub for the newest release (stable = latest non-prerelease,
      beta = newest including pre-releases)
   2. download   retencka-<ver>.tar.gz  and  retencka-<ver>.tar.gz.sig
@@ -11,8 +22,13 @@
      new version, otherwise switch back (application AND systemd units), restart
      and blacklist the broken version
 
+Progress goes to update-status.json ("state"): checking → available | up_to_date | error,
+downloading → verifying → installing → restarting → done | rolled_back | error.
+
 Only the application directory changes; the database and settings live in
-/var/lib/retencka/data and are never touched. Runs as root (oneshot).
+/var/lib/retencka/data and are never touched. Runs as root (oneshot). Everything read
+from the data directory is written by the unprivileged app: it is read without following
+symlinks, size-limited and validated strictly, and it never chooses URLs or paths.
 """
 
 from __future__ import annotations
@@ -21,6 +37,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -29,16 +46,24 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 APP = Path("/var/lib/retencka/app")
 RELEASES = APP / "releases"
 CURRENT = APP / "current"
 DATA = Path("/var/lib/retencka/data")
 STATUS = DATA / "update-status.json"
+REQUEST = DATA / "update-request"
+PREFS = DATA / "update-prefs.json"
 BAD = DATA / "update-bad-versions.json"
 PUBKEY = Path("/etc/retencka/release.pub")
 MAX_DOWNLOAD = 30 * 1024 * 1024
+MAX_CHANGELOG = 512 * 1024
+MAX_NOTE = 8000            # characters of release notes per version
+MAX_NOTES = 20             # versions in one status
 KEEP = 3
+CHANNELS = ("stable", "beta")
+VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,20})?$")
 
 
 def env(name: str, default: str) -> str:
@@ -84,12 +109,171 @@ def vtuple(v: str) -> tuple:
     return (tuple(nums), 0 if pre else 1, ident)
 
 
-def write_status(**kw) -> None:
-    kw["checked_at"] = int(time.time())
-    tmp = STATUS.with_suffix(".tmp")
-    tmp.write_text(json.dumps(kw, ensure_ascii=False))
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, STATUS)
+# ------------------------------------------------- files shared with the app
+def read_small(path: Path, limit: int = 4096) -> Optional[bytes]:
+    """Content of a small regular file written by the unprivileged app, or None when it
+    does not exist. Symlinks, FIFOs, devices and oversized files count as empty."""
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except FileNotFoundError:
+        return None
+    except OSError:                      # e.g. ELOOP = a symlink planted instead of the file
+        return b""
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return b""
+        data = os.read(fd, limit + 1)
+        return b"" if len(data) > limit else data
+    finally:
+        os.close(fd)
+
+
+def parse_request(raw: Optional[bytes]) -> Optional[dict]:
+    """What the web asked for. None = no request file (timer run).
+
+    >>> parse_request(None) is None
+    True
+    >>> parse_request(b"1729000000")                     # old style: timestamp
+    {'action': 'check'}
+    >>> parse_request(b'{"action": "install", "version": "1.2.0"}')
+    {'action': 'install', 'version': '1.2.0'}
+    >>> parse_request(b'{"action": "install", "version": "../../etc"}')
+    {'action': 'check'}
+    """
+    if raw is None:
+        return None
+    try:
+        obj = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return {"action": "check"}
+    if isinstance(obj, dict) and obj.get("action") == "install":
+        ver = obj.get("version")
+        if isinstance(ver, str) and VERSION_RE.match(ver):
+            return {"action": "install", "version": ver}
+    return {"action": "check"}
+
+
+def parse_prefs(raw: Optional[bytes]) -> Optional[dict]:
+    """update-prefs.json → {"auto": bool, "channel": "stable"|"beta"}; None if missing or
+    invalid in any way (then /etc/default/retencka applies).
+
+    >>> parse_prefs(b'{"auto": false, "channel": "beta"}')
+    {'auto': False, 'channel': 'beta'}
+    >>> parse_prefs(b'{"auto": 1, "channel": "beta"}') is None     # not a bool
+    True
+    >>> parse_prefs(b'{"auto": true, "channel": "nightly"}') is None
+    True
+    """
+    if not raw:
+        return None
+    try:
+        obj = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(obj, dict):
+        return None
+    auto, channel = obj.get("auto"), obj.get("channel")
+    if not isinstance(auto, bool) or channel not in CHANNELS:
+        return None
+    return {"auto": auto, "channel": channel}
+
+
+def load_prefs() -> dict:
+    p = parse_prefs(read_small(PREFS))
+    if p is not None:
+        return p
+    channel = env("RETENCKA_CHANNEL", "stable")
+    return {"auto": env("RETENCKA_AUTO_UPDATE", "1") == "1",
+            "channel": channel if channel in CHANNELS else "stable"}
+
+
+def write_atomic(path: Path, text: str) -> None:
+    """Replace `path` atomically. The temp name is random and created exclusively, and
+    rename() replaces a planted symlink instead of writing through it."""
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+class Status:
+    """update-status.json of this run; fields given once (latest, notes …) are kept."""
+
+    def __init__(self, current: str, trigger: str, path: Optional[Path] = None):
+        now = int(time.time())
+        self.path = path or STATUS
+        self.data: dict = {"current": current, "latest": None, "notes": [], "trigger": trigger,
+                           "started_at": now}
+
+    def __call__(self, state: str, message: str, **kw) -> dict:
+        now = int(time.time())
+        self.data.update(kw)
+        self.data.update(state=state, message=message, updated_at=now, checked_at=now)
+        try:
+            write_atomic(self.path, json.dumps(self.data, ensure_ascii=False))
+        except OSError as e:
+            print(f"status write failed: {e}", flush=True)
+        try:
+            print(f"[{state}] {message}", flush=True)
+        except UnicodeEncodeError:           # non-UTF-8 console (tests on Windows)
+            print(f"[{state}] " + message.encode("ascii", "replace").decode(), flush=True)
+        return self.data
+
+
+def decide(req: Optional[dict], auto: bool, cur: str, latest: Optional[str], bad: set) -> str:
+    """up_to_date | available | failed_before | mismatch | install
+
+    >>> decide(None, True, "1.0.0", "1.1.0", set())                 # timer, automatic
+    'install'
+    >>> decide(None, False, "1.0.0", "1.1.0", set())                # timer, automatic off
+    'available'
+    >>> decide({"action": "check"}, True, "1.0.0", "1.1.0", set())  # web check never installs
+    'available'
+    >>> decide({"action": "install", "version": "1.1.0"}, False, "1.0.0", "1.2.0", set())
+    'mismatch'
+    """
+    if latest is None or vtuple(latest) <= vtuple(cur):
+        return "up_to_date"
+    if req is not None and req.get("action") == "install":
+        return "install" if req.get("version") == latest else "mismatch"
+    if latest in bad:
+        return "failed_before"
+    return "install" if req is None and auto else "available"
+
+
+HEAD_RE = re.compile(r"^##\s+\[?v?(\d[^\]\s]*)\]?\s*(?:[-–—(]\s*([0-9]{4}-[0-9]{2}-[0-9]{2}))?", re.M)
+
+
+def changelog_sections(md: str, cur: str, target: str) -> list[dict]:
+    """Sections of a Keep-a-Changelog file for versions cur < v <= target, newest first.
+
+    >>> md = "# Changelog\\n## [1.2.0] - 2026-11-01\\n### Přidáno\\n- a\\n## [1.1.0] - 2026-10-01\\n- b\\n"
+    >>> [(s["version"], s["date"]) for s in changelog_sections(md, "1.0.0", "1.2.0")]
+    [('1.2.0', '2026-11-01'), ('1.1.0', '2026-10-01')]
+    >>> [s["version"] for s in changelog_sections(md, "1.1.0", "1.2.0")]
+    ['1.2.0']
+    """
+    heads = list(HEAD_RE.finditer(md))
+    out = []
+    for i, m in enumerate(heads):
+        ver = m.group(1)
+        if not VERSION_RE.match(ver) or not (vtuple(cur) < vtuple(ver) <= vtuple(target)):
+            continue
+        end = heads[i + 1].start() if i + 1 < len(heads) else len(md)
+        body = md[m.end():end].split("\n", 1)[-1] if "\n" in md[m.end():end] else ""
+        # stop at a following level-1/level-2 heading that is not a version (e.g. link refs)
+        body = re.split(r"^\[[^\]]+\]:\s", body, maxsplit=1, flags=re.M)[0].strip()
+        out.append({"version": ver, "date": m.group(2), "markdown": body[:MAX_NOTE]})
+    out.sort(key=lambda s: vtuple(s["version"]), reverse=True)
+    return out[:MAX_NOTES]
 
 
 def current_version() -> str:
@@ -109,7 +293,8 @@ def http_get(url: str, limit: int, accept: str = "application/octet-stream") -> 
     return data
 
 
-def find_release(repo: str, channel: str):
+def find_release(repo: str, channel: str) -> Optional[dict]:
+    """Newest signed release: {version, tag, published_at, tar, sig} or None."""
     if channel == "beta":
         rels = json.loads(http_get(f"https://api.github.com/repos/{repo}/releases?per_page=10", 2_000_000,
                                    "application/vnd.github+json"))
@@ -124,12 +309,27 @@ def find_release(repo: str, channel: str):
             raise
     best = None
     for r in rels:
-        ver = r.get("tag_name", "").lstrip("v")
+        tag = str(r.get("tag_name", ""))
+        ver = tag.lstrip("v")
+        if not VERSION_RE.match(ver):
+            continue
         assets = {a["name"]: a["browser_download_url"] for a in r.get("assets", [])}
         tar, sig = f"retencka-{ver}.tar.gz", f"retencka-{ver}.tar.gz.sig"
-        if tar in assets and sig in assets and (best is None or vtuple(ver) > vtuple(best[0])):
-            best = (ver, assets[tar], assets[sig])
+        if tar in assets and sig in assets and (best is None or vtuple(ver) > vtuple(best["version"])):
+            best = {"version": ver, "tag": tag, "published_at": str(r.get("published_at") or "")[:10] or None,
+                    "tar": assets[tar], "sig": assets[sig]}
     return best
+
+
+def fetch_notes(repo: str, tag: str, cur: str, target: str) -> list[dict]:
+    """Release notes from CHANGELOG.md of the target tag; [] when unavailable."""
+    try:
+        md = http_get(f"https://raw.githubusercontent.com/{repo}/{tag}/CHANGELOG.md", MAX_CHANGELOG,
+                      "text/plain").decode("utf-8", "replace")
+        return changelog_sections(md, cur, target)
+    except Exception as e:
+        print(f"release notes unavailable: {e}", flush=True)
+        return []
 
 
 def pubkey() -> Path:
@@ -243,44 +443,29 @@ def healthy(expected: str, timeout: int = 120) -> bool:
     return False
 
 
-def main() -> int:
-    repo = env("RETENCKA_REPO", "Svaty10/Retencni_Nadrz_V2")
-    channel = env("RETENCKA_CHANNEL", "stable")
-    auto = env("RETENCKA_AUTO_UPDATE", "1") == "1"
-    manual = (DATA / "update-request").exists()
-    (DATA / "update-request").unlink(missing_ok=True)
-    cur = current_version()
+def load_bad() -> set:
     try:
-        bad = set(json.loads(BAD.read_text()))
-    except (OSError, ValueError):
-        bad = set()
+        v = json.loads((read_small(BAD, 65536) or b"[]").decode("utf-8"))
+        return {x for x in v if isinstance(x, str)} if isinstance(v, list) else set()
+    except (UnicodeDecodeError, ValueError):
+        return set()
 
-    try:
-        rel = find_release(repo, channel)
-    except Exception as e:
-        write_status(current=cur, message=f"Kontrola selhala: {e}")
-        return 1
-    if not rel or vtuple(rel[0]) <= vtuple(cur):
-        write_status(current=cur, latest=rel[0] if rel else None, message=f"Aktuální verze {cur}")
-        return 0
-    ver, tar_url, sig_url = rel
-    if ver in bad:
-        write_status(current=cur, latest=ver, message=f"Verze {ver} dříve selhala – přeskočeno")
-        return 0
-    if not (auto or manual):
-        write_status(current=cur, latest=ver, message=f"K dispozici verze {ver} (automatické aktualizace vypnuty)")
-        return 0
 
+def install(rel: dict, cur: str, bad: set, st: Status) -> int:
+    ver = rel["version"]
     RELEASES.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=APP) as tmpd:
         tmp = Path(tmpd)
         tar, sig = tmp / "r.tar.gz", tmp / "r.sig"
         try:
-            tar.write_bytes(http_get(tar_url, MAX_DOWNLOAD))
-            sig.write_bytes(http_get(sig_url, 4096))
+            st("downloading", f"Stahuji verzi {ver}…", target=ver)
+            tar.write_bytes(http_get(rel["tar"], MAX_DOWNLOAD))
+            sig.write_bytes(http_get(rel["sig"], 4096))
+            st("verifying", "Ověřuji podpis balíku…")
             if not verify(tar, sig):
-                write_status(current=cur, latest=ver, message=f"Verze {ver}: NEPLATNÝ PODPIS – odmítnuto")
+                st("error", f"Verze {ver} má neplatný podpis – odmítnuto. Dál běží verze {cur}.")
                 return 2
+            st("installing", f"Instaluji verzi {ver}…")
             stage = tmp / "x"
             stage.mkdir()
             safe_extract(tar, stage)
@@ -301,10 +486,11 @@ def main() -> int:
                 shutil.rmtree(final)
             os.replace(stage, final)
         except Exception as e:
-            write_status(current=cur, latest=ver, message=f"Stažení verze {ver} selhalo: {e}")
+            st("error", f"Instalace verze {ver} selhala: {e}. Dál běží verze {cur}.")
             return 1
 
     previous = CURRENT.resolve()
+    st("restarting", "Restartuji aplikaci…")
     switch(RELEASES / ver)
     units_backup: dict = {}
     try:
@@ -313,7 +499,7 @@ def main() -> int:
         print(f"unit sync failed: {e}", flush=True)
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
     if healthy(ver):
-        write_status(current=ver, latest=ver, message=f"Aktualizováno {cur} → {ver}")
+        st("done", f"Aktualizováno {cur} → {ver}", current=ver)
         keep = sorted((p for p in RELEASES.iterdir() if p.is_dir()), key=lambda p: vtuple(p.name))[-KEEP:]
         for p in RELEASES.iterdir():
             if p.is_dir() and p not in keep and p.resolve() not in (previous, final.resolve()):
@@ -324,9 +510,51 @@ def main() -> int:
     restore_units(units_backup)
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
     bad.add(ver)
-    BAD.write_text(json.dumps(sorted(bad)))
-    write_status(current=cur, latest=ver, message=f"Verze {ver} nenaběhla – vráceno na {cur}")
+    try:
+        write_atomic(BAD, json.dumps(sorted(bad)))
+    except OSError as e:
+        print(f"cannot record bad version: {e}", flush=True)
+    st("rolled_back", f"Verze {ver} nenaběhla – vráceno na {cur}, dál běží předchozí verze.")
     return 3
+
+
+def main() -> int:
+    repo = env("RETENCKA_REPO", "Svaty10/Retencni_Nadrz_V2")     # never from the data directory
+    prefs = load_prefs()
+    req = parse_request(read_small(REQUEST))
+    try:
+        REQUEST.unlink()
+    except FileNotFoundError:
+        pass
+    cur = current_version()
+    st = Status(cur, "timer" if req is None else "web")
+    st("checking", "Hledám aktualizace…", channel=prefs["channel"])
+    bad = load_bad()
+
+    try:
+        rel = find_release(repo, prefs["channel"])
+    except Exception as e:
+        st("error", f"Kontrola aktualizací selhala: {e}")
+        return 1
+    latest = rel["version"] if rel else None
+    what = decide(req, prefs["auto"], cur, latest, bad)
+    if what == "up_to_date":
+        st("up_to_date", f"Máte nejnovější verzi {cur}.", latest=latest)
+        return 0
+
+    st("checking", "Načítám poznámky k vydání…", latest=latest, published_at=rel["published_at"],
+       notes=fetch_notes(repo, rel["tag"], cur, latest), failed_before=latest in bad)
+    if what == "mismatch":
+        st("available", f"Požadovaná verze {req['version']} už není nejnovější – k dispozici je {latest}.")
+        return 0
+    if what == "failed_before":
+        st("available", f"Verze {latest} se dříve nepodařilo spustit; lze ji zkusit nainstalovat ručně.")
+        return 0
+    if what == "available":
+        st("available", f"K dispozici je verze {latest}."
+           + ("" if req is not None else " Automatické aktualizace jsou vypnuté."))
+        return 0
+    return install(rel, cur, bad, st)
 
 
 if __name__ == "__main__":

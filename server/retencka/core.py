@@ -11,8 +11,10 @@ import json
 import logging
 import math
 import os
+import re
 import shutil
 import socket
+import tempfile
 import threading
 import time
 from collections import OrderedDict
@@ -24,7 +26,7 @@ from .auth import IpLimiter, Sessions
 from .db import Database
 from .external import Http, Hydrawise, Weather
 from .model import Packet
-from .settings import NODE_SCHEMA, Nodes, Settings
+from .settings import NODE_SCHEMA, Nodes, Settings, strip_schema_defaults
 
 log = logging.getLogger("retencka.core")
 
@@ -47,6 +49,9 @@ STOP_RETRY_MARGIN_S = 60          # refill row closed this long after the planne
 LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
 BACKUP_KEEP = 7                   # nightly local backups kept
 SERVIS_24H_S = 24 * 3600
+# same rules as system/bin/retencka-control.py (the root helper validates again)
+NETBIRD_KEY_RE = re.compile(r"^[A-Za-z0-9-]{20,80}$")
+NETBIRD_URL_RE = re.compile(r"^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?/?$")
 
 # audit actions forwarded to Telegram: action -> admins only
 NOTIFY_ACTIONS = {"AUTO_REFILL": False, "MANUAL_REFILL": False, "REFILL_ERROR": False, "REFILL_FAULT": False,
@@ -225,7 +230,53 @@ class Core:
             mode, until = "off", None
         return {"installed": bool(st.get("installed")), "connected": bool(st.get("connected")),
                 "ip": st.get("ip"), "mode": mode, "until": until, "by": want.get("by"),
-                "checked": st.get("checked")}
+                "checked": st.get("checked"), "install": self.netbird_install_state()}
+
+    def netbird_install(self, setup_key: str, url: str, user: str, ip: str = "") -> dict:
+        """Ask the root helper to install NetBird (control-netbird-install). The setup key is
+        written only into the request file (deleted by the helper at once), never logged."""
+        setup_key, url = str(setup_key or "").strip(), str(url or "").strip()
+        if not NETBIRD_KEY_RE.match(setup_key):
+            raise ValueError("Neplatný setup key (20–80 znaků: písmena, číslice, pomlčka).")
+        if url and not NETBIRD_URL_RE.match(url):
+            raise ValueError("Adresa serveru musí být https://… (jen písmena, číslice, tečka, pomlčka).")
+        st = self.netbird_install_state()
+        if st.get("state") in ("queued", "installing") and time.time() - (st.get("updated_at") or 0) < 20 * 60:
+            raise ValueError("Instalace už probíhá.")
+        if self.servis_state()["installed"]:
+            raise ValueError("Vzdálený servis už je nainstalovaný.")
+        now = int(time.time())
+        self._write_json("netbird-install.json", {"state": "queued", "message": "Čekám na spuštění instalace…",
+                                                  "updated_at": now})
+        fd, tmp = tempfile.mkstemp(dir=self.data_dir, prefix=".control-netbird.")
+        with os.fdopen(fd, "w") as f:
+            json.dump({"setup_key": setup_key, "management_url": url}, f)
+        os.replace(tmp, os.path.join(self.data_dir, "control-netbird-install"))
+        self.audit("SERVICE_ACCESS", "Instalace vzdáleného servisu (NetBird) spuštěna", user, ip)
+        return self.netbird_install_state()
+
+    def netbird_install_state(self) -> dict:
+        try:
+            with open(os.path.join(self.data_dir, "netbird-install.json"), encoding="utf-8") as f:
+                st = json.load(f)
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(st, dict):
+            return {}
+        if st.get("state") == "done" and not st.get("audited"):
+            self.audit("SERVICE_ACCESS", "Vzdálený servis (NetBird) nainstalován", "system")
+            st["audited"] = True
+            try:
+                self._write_json("netbird-install.json", st)
+            except OSError:
+                pass
+        return {k: st.get(k) for k in ("state", "message", "updated_at")}
+
+    def _write_json(self, name: str, data: dict) -> None:
+        fd, tmp = tempfile.mkstemp(dir=self.data_dir, prefix="." + name + ".")
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, os.path.join(self.data_dir, name))
 
     def set_servis(self, mode: str, user: str, ip: str = "") -> dict:
         if mode not in ("off", "24h", "on"):
@@ -1407,7 +1458,7 @@ class Core:
                 raise ValueError("Soubor není záloha Retenční nádrže (nebo je poškozený).")
             if ver > self.db.scalar("PRAGMA user_version", (), 0):
                 raise ValueError("Záloha je z novější verze – nejdřív aktualizujte hub.")
-            return self._merge(work, tables, full)
+            return self._merge(work, tables, full, ver)
         finally:
             for suffix in ("", "-journal", "-wal", "-shm"):
                 try:
@@ -1415,7 +1466,7 @@ class Core:
                 except OSError:
                     pass
 
-    def _merge(self, work: str, tables: set, full: bool) -> dict:
+    def _merge(self, work: str, tables: set, full: bool, src_ver: int = 999) -> dict:
         c = self.db.conn()
         c.execute("ATTACH DATABASE ? AS src", (work,))
         stats = {"measurements": 0, "skipped": 0, "nodes": 0, "refills": 0, "audit": 0, "users": 0,
@@ -1432,6 +1483,12 @@ class Core:
                 for r in c.execute(f"SELECT {', '.join(nc)} FROM src.nodes").fetchall():
                     row = dict(zip(nc, r))
                     row.pop("unpair_at", None)
+                    if src_ver < 9 and row.get("config"):
+                        # backup from before shared tank defaults: keep only real overrides
+                        try:
+                            row["config"] = json.dumps(strip_schema_defaults(json.loads(row["config"])))
+                        except (ValueError, TypeError, AttributeError):
+                            pass
                     if self.nodes.get(row["node_id"]) is None:
                         if len(self.nodes.ids()) >= 16:
                             continue

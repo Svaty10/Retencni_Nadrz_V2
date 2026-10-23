@@ -43,6 +43,7 @@
         <symbol id="i-bars" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 16.5v-5M11 16.5V7M15.5 16.5v-7M20 16.5V5"/></symbol>
         <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15l5.5-5.5"/></symbol>
         <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
     </defs>
 </svg>
 
@@ -57,6 +58,7 @@
             <button class="account-btn" id="accountBtn" type="button" aria-haspopup="menu" aria-expanded="false"
                     aria-controls="accountMenu" aria-label="Účet a nastavení">
                 <span class="avatar" id="avatarInitial" aria-hidden="true">?</span>
+                <span class="badge-dot hidden" id="avatarDot" title="K dispozici je aktualizace"></span>
                 <svg class="ico ico-sm" aria-hidden="true"><use href="#i-chevron"/></svg>
             </button>
             <div class="menu hidden" id="accountMenu" role="menu" aria-labelledby="accountBtn">
@@ -71,7 +73,7 @@
                 <button class="menu-item tab-btn" data-tab="heslo" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>Můj účet</button>
                 <button class="menu-item tab-btn admin-only hidden" data-tab="nastaveni" type="button" role="menuitem">
-                    <svg class="ico" aria-hidden="true"><use href="#i-sliders"/></svg>Nastavení</button>
+                    <svg class="ico" aria-hidden="true"><use href="#i-sliders"/></svg>Nastavení<span class="badge-dot hidden" id="menuUpdDot" title="K dispozici je aktualizace"></span></button>
                 <button class="menu-item tab-btn admin-only hidden" data-tab="uzivatele" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-users"/></svg>Správa uživatelů</button>
                 <button class="menu-item tab-btn admin-only hidden" data-tab="logovani" type="button" role="menuitem">
@@ -251,8 +253,8 @@
             </label>
         </div>
         <div class="stack">
-            <!-- Nádrž -->
-            <section class="card">
+            <!-- Nádrž (jen v záložce nádrže) -->
+            <section class="card scope-tank" id="tankCard">
                 <h2>Nádrž – <span id="calNodeName">–</span></h2>
 
                 <dl class="live-grid">
@@ -447,7 +449,7 @@
             </section>
 
             <!-- Čidla -->
-            <section class="card span-cols">
+            <section class="card span-cols scope-all">
                 <h2>Čidla</h2>
                 <div class="table-responsive">
                     <table class="user-table">
@@ -487,8 +489,97 @@
                 </div>
             </section>
 
+
+            <!-- Výchozí nastavení nádrží (sdílené; nádrž může mít vlastní hodnotu) -->
+            <section class="card col-card scope-all" id="defCard">
+                <h2>Výchozí nastavení nádrží</h2>
+                <p class="muted small">Platí pro všechny nádrže, které nemají vlastní hodnotu. Vlastní hodnotu
+                    nastavíte u nádrže; změna výchozí hodnoty ji nepřepíše.</p>
+                <form id="defForm" class="config-form flow-form">
+                    <h3>Upozornění a baterie</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span></label>
+                            <div class="input-unit"><input type="number" step="1" min="0" max="100" name="notify_low_pct"><span class="unit">%</span></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Baterie v čidle (3× AA)</label>
+                            <select name="battery_type" class="unified-select">
+                                <option value="lifes2">Lithiové Li-FeS2 (Energizer Ultimate Lithium)</option>
+                                <option value="alkaline">Alkalické</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row adv">
+                        <div class="form-group">
+                            <label>Odtokový součinitel střechy</label>
+                            <input type="number" step="0.05" min="0.05" max="1" name="runoff_coef" class="unified-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Přesnost sondy</label>
+                            <div class="input-unit"><input type="number" step="0.01" name="probe_accuracy_pct"><span class="unit">% rozsahu</span></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Rozsah sondy</label>
+                            <div class="input-unit"><input type="number" step="1" name="probe_range_cm"><span class="unit">cm</span></div>
+                        </div>
+                    </div>
+                    <h3>Dopouštění</h3>
+                    <div class="form-row toggles">
+                        <label class="toggle">
+                            <span class="toggle-text">Čekat na předpovězený déšť</span>
+                            <span class="switch"><input type="checkbox" name="rain_wait_enabled"><span class="slider"></span></span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Dopouštět pod</label>
+                            <div class="input-unit"><input type="number" step="1" name="refill_threshold_pct"><span class="unit">%</span></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Dopustit na</label>
+                            <div class="input-unit"><input type="number" step="1" name="auto_refill_target_pct"><span class="unit">%</span></div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nečekat na déšť pod prahem o víc než</label>
+                            <div class="input-unit"><input type="number" step="1" name="rain_wait_max_below_pct"><span class="unit">%</span></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Přestat čekat po poklesu o</label>
+                            <div class="input-unit"><input type="number" step="1" name="rain_wait_max_drop_pct"><span class="unit">%</span></div>
+                        </div>
+                    </div>
+                    <div class="form-row adv">
+                        <div class="form-group">
+                            <label>Výhled deště</label>
+                            <div class="input-unit"><input type="number" step="1" min="1" max="72" name="rain_wait_hours"><span class="unit">h</span></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Nejvýš dopustit na</label>
+                            <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct"><span class="unit">%</span></div>
+                        </div>
+                    </div>
+                    <div class="form-row adv">
+                        <div class="form-group">
+                            <label>Průtok</label>
+                            <div class="input-unit"><input type="number" step="0.1" name="flow_rate_lpm"><span class="unit">L/min</span></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Nejdelší dopouštění</label>
+                            <div class="input-unit"><input type="number" step="1" name="max_refill_minutes"><span class="unit">min</span></div>
+                        </div>
+                    </div>
+                    <div class="form-actions"><button type="submit" class="btn btn-primary">Uložit výchozí nastavení</button></div>
+                </form>
+            </section>
+
+            <!-- sloupce karet (rozděluje app.js podle výšky, spodky zarovnané) -->
+            <div class="set-cols scope-all" id="setCols"></div>
+
             <!-- Obecné -->
-            <section class="card">
+            <section class="card col-card scope-all">
                 <h2>Obecné</h2>
                 <form id="sysForm" class="config-form flow-form">
                     <h3>Poloha (předpověď počasí)</h3>
@@ -507,19 +598,6 @@
                         <div class="form-group">
                             <label>API klíč</label>
                             <input type="password" name="hydrawise_api_key" class="unified-input" autocomplete="off">
-                        </div>
-                    </div>
-                    <h3>Telegram</h3>
-                    <p class="muted small">V Telegramu napište <b>@BotFather</b> zprávu <b>/newbot</b>, zvolte název
-                        (např. „Nádrž Novákovi“) a vložte sem token, který vám pošle.</p>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Token bota</label>
-                            <input type="password" name="telegram_token" class="unified-input" autocomplete="off">
-                        </div>
-                        <div class="form-group">
-                            <label>Stav</label>
-                            <div class="readonly-box" id="tgAdminStatus">–</div>
                         </div>
                     </div>
                     <div class="adv">
@@ -544,8 +622,26 @@
             </section>
 
             <!-- Telegram a servis -->
-            <section class="card">
+            <section class="card col-card scope-all">
                 <h2>Telegram a vzdálený servis</h2>
+                <h3>Telegram</h3>
+                <div class="tg-state" id="tgState">
+                    <span class="status-pill" id="tgAdminStatus">–</span>
+                    <button type="button" class="btn btn-outline btn-sm hidden" id="tgChangeBtn">Změnit token</button>
+                </div>
+                <div id="tgSetup" class="setup-box hidden">
+                    <ol class="setup-steps">
+                        <li>V Telegramu otevřete <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a>.</li>
+                        <li>Pošlete mu <code>/newbot</code>, zvolte název (např. „Nádrž Novákovi“) a uživatelské jméno končící na <code>bot</code>.</li>
+                        <li>Token, který vám pošle, vložte sem.</li>
+                        <li>Klikněte na <b>Ověřit a uložit</b>.</li>
+                    </ol>
+                    <div class="inline-actions">
+                        <input type="password" id="tgToken" class="unified-input" placeholder="Token bota (123456:ABC…)" autocomplete="off" aria-label="Token bota">
+                        <button type="button" class="btn btn-primary" id="tgSave">Ověřit a uložit</button>
+                    </div>
+                    <p class="muted small mt-15" id="tgSetupMsg"></p>
+                </div>
                 <h3>Propojené chaty</h3>
                 <div class="table-responsive">
                     <table class="user-table">
@@ -556,25 +652,44 @@
                 <h3>Servisní přístup (NetBird)</h3>
                 <p class="muted small">Umožní servisnímu technikovi připojit se k zařízení na dálku (web i správa).
                     Zákazník ho může kdykoli vypnout.</p>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Stav</label>
-                        <div class="readonly-box" id="servisStatus">–</div>
+                <div id="nbInstallBox" class="setup-box hidden">
+                    <p class="small">Vzdálený servis zatím není nainstalovaný. Setup key dostanete od servisního
+                        technika (NetBird → <i>Setup Keys</i>).</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nbKey">Setup key</label>
+                            <input type="password" id="nbKey" class="unified-input" autocomplete="off" maxlength="80">
+                        </div>
+                        <div class="form-group adv">
+                            <label for="nbUrl">Vlastní server (URL) <span class="muted">– nepovinné</span></label>
+                            <input type="url" id="nbUrl" class="unified-input" placeholder="https://netbird.example.cz" autocomplete="off" maxlength="200">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="servisMode">Povolit</label>
-                        <select id="servisMode" class="unified-select">
-                            <option value="off">Vypnuto</option>
-                            <option value="24h">Na 24 hodin</option>
-                            <option value="on">Trvale</option>
-                        </select>
-                    </div>
+                    <div class="form-actions"><button type="button" class="btn btn-primary" id="nbInstallBtn">Nainstalovat vzdálený servis</button></div>
                 </div>
-                <div class="form-actions"><button type="button" id="servisSave" class="btn btn-outline">Uložit</button></div>
+                <div class="upd-wait hidden" id="nbProgress"><span class="spinner"></span><span id="nbProgressText">Instaluji…</span></div>
+                <div id="nbResult" class="hidden"></div>
+                <div id="servisBox">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Stav</label>
+                            <div class="readonly-box" id="servisStatus">–</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="servisMode">Povolit</label>
+                            <select id="servisMode" class="unified-select">
+                                <option value="off">Vypnuto</option>
+                                <option value="24h">Na 24 hodin</option>
+                                <option value="on">Trvale</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions"><button type="button" id="servisSave" class="btn btn-outline">Uložit</button></div>
+                </div>
             </section>
 
             <!-- Záloha -->
-            <section class="card">
+            <section class="card col-card scope-all">
                 <h2>Záloha</h2>
                 <div class="backup-actions">
                     <a class="btn btn-primary" id="backupBtn" href="/api/backup/download" download>Stáhnout zálohu</a>
@@ -595,7 +710,7 @@
             </section>
 
             <!-- Home Assistant -->
-            <section class="card">
+            <section class="card col-card scope-all">
                 <h2>Home Assistant</h2>
                 <div class="token-row">
                     <input type="password" id="haToken" class="unified-input" readonly aria-label="Token">
@@ -610,9 +725,24 @@
             </section>
 
             <!-- Systém -->
-            <section class="card">
+            <section class="card col-card scope-all">
                 <h2>Systém</h2>
                 <dl class="kv" id="sysInfo"></dl>
+                <h3>Aktualizace</h3>
+                <div class="upd-line" id="sysUpdate"></div>
+                <div class="upd-prefs">
+                    <label class="toggle">
+                        <span class="toggle-text">Instalovat aktualizace automaticky (v noci)</span>
+                        <span class="switch"><input type="checkbox" class="upd-auto"><span class="slider"></span></span>
+                    </label>
+                    <label class="upd-channel">
+                        <span>Kanál</span>
+                        <select class="unified-select upd-channel-sel" aria-label="Kanál aktualizací">
+                            <option value="stable">Stabilní</option>
+                            <option value="beta">Beta</option>
+                        </select>
+                    </label>
+                </div>
                 <div class="form-actions"><button class="btn btn-outline" id="updateBtn" type="button">Zkontrolovat aktualizace</button></div>
             </section>
         </div>
@@ -735,6 +865,34 @@
                 <p class="muted small mt-20" id="aboutLine"></p>
             </section>
         </div>
+    </div>
+</div>
+
+<!-- Dialog aktualizací (obsah kreslí app.js; texty z GitHubu jen přes textContent) -->
+<div class="modal-backdrop hidden" id="updModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="updTitle" tabindex="-1">
+        <div class="modal-head">
+            <h2 id="updTitle">Aktualizace</h2>
+            <button class="icon-btn" id="updClose" type="button" aria-label="Zavřít">
+                <svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+        </div>
+        <div class="modal-body" id="updBody" aria-live="polite"></div>
+        <div class="modal-prefs">
+            <div class="upd-prefs">
+                    <label class="toggle">
+                        <span class="toggle-text">Instalovat aktualizace automaticky (v noci)</span>
+                        <span class="switch"><input type="checkbox" class="upd-auto"><span class="slider"></span></span>
+                    </label>
+                    <label class="upd-channel">
+                        <span>Kanál</span>
+                        <select class="unified-select upd-channel-sel" aria-label="Kanál aktualizací">
+                            <option value="stable">Stabilní</option>
+                            <option value="beta">Beta</option>
+                        </select>
+                    </label>
+                </div>
+        </div>
+        <div class="modal-foot" id="updFoot"></div>
     </div>
 </div>
 

@@ -349,6 +349,126 @@ class ServerTest(unittest.TestCase):
         st, js, _ = self.req("GET", f"/api/history?from={now - 3600}&to={now + 60}", headers=h)
         self.assertEqual(st, 200)
 
+    def test_1b_update_api(self):
+        """Check / install requests for the root updater, prefs, status; admin + CSRF only."""
+        from retencka import __version__
+        d = self.tmp.name
+        req_file, status_file = os.path.join(d, "update-request"), os.path.join(d, "update-status.json")
+        st, _, _ = self.req("GET", "/api/update/status")
+        self.assertEqual(st, 401)
+        h = self.login()
+        st, js, _ = self.req("GET", "/api/update/status", headers=h)
+        self.assertEqual(st, 200)
+        self.assertEqual(js["running"], __version__)
+        self.assertFalse(js["pending"])
+        self.assertIn(js["prefs"]["channel"], ("stable", "beta"))
+        # CSRF required
+        st, _, _ = self.req("POST", "/api/update/check", {}, headers={"Cookie": h["Cookie"]})
+        self.assertEqual(st, 403)
+        st, js, _ = self.req("POST", "/api/update/check", {}, headers=h)
+        self.assertEqual(st, 200, js)
+        self.assertTrue(js["pending"])
+        with open(req_file) as f:
+            self.assertEqual(json.load(f)["action"], "check")
+        # the old route still asks for a check (never an install)
+        st, js, _ = self.req("POST", "/api/system/update", {}, headers=h)
+        self.assertEqual(st, 200)
+        with open(req_file) as f:
+            self.assertEqual(json.load(f)["action"], "check")
+        # install only of the version the last check found
+        st, js, _ = self.req("POST", "/api/update/install", {"version": "9.9.9"}, headers=h)
+        self.assertEqual(st, 409)
+        with open(status_file, "w") as f:
+            json.dump({"state": "available", "current": __version__, "latest": "9.9.9",
+                       "updated_at": int(time.time())}, f)
+        for bad in ("9.9.9; rm", 9, None, "../9"):
+            st, _, _ = self.req("POST", "/api/update/install", {"version": bad}, headers=h)
+            self.assertEqual(st, 400, bad)
+        st, js, _ = self.req("POST", "/api/update/install", {"version": "9.9.8"}, headers=h)
+        self.assertEqual(st, 409)
+        st, js, _ = self.req("POST", "/api/update/install", {"version": "9.9.9"}, headers=h)
+        self.assertEqual(st, 200, js)
+        with open(req_file) as f:
+            body = json.load(f)
+        body.pop("ts")
+        self.assertEqual(body, {"action": "install", "version": "9.9.9"})
+        # while installing, no new request is accepted
+        with open(status_file, "w") as f:
+            json.dump({"state": "installing", "latest": "9.9.9", "updated_at": int(time.time())}, f)
+        st, _, _ = self.req("POST", "/api/update/check", {}, headers=h)
+        self.assertEqual(st, 409)
+        st, js, _ = self.req("GET", "/api/update/status", headers=h)
+        self.assertTrue(js["busy"])
+        self.assertEqual(js["status"]["state"], "installing")
+        # prefs: strict validation
+        for bad in ({"auto": "yes", "channel": "stable"}, {"auto": True, "channel": "nightly"}, {}):
+            st, _, _ = self.req("POST", "/api/update/prefs", bad, headers=h)
+            self.assertEqual(st, 400, bad)
+        st, js, _ = self.req("POST", "/api/update/prefs", {"auto": False, "channel": "beta"}, headers=h)
+        self.assertEqual(st, 200, js)
+        with open(os.path.join(d, "update-prefs.json")) as f:
+            self.assertEqual(json.load(f), {"auto": False, "channel": "beta"})
+        st, js, _ = self.req("GET", "/api/system", headers=h)
+        self.assertEqual(js["update_prefs"], {"auto": False, "channel": "beta"})
+        for p in (req_file, status_file, os.path.join(d, "update-prefs.json")):
+            os.remove(p)
+
+    def test_1d_netbird_install_request(self):
+        h = self.login()
+        key = "ABCDEF01-2345-6789-ABCD-EF0123456789"
+        for bad in ({"setup_key": "short"}, {"setup_key": "x; rm -rf / #aaaaaaaaaaaaaaa"},
+                    {"setup_key": key, "management_url": "http://plain.cz"},
+                    {"setup_key": key, "management_url": "https://a.cz/$(id)"}):
+            st, _, _ = self.req("POST", "/api/servis/install", bad, headers=h)
+            self.assertEqual(st, 400, bad)
+        st, js, _ = self.req("POST", "/api/servis/install", {"setup_key": key, "management_url": "https://nb.example.cz"},
+                             headers=h)
+        self.assertEqual(st, 200, js)
+        req = os.path.join(self.tmp.name, "control-netbird-install")
+        with open(req) as f:
+            self.assertEqual(json.load(f), {"setup_key": key, "management_url": "https://nb.example.cz"})
+        st, js, _ = self.req("GET", "/api/servis", headers=h)
+        self.assertEqual(js["install"]["state"], "queued")
+        self.assertNotIn(key, json.dumps(js))                              # never echoed back
+        st, _, _ = self.req("POST", "/api/servis/install", {"setup_key": key}, headers=h)
+        self.assertEqual(st, 400)                                          # already running
+        details = " ".join(r["detail"] or "" for r in self.core.db.query("SELECT detail FROM audit"))
+        self.assertNotIn(key, details)
+        os.remove(req)
+        os.remove(os.path.join(self.tmp.name, "netbird-install.json"))
+
+    def test_1c_node_defaults_api(self):
+        h = self.login()
+        st, js, _ = self.req("GET", "/api/node-defaults", headers=h)
+        self.assertEqual(st, 200)
+        self.assertIn("notify_low_pct", js["keys"])
+        nid = self.core.nodes.ids()[0]
+        node = f"{nid:04X}"
+        st, js, _ = self.req("GET", "/api/nodes", headers=h)
+        mine = next(n for n in js["nodes"] if n["id"] == node)
+        self.assertIn("inherited", mine)
+        # own value for this tank, then a default change must not touch it
+        st, js, _ = self.req("POST", f"/api/node?node={node}", {"notify_low_pct": 44}, headers=h)
+        self.assertEqual(st, 200, js)
+        self.assertNotIn("notify_low_pct", js["node"]["inherited"])
+        st, js, _ = self.req("POST", "/api/node-defaults", {"notify_low_pct": 11, "rain_wait_hours": 12}, headers=h)
+        self.assertEqual(st, 200, js)
+        self.assertEqual(sorted(js["changed"]), ["notify_low_pct", "rain_wait_hours"])
+        mine = next(n for n in js["nodes"] if n["id"] == node)
+        self.assertEqual((mine["notify_low_pct"], mine["rain_wait_hours"]), (44, 12))
+        st, js, _ = self.req("POST", "/api/node-defaults", {"tank_area_m2": 3}, headers=h)
+        self.assertEqual(st, 400)
+        st, js, _ = self.req("POST", "/api/node-defaults", {"notify_low_pct": 11}, headers={"Cookie": h["Cookie"]})
+        self.assertEqual(st, 403)                                         # CSRF
+        # reset → inherited again
+        st, js, _ = self.req("POST", f"/api/node?node={node}", {"reset": ["notify_low_pct"]}, headers=h)
+        self.assertEqual(st, 200, js)
+        self.assertEqual(js["node"]["notify_low_pct"], 11)
+        self.assertIn("notify_low_pct", js["node"]["inherited"])
+        st, js, _ = self.req("POST", f"/api/node?node={node}", {"reset": "notify_low_pct"}, headers=h)
+        self.assertEqual(st, 400)
+        self.req("POST", "/api/node-defaults", {"notify_low_pct": 15, "rain_wait_hours": 24}, headers=h)
+
     def test_2_bruteforce_and_limits(self):
         for _ in range(4):
             self.req("POST", "/api/auth/login", {"username": "nobody", "password": "wrong-password"})

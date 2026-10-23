@@ -161,6 +161,27 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE nodes ADD COLUMN last_ctr INTEGER;
     """,
+    # --- v9: shared tank defaults (settings row "node_defaults") + per-tank overrides.
+    # A node kept a full copy of every key; an inheritable key whose value equals the
+    # schema default becomes inherited, any other value stays as the tank's override, so
+    # no effective value changes. Shared defaults start at the schema defaults (no row).
+    # Frozen copy of settings.INHERITABLE and its defaults at the time of this migration.
+    """
+    UPDATE nodes SET config = json_remove(config, '$.probe_accuracy_pct') WHERE json_extract(config, '$.probe_accuracy_pct') = 0.5;
+    UPDATE nodes SET config = json_remove(config, '$.probe_range_cm') WHERE json_extract(config, '$.probe_range_cm') = 200.0;
+    UPDATE nodes SET config = json_remove(config, '$.notify_low_pct') WHERE json_extract(config, '$.notify_low_pct') = 15.0;
+    UPDATE nodes SET config = json_remove(config, '$.runoff_coef') WHERE json_extract(config, '$.runoff_coef') = 0.8;
+    UPDATE nodes SET config = json_remove(config, '$.battery_type') WHERE json_extract(config, '$.battery_type') = 'lifes2';
+    UPDATE nodes SET config = json_remove(config, '$.refill_threshold_pct') WHERE json_extract(config, '$.refill_threshold_pct') = 20.0;
+    UPDATE nodes SET config = json_remove(config, '$.auto_refill_target_pct') WHERE json_extract(config, '$.auto_refill_target_pct') = 30.0;
+    UPDATE nodes SET config = json_remove(config, '$.max_refill_pct') WHERE json_extract(config, '$.max_refill_pct') = 90.0;
+    UPDATE nodes SET config = json_remove(config, '$.rain_wait_enabled') WHERE json_extract(config, '$.rain_wait_enabled') = 1;
+    UPDATE nodes SET config = json_remove(config, '$.rain_wait_hours') WHERE json_extract(config, '$.rain_wait_hours') = 24;
+    UPDATE nodes SET config = json_remove(config, '$.rain_wait_max_below_pct') WHERE json_extract(config, '$.rain_wait_max_below_pct') = 10.0;
+    UPDATE nodes SET config = json_remove(config, '$.rain_wait_max_drop_pct') WHERE json_extract(config, '$.rain_wait_max_drop_pct') = 5.0;
+    UPDATE nodes SET config = json_remove(config, '$.max_refill_minutes') WHERE json_extract(config, '$.max_refill_minutes') = 120;
+    UPDATE nodes SET config = json_remove(config, '$.flow_rate_lpm') WHERE json_extract(config, '$.flow_rate_lpm') = 41.6
+    """,
 ]
 
 

@@ -3,6 +3,18 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.2.0] - 2026-10-23
+
+### Přidáno
+- **Aktualizace v okně:** *Zkontrolovat aktualizace* jen zjistí novou verzi a ukáže seznam změn; instaluje se až po potvrzení, s průběhem (stahuji → ověřuji podpis → instaluji → restartuji) a výsledkem. Přepínač „Instalovat automaticky (v noci)“ a kanál Stabilní / Beta přímo na webu; dostupná verze je označená u ikony účtu. Telegram `aktualizovat` nejdřív zkontroluje a nabídne instalaci.
+- **Nastavení podle nádrží:** přepínač *Všechny nádrže* / jednotlivé nádrže. Společné věci a nová karta *Výchozí nastavení nádrží* (baterie, upozornění, sonda, dopouštění, čekání na déšť, průtok); u nádrže lze hodnotu změnit na vlastní („vlastní“ / „↺ výchozí“) – změna výchozích ji nepřepíše. Stávající hodnoty se při aktualizaci zachovají.
+- **Telegram z webu:** průvodce založením bota (BotFather → token → Ověřit a uložit) v kartě Telegram.
+- **Vzdálený servis z webu:** instalace a připojení NetBirdu zadáním setup key (klíč se nikde nezobrazí ani nezaloguje).
+
+### Změněno
+- Karty v Nastavení se skládají do sloupců podle výšky a končí v jedné rovině.
+- Návod k programování čidla: odpor 4,7 kΩ, čidlo napájené z baterie (baterii připojit před drátem UPDI).
+
 ## [1.1.2] - 2026-10-23
 
 ### Změněno

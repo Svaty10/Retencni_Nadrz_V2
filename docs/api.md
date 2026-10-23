@@ -35,7 +35,8 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/weather` | user | předpověď 7 dní (Open-Meteo, cache 1 h) |
 | GET | `/api/export.csv?…` | admin | CSV (středník, desetinná čárka) |
 | GET/POST | `/api/settings` | admin | globální nastavení (validované; API klíč maskovaný) |
-| POST | `/api/node?node=` | admin | nastavení čidla (název, rozměry, `cal_points`, přesnost/rozsah sondy, …) |
+| POST | `/api/node?node=` | admin | nastavení čidla (název, rozměry, `cal_points`, přesnost/rozsah sondy, …). Zděditelné klíče (viz `/api/node-defaults`) se uloží jako vlastní hodnota nádrže jen když se liší od zděděné; `{"reset": ["klíč", …]}` vlastní hodnoty zruší (zase platí výchozí). Odpověď i `GET /api/nodes` (`nodes[]`) obsahují efektivní hodnoty + `inherited` / `overrides` (seznamy klíčů) |
+| GET/POST | `/api/node-defaults` | admin | výchozí nastavení všech nádrží: `{"defaults": {…}, "keys": [zděditelné klíče]}`; POST `{klíč: hodnota}` změní výchozí hodnotu u všech nádrží bez vlastní hodnoty (vlastní hodnoty se nemění; odmítne hodnotu, která by u některé nádrže porušila pravidla dopouštění). Zděditelné: přesnost a rozsah sondy, upozornění, odtokový součinitel, typ baterie, hranice/cíl/maximum dopouštění, čekání na déšť (zapnuto, hodiny, odchylky), nejdelší dopouštění, průtok |
 | POST | `/api/calibration/point?node=` | admin | `actual_cm` – kalibrační bod z aktuálního napětí sondy |
 | POST | `/api/calibration/recompute?node=` | admin | přepočet historie (kalibrace + vyhlazení) |
 | POST | `/api/calibration/battery?node=` | admin | `actual_v` – korekce měření baterie |
@@ -47,7 +48,13 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů |
 | GET | `/api/audit?page=&category=&who=&q=&from=&to=` | admin | log: `category` = login/users/settings/refill/sensors/system/problems, `who` = people/system/jméno, `q` = text |
 | GET | `/api/ha` · POST `/api/ha/rotate` | admin | token pro HA |
-| GET | `/api/system` · POST `/api/system/update` | admin | stav systému, ruční kontrola aktualizací |
+| GET | `/api/system` | admin | stav systému; `update` = poslední `update-status.json`, `update_prefs` |
+| POST | `/api/update/check` | admin | požádá root updater o kontrolu (nikdy neinstaluje); 409 když právě probíhá instalace. Stará cesta `POST /api/system/update` dělá totéž |
+| POST | `/api/update/install` | admin | `{"version": "X"}` – instalace přesně té verze, kterou nabídla poslední kontrola (`state` available/error/rolled_back a `latest` = X), jinak 409 |
+| GET | `/api/update/status` | admin | `{"status": {...}, "running": "verze webu", "prefs": {"auto", "channel"}, "pending": žádost čeká, "busy": updater pracuje}`; `status`: `state` (checking, available, up_to_date, error, downloading, verifying, installing, restarting, done, rolled_back), `current`, `latest`, `target`, `published_at`, `message`, `started_at`, `updated_at`, `notes` = `[{version, date, markdown}]` |
+| POST | `/api/update/prefs` | admin | `{"auto": true\|false, "channel": "stable"\|"beta"}` – automatická instalace v noci a kanál (přísná validace) |
+| GET | `/api/servis` · POST `/api/servis` | admin | vzdálený servis: stav (`installed`, `connected`, `ip`, `mode`, `until`, `install` = průběh instalace z webu `{state: queued/installing/done/error, message}`); POST `{"mode": "off"\|"24h"\|"on"}` |
+| POST | `/api/servis/install` | admin | `{"setup_key": "…", "management_url": "https://…" (nepovinné)}` – instalace NetBird přes root helper; klíč se nevrací ani nezapisuje do záznamů |
 | GET | `/api/backup` · `/api/backup/download` | admin | seznam nočních záloh; stažení aktuální zálohy (`.db.gz`) |
 | POST | `/api/backup/import[?full=1]` | admin | tělo = soubor zálohy (`.db.gz` / `.db`, max 1 GB, streamuje se); sloučení bez duplicit, `full=1` i nastavení a uživatelé; vrací počty |
 

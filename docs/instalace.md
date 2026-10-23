@@ -103,9 +103,33 @@ odemknout jen přeprogramováním.
 | Bez internetu | web, grafy i HA běží dál (vše lokálně); čas drží `fake-hwclock`, dashboard upozorní |
 
 ## 5. Aktualizace z GitHubu
-Hub se 1× denně (03:30 + náhodné zpoždění) nebo tlačítkem *Nastavení → Systém* podívá na GitHub
-Releases a nainstaluje jen **podepsaný** balík (Ed25519). Data a nastavení (`/var/lib/retencka/data`)
-se nemění; když nová verze do 2 min nenaběhne, vrátí se předchozí i se systemd jednotkami.
+Hub instaluje jen **podepsaný** balík z GitHub Releases (Ed25519). Data a nastavení
+(`/var/lib/retencka/data`) se nemění; když nová verze do 2 min nenaběhne, vrátí se předchozí
+i se systemd jednotkami.
+
+**Ručně z webu – zkontrolovat → vybrat → nainstalovat:**
+1. *Nastavení → Systém → Zkontrolovat aktualizace* otevře dialog „Hledám aktualizace…“.
+   Kontrola **nikdy nic neinstaluje**.
+2. Výsledek: „Máte nejnovější verzi X“, nebo nová verze s datem vydání a poznámkami
+   z `CHANGELOG.md` (všechny verze mezi nainstalovanou a novou), nebo chyba se „Zkusit znovu“.
+3. **Aktualizovat na X** spustí instalaci s průběhem *Stahuji → Ověřuji podpis → Instaluji →
+   Restartuji*. Během restartu dialog chvíli čeká („Čekám na restart…“, až 3 min), pak ukáže
+   „Aktualizováno na X“ s tlačítkem *Načíst znovu*. Při chybě nebo návratu dál běží předchozí verze.
+   Nainstaluje se jen přesně ta verze, která byla nabídnuta, a jen pokud je stále nejnovější.
+
+Když je k dispozici nová verze, svítí tečka u ikony účtu a u položky *Nastavení*; v kartě *Systém*
+je řádek „K dispozici verze X“ s tlačítkem do dialogu.
+
+**Automaticky v noci:** 1× denně (03:30 + náhodné zpoždění, a 15 min po startu) se hub podívá na
+GitHub. Přepínač *Instalovat aktualizace automaticky (v noci)* (v dialogu i v kartě *Systém*)
+rozhoduje, zda novou verzi rovnou nainstaluje, nebo ji jen nabídne.
+
+Jak to funguje uvnitř: web (bez práv roota) zapíše žádost `data/update-request`
+(`{"action": "check"}` nebo `{"action": "install", "version": "X"}`), kterou zpracuje
+`retencka-update.service` (root). Průběh zapisuje do `data/update-status.json` (`state`: checking →
+available / up_to_date / error, downloading → verifying → installing → restarting → done /
+rolled_back / error). Volby automatiky a kanálu jsou v `data/update-prefs.json`; root je čte přísně
+validované (jen ano/ne a `stable`/`beta`) a nikdy z nich nebere adresu repozitáře ani cesty.
 
 ### 5.1 Jednorázová příprava podpisového klíče
 Na PC (Windows: **Git Bash**, OpenSSL je jeho součástí), **mimo** složku repozitáře a mimo OneDrive:
@@ -135,7 +159,8 @@ git tag v1.0.1                      # tag = "v" + přesně __version__
 git push && git push --tags
 ```
 GitHub Action *release* spustí testy, sestaví `retencka-1.0.1.tar.gz`, podepíše ho a vytvoří Release.
-Průběh: záložka **Actions**. Huby si ho stáhnou do 24 h (nebo hned tlačítkem *Zkontrolovat aktualizace*).
+Průběh: záložka **Actions**. Huby s automatikou si ho nainstalují do 24 h, ostatní ho nabídnou
+(nebo hned přes *Zkontrolovat aktualizace* → *Aktualizovat na X*).
 Ručně (bez Actions): `tools/make-release.sh ~/retencka-klic/release.key` a oba soubory z `dist/`
 nahrát k Release s tagem `v1.0.1`.
 
@@ -146,24 +171,30 @@ nahrát k Release s tagem `v1.0.1`.
 | Action: *Soukromý klíč … chybí* | chybí secret `RELEASE_SIGNING_KEY` |
 | Action: *Chybí system/keys/release.pub* / *Podpis nesedí* | veřejný klíč není commitnutý, nebo nepatří k secretu |
 | Hub: *chybí veřejný klíč release.pub* | hub instalovaný před přidáním klíče – spustit instalaci znovu (5.1 bod 4) |
-| Hub: *NEPLATNÝ PODPIS* | balík podepsaný jiným klíčem než má hub |
-| Hub: *Verze … nenaběhla – vráceno* | nová verze na hubu nenastartovala; je zablokovaná, opravte a vydejte vyšší verzi |
-| Hub: *Aktuální verze …* | na GitHubu není novější podepsaný Release (pozor: Release musí obsahovat `.tar.gz` i `.sig`) |
+| Hub: *… má neplatný podpis – odmítnuto* | balík podepsaný jiným klíčem než má hub |
+| Hub: *Verze … nenaběhla – vráceno* | nová verze na hubu nenastartovala; automatika ji už nezkouší (ručně z dialogu ji lze zkusit znovu), opravte a vydejte vyšší verzi |
+| Hub: *Máte nejnovější verzi …* | na GitHubu není novější podepsaný Release (pozor: Release musí obsahovat `.tar.gz` i `.sig`) |
+| Web: *Služba aktualizací na žádost nereaguje* | neběží `retencka-update.path` – `sudo systemctl enable --now retencka-update.path`, viz `journalctl -u retencka-update` |
 
 Stav poslední kontroly je v *Nastavení → Systém*, podrobně `journalctl -u retencka-update`.
 
 ### 5.4 Kanál a automatika
-V `/etc/default/retencka`: `RETENCKA_CHANNEL=stable|beta`, `RETENCKA_AUTO_UPDATE=1|0`. Kanál `beta`
+Přepínač automatiky a volba kanálu (*Stabilní* / *Beta*) jsou v dialogu aktualizací a v kartě
+*Nastavení → Systém* (uloží se do `data/update-prefs.json`). Dokud je web nezměnil, platí
+`/etc/default/retencka`: `RETENCKA_CHANNEL=stable|beta`, `RETENCKA_AUTO_UPDATE=1|0`. Kanál `beta`
 bere i předběžné verze (tag s pomlčkou, např. `v1.3.0-beta1` → GitHub *pre-release*). Předběžná verze
 je vždy starší než finální (`1.3.0-beta1` < `1.3.0`), takže z bety se po vydání finální verze přejde samo.
 
 ## 6. Telegram – upozornění a ovládání z telefonu
 Zdarma, bez veřejné IP a bez otevřených portů (hub se k Telegramu jen sám připojuje).
 
-**Při instalaci (dělá technik):**
-1. V Telegramu napište **@BotFather** → `/newbot` → název (např. „Nádrž Novákovi“) a uživatelské jméno
-   končící na `bot`. BotFather pošle **token**.
-2. Web hubu → *Nastavení → Obecné → Telegram* → vložit token → *Uložit*. Stav ukáže „připojeno · @jméno_bota“.
+**Při instalaci (technik nebo zákazník, přímo z webu):** *Nastavení → Všechny nádrže → Telegram a vzdálený
+servis*. Dokud bot není nastavený, karta ukazuje návod:
+1. V Telegramu otevřete [@BotFather](https://t.me/BotFather),
+2. pošlete `/newbot`, zvolte název (např. „Nádrž Novákovi“) a uživatelské jméno končící na `bot`,
+3. token, který BotFather pošle, vložte do pole *Token bota*,
+4. *Ověřit a uložit* – hub se k botovi připojí a ukáže „Bot: připojeno · @jméno_bota“ (jinak chybu, např.
+   neplatný token). Token lze později vyměnit tlačítkem *Změnit token*.
 
 **Každý uživatel (i zákazník):** *Můj účet → Telegram → Propojit s Telegramem* → otevřít odkaz v telefonu →
 v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administrátor smí dopouštět a servisní příkazy.
@@ -176,11 +207,13 @@ v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administ
 | `dopustit [nádrž] [%]`, `stop [nádrž]` | admin | dopouštění na dálku; `stop` zruší i čekající nebo automatické dopouštění |
 | `obnovit [nádrž]` | admin | znovu zapne automatiku pozastavenou zrušením |
 | `diag`, `log` | admin | diagnostika (signál, ztráty, rušení, baterie, místo, verze), poslední záznamy |
-| `restart`, `reboot`, `aktualizovat` | admin | restart aplikace / zařízení, kontrola aktualizací (s potvrzením) |
+| `restart`, `reboot` | admin | restart aplikace / zařízení (s potvrzením) |
+| `aktualizovat` | admin | zkontroluje aktualizace a pošle výsledek; je-li nová verze, s poznámkami a tlačítkem *Aktualizovat na X* (nebo `aktualizovat instalovat X`) |
 | `servis zap` / `trvale` / `vyp` | admin | vzdálený servisní přístup (NetBird, viz níže) |
 | `odhlasit` | všichni | odpojí chat |
 
-Upozornění: hladina pod nastavenou hranicí (*Nastavení → Nádrž → Upozornit pod*), dopouštění spuštěno /
+Upozornění: hladina pod nastavenou hranicí (*Upozornit v Telegramu pod* – výchozí pro všechny nádrže
+v *Nastavení → Všechny nádrže → Výchozí nastavení nádrží*, vlastní hodnota v záložce nádrže), dopouštění spuštěno /
 dokončeno / porucha, čekání na déšť, slabá nebo vybitá baterie, čidlo neposílá data a znovu posílá.
 Administrátoři navíc dostávají restarty čidel, párování, málo místa na kartě a změny servisního přístupu.
 
@@ -192,8 +225,15 @@ NetBird je zdarma do 5 uživatelů a 100 zařízení a je open source (lze provo
    skupina např. `retencka`).
 2. *Access Control*: pravidlo „skupina `servis` (vaše PC/telefon) → skupina `retencka`, TCP 22 a 80“ a **žádné**
    pravidlo `retencka → retencka` (huby se navzájem nevidí). Výchozí pravidlo „All“ smažte.
-3. Instalace hubu: `cd /opt/retencka-src && sudo ./system/install.sh --netbird-setup-key <KLÍČ>`
-   (vlastní server: navíc `--netbird-url https://…`).
+3. Instalace na hubu – jedna z možností:
+   * **z webu:** *Nastavení → Všechny nádrže → Telegram a vzdálený servis → Nainstalovat vzdálený servis*:
+     vložit setup key (vlastní server: pole *Vlastní server (URL)* v pokročilém režimu, jen `https://`).
+     Karta ukazuje průběh instalace a výsledek. Klíč se nikam neukládá ani nezapisuje do záznamů.
+   * **při instalaci hubu:** `cd /opt/retencka-src && sudo ./system/install.sh --netbird-setup-key <KLÍČ>`
+     (vlastní server: navíc `--netbird-url https://…`).
+
+   Obě cesty dělají totéž (`system/bin/retencka-netbird-install.sh`): repozitář NetBird s podpisovým
+   klíčem, instalace balíku, `netbird service install/start` a `netbird up --setup-key …`.
 4. Po instalaci je přístup povolen **24 hodin**, pak se sám vypne. Zákazník (nebo technik s jeho souhlasem)
    ho zapíná v *Nastavení → Telegram a vzdálený servis* (vypnuto / na 24 h / trvale) nebo příkazem
    `servis zap` v Telegramu. Každá změna je v záznamech a administrátorům přijde zpráva.
@@ -201,7 +241,9 @@ NetBird je zdarma do 5 uživatelů a 100 zařízení a je open source (lze provo
    (`PasswordAuthentication no` v `/etc/ssh/sshd_config`).
 
 NetBird ovládá pomocná služba `retencka-control` (s právy roota, aplikace sama žádná nemá): aplikace zapíše
-požadavek, služba zavolá `netbird up` / `netbird down` a každých 5 minut kontroluje vypršení 24 h.
+požadavek, služba zavolá `netbird up` / `netbird down` a každých 5 minut kontroluje vypršení 24 h. Instalaci
+z webu provádí stejná služba (`data/control-netbird-install`, soubor se klíčem smaže hned po přečtení;
+průběh v `data/netbird-install.json`, podrobnosti `journalctl -u retencka-control`).
 
 ## 8. Vlastní doména – Cloudflare Tunnel
 Pro vlastní nasazení s doménou (adresa typu `https://nadrz.mojedomena.cz`).
@@ -236,7 +278,8 @@ journalctl -u retencka -f            # log aplikace (jen v RAM)
 journalctl -u retencka-netwatch -f   # Wi-Fi / hotspot
 journalctl -u retencka-control       # restart / servisní přístup (NetBird)
 netbird status                       # stav NetBird
-sudo systemctl start retencka-update # ruční kontrola aktualizace
+sudo systemctl start retencka-update # běh jako v noci (instaluje jen se zapnutou automatikou)
+cat /var/lib/retencka/data/update-status.json   # stav poslední kontroly / instalace
 sudo cat /boot/firmware/retencka.txt                              # heslo ze štítku
 sudo sqlite3 /var/lib/retencka/data/retencka.db "DELETE FROM users"  # tovární přístup: admin + heslo ze štítku
 ```

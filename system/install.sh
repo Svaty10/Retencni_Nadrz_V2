@@ -286,18 +286,8 @@ fi
 # ------------------------------------------------------------------- NetBird
 if [ -n "$NB_KEY" ]; then
     step "NetBird (vzdálený servis)"
-    if ! command -v netbird >/dev/null; then
-        apt-get install -y -qq ca-certificates curl gnupg >/dev/null
-        install -d -m 755 /usr/share/keyrings
-        curl -fsSL https://pkgs.netbird.io/debian/public.key \
-            | gpg --dearmor --yes --output /usr/share/keyrings/netbird-archive-keyring.gpg
-        echo "deb [signed-by=/usr/share/keyrings/netbird-archive-keyring.gpg] https://pkgs.netbird.io/debian stable main" \
-            > /etc/apt/sources.list.d/netbird.list
-        apt-get update -qq && apt-get install -y -qq netbird >/dev/null
-    fi
-    netbird service install >/dev/null 2>&1 || true
-    netbird service start >/dev/null 2>&1 || true
-    if netbird up --setup-key "$NB_KEY" ${NB_URL:+--management-url "$NB_URL"}; then
+    # stejná instalace jako z webu (retencka-control.py → retencka-netbird-install.sh)
+    if NB_SETUP_KEY="$NB_KEY" NB_MANAGEMENT_URL="$NB_URL" bash "$SRC/system/bin/retencka-netbird-install.sh"; then
         # access during the installation; afterwards only if the customer allows it
         printf '{"mode": "24h", "until": %d, "by": "instalace"}\n' $(( $(date +%s) + 86400 )) > "$DATA/servis.json"
         chown retencka:retencka "$DATA/servis.json"

@@ -73,6 +73,22 @@ class TelegramTest(Base):
         self.assertIn("Dopouštění není pro tuto nádrž nastaveno", self.msg(2, "dopustit 60")[-1])
         self.assertIn("Hub", self.msg(2, "diag")[-1])
 
+    def test_update_check_then_install(self):
+        req = os.path.join(self.tmp.name, "update-request")
+        self.link(2, "admin")
+        self.assertIn("Hledám", self.msg(2, "aktualizovat")[-1])
+        with open(req) as f:
+            self.assertEqual(json.load(f)["action"], "check")           # a check never installs
+        # install only of the version the last check reported
+        self.assertIn("není k dispozici", self.msg(2, "aktualizovat instalovat 9.9.9")[-1])
+        with open(os.path.join(self.tmp.name, "update-status.json"), "w") as f:
+            json.dump({"state": "available", "latest": "9.9.9", "updated_at": int(time.time())}, f)
+        self.assertIn("Instaluji verzi 9.9.9", self.msg(2, "aktualizovat instalovat 9.9.9")[-1])
+        with open(req) as f:
+            self.assertEqual(json.load(f)["version"], "9.9.9")
+        self.link(1, "pepa")
+        self.assertIn("oprávnění", self.msg(1, "aktualizovat")[-1])
+
     def test_refill_target_validated(self):
         self.link(2, "admin")
         for bad in ("nan", "inf", "-5", "0", "101", "1e999"):

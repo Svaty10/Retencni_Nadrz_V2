@@ -730,9 +730,6 @@ body.no-refill .refill-only { display: none !important; }
 /* --- Responzivita -------------------------------------------- */
 @media (min-width: 1280px) {
     .chart-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    #nastaveni .stack { display: block; columns: 2; column-gap: 16px; }
-    #nastaveni .stack > .card { break-inside: avoid; margin-bottom: 16px; }
-    #nastaveni .stack > .card:first-child, #nastaveni .stack > .card.span-cols { column-span: all; }
 }
 @media (min-width: 1100px) {
     /* pole formuláře tečou do 2–4 sloupců podle šířky karty */
@@ -831,9 +828,120 @@ body.no-refill .refill-only { display: none !important; }
     *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
 
-@media (min-width: 1700px) { #nastaveni .stack { columns: 3; } }
+
 
 /* Čidla: tři tabulky pod sebou se stejně širokým prvním sloupcem, akce vpravo */
 .span-cols .user-table th:first-child { width: 26%; }
 .span-cols .user-table td { white-space: nowrap; }
 .span-cols .user-table td:first-child { white-space: normal; }
+
+/* --- Aktualizace: dialog, tečka u avatara, kroky ------------- */
+.badge-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 0 2px var(--surface); flex-shrink: 0;
+}
+.account-btn { position: relative; }
+.account-btn .badge-dot { position: absolute; top: 3px; left: 27px; }
+.menu-item .badge-dot { margin-left: auto; }
+
+body.modal-open { overflow: hidden; }
+.modal-backdrop {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: rgba(20, 20, 18, 0.45);
+}
+.modal {
+    width: 100%; max-width: 560px; max-height: calc(100vh - 32px);
+    display: flex; flex-direction: column;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.modal:focus { outline: none; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 8px; }
+.modal-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border: 0; border-radius: var(--radius-sm);
+    background: none; color: var(--muted); cursor: pointer;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+.modal-backdrop.busy .icon-btn { visibility: hidden; }
+.modal-body { padding: 8px 20px 12px; overflow-y: auto; min-height: 80px; }
+.modal-prefs { padding: 12px 20px; border-top: 1px solid var(--line); }
+.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--line); }
+.modal-foot:empty { display: none; }
+.upd-big { font-size: 18px; font-weight: 600; margin: 4px 0 4px; }
+.upd-big.ok { color: var(--green); }
+.upd-wait { display: flex; align-items: center; gap: 10px; margin: 12px 0; color: var(--ink-2); }
+.spinner {
+    width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%;
+    border: 2px solid var(--line-strong); border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .spinner { animation: spin 2.5s linear infinite !important; }
+}
+.upd-notes { margin-top: 12px; border-top: 1px solid var(--line); }
+.upd-notes h3 { margin: 14px 0 4px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.md h4 { margin: 10px 0 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.md ul { margin: 0 0 6px; padding-left: 18px; }
+.md li { margin: 2px 0; font-size: 14px; }
+.md p { font-size: 14px; margin: 0 0 6px; }
+.upd-steps { list-style: none; margin: 14px 0 4px; padding: 0; display: grid; gap: 8px; }
+.upd-steps li { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+.upd-steps .step-dot {
+    width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid var(--line-strong); background: var(--surface);
+}
+.upd-steps li.active { color: var(--ink); font-weight: 600; }
+.upd-steps li.active .step-dot { border-color: var(--accent); background: var(--accent-soft); }
+.upd-steps li.done { color: var(--ink-2); }
+.upd-steps li.done .step-dot { border-color: var(--green); background: var(--green); }
+.upd-prefs { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.upd-prefs .toggle { flex: 1 1 260px; }
+.upd-channel { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.upd-channel .unified-select { width: 140px; }
+.upd-line { margin-bottom: 12px; }
+.upd-line p { margin: 0; }
+.upd-avail-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+#sysInfo + h3 { margin-top: 20px; }
+@media (max-width: 640px) {
+    .modal-backdrop { align-items: flex-end; padding: 0; }
+    .modal { max-width: none; max-height: 92vh; border-radius: 10px 10px 0 0; border-bottom: 0; }
+    .modal-foot .btn { flex: 1; }
+}
+@media (prefers-color-scheme: dark) {
+    .modal-backdrop { background: rgba(0, 0, 0, 0.6); }
+}
+.modal-backdrop.busy .modal-prefs { display: none; }
+
+/* --- Nastavení: přepínač Všechny nádrže / nádrž, sloupce se zarovnanými spodky ---- */
+body.set-all #nastaveni .scope-tank,
+body.set-tank #nastaveni .scope-all { display: none !important; }
+.set-cols { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.set-cols[data-cols="2"] { --cols: 2; }
+.set-cols[data-cols="3"] { --cols: 3; }
+.set-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.set-col > .card.fill { flex: 1; }          /* poslední karta sloupce vyplní zbytek výšky */
+.inh { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; vertical-align: 1px; }
+.inh-tag {
+    font-size: 11px; font-weight: 500; line-height: 1; padding: 3px 6px;
+    border-radius: 4px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+}
+.inh-tag.own { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.inh-tag.pending { font-style: italic; }
+.inh-reset {
+    display: inline-flex; align-items: center; gap: 3px; padding: 0 2px; min-height: 20px;
+    border: 0; background: none; color: var(--accent); font-size: 12px; cursor: pointer;
+}
+.inh-reset:hover { text-decoration: underline; }
+.toggle-text .inh { margin-left: 6px; }
+.tg-state { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.tg-state .status-pill { margin-left: 0; padding-left: 0; border-left: 0; white-space: normal; }
+.setup-box { padding: 12px 14px; margin: 8px 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.setup-steps { margin: 0 0 12px; padding-left: 20px; font-size: 14px; }
+.setup-steps li { margin: 3px 0; }
+.setup-box .inline-actions > .unified-input { max-width: none; flex: 1 1 260px; }
+#nbResult { margin: 8px 0 12px; }

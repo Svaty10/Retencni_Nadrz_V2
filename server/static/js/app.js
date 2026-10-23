@@ -146,7 +146,7 @@
         try { sessionStorage.setItem('tab', id); } catch (e) { /* ignore */ }
         if (lastState) renderNodeBar(lastState.nodes || []);
         if (id === 'dashboard') loadAllCharts();
-        if (id === 'nastaveni') loadSettingsTab();
+        if (id === 'nastaveni') { setSettingsScope(SET_ALL); loadSettingsTab(); }
         if (id === 'logovani') loadAuditLog(1);
         if (id === 'uzivatele') loadUsers();
         if (id === 'heslo') loadTelegramMine();
@@ -814,7 +814,8 @@
 
     function renderNodeBar(nodes) {
         const bar = $('nodeBar');
-        const tabWithNodes = $('dashboard').classList.contains('active') || $('nastaveni').classList.contains('active');
+        if ($('nastaveni').classList.contains('active')) { renderSettingsBar(nodes); return; }
+        const tabWithNodes = $('dashboard').classList.contains('active');
         bar.classList.toggle('hidden', nodes.length < 2 || !tabWithNodes);
         bar.textContent = '';
         const onDash = $('dashboard').classList.contains('active');
@@ -850,6 +851,43 @@
                 if ($('nastaveni').classList.contains('active')) applyNode(currentNodeCfg());
             });
             bar.appendChild(b);
+        });
+    }
+
+    // Nastavení: „Všechny nádrže“ (společné) + záložka každé nádrže (jen ta nádrž)
+    let SET_ALL = true;
+    try { SET_ALL = sessionStorage.getItem('setAll') !== '0'; } catch (e) { /* ignore */ }
+
+    function setSettingsScope(all) {
+        SET_ALL = !!all || !CURRENT_NODE;
+        try { sessionStorage.setItem('setAll', SET_ALL ? '1' : '0'); } catch (e) { /* ignore */ }
+        document.body.classList.toggle('set-all', SET_ALL);
+        document.body.classList.toggle('set-tank', !SET_ALL);
+        if (lastState) renderSettingsBar(lastState.nodes || []);
+        if (!SET_ALL) applyNode(currentNodeCfg());
+        layoutSettingsColumns();
+    }
+
+    function renderSettingsBar(nodes) {
+        const bar = $('nodeBar');
+        bar.classList.remove('hidden');
+        bar.textContent = '';
+        const tab = (label, active, fn, extra) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'node-pill' + (extra ? ' ' + extra : '') + (active ? ' active' : '');
+            b.setAttribute('role', 'tab');
+            b.setAttribute('aria-selected', active ? 'true' : 'false');
+            b.innerHTML = label;
+            b.addEventListener('click', fn);
+            bar.appendChild(b);
+        };
+        tab('Všechny nádrže', SET_ALL, () => setSettingsScope(true), 'all');
+        nodes.forEach((n) => {
+            tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, !SET_ALL && n.id === CURRENT_NODE, () => {
+                if (n.id !== CURRENT_NODE) selectNode(n.id);
+                setSettingsScope(false);
+            });
         });
     }
 
@@ -943,11 +981,54 @@
         return nodesCache ? nodesCache.nodes.find((n) => n.id === CURRENT_NODE) : null;
     }
 
+    // Štítky u zděditelných polí nádrže: „výchozí“ / „vlastní“ + „↺ výchozí“ (zruší vlastní hodnotu)
+    function fieldBox(el) {
+        const t = el.closest('.toggle');
+        if (t) return t.querySelector('.toggle-text');
+        const g = el.closest('.form-group');
+        return g ? g.querySelector('label') : null;
+    }
+    function renderInheritTags(form, n) {
+        form.querySelectorAll('.inh').forEach((t) => t.remove());
+        const inherited = new Set(n.inherited || []), own = new Set(n.overrides || []);
+        Array.from(form.elements).forEach((el) => {
+            if (!el.name || !(inherited.has(el.name) || own.has(el.name))) return;
+            const box = fieldBox(el);
+            if (!box) return;
+            const wrap = document.createElement('span');
+            wrap.className = 'inh';
+            const tag = document.createElement('span');
+            tag.className = 'inh-tag' + (own.has(el.name) ? ' own' : '');
+            tag.textContent = own.has(el.name) ? 'vlastní' : 'výchozí';
+            tag.title = own.has(el.name) ? 'Vlastní hodnota této nádrže' : 'Zděděno z výchozího nastavení nádrží';
+            wrap.appendChild(tag);
+            if (own.has(el.name)) {
+                const r = document.createElement('button');
+                r.type = 'button';
+                r.className = 'inh-reset';
+                r.innerHTML = ico('restart', 'ico-sm') + 'výchozí';
+                r.title = 'Zrušit vlastní hodnotu a použít výchozí';
+                r.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    action(() => api('POST', '/api/node?' + nq(), { reset: [el.name] }), 'Použita výchozí hodnota.')
+                        .then((res) => { if (res) { loadSettingsTab(); pollState(); } });
+                });
+                wrap.appendChild(r);
+            } else {
+                const mark = () => { tag.textContent = 'vlastní'; tag.classList.add('own', 'pending'); tag.title = 'Po uložení bude vlastní hodnotou této nádrže'; };
+                el.addEventListener('input', mark, { once: true });
+                el.addEventListener('change', mark, { once: true });
+            }
+            box.appendChild(wrap);
+        });
+    }
+
     function applyNode(n) {
         if (!n) return;
         $('calNodeName').textContent = n.name;
         $('calNodeId').value = n.id;
         fillForm($('calForm'), n);
+        renderInheritTags($('calForm'), n);
         renderCalPoints(n.cal_points);
         $('batTrim').textContent = num(n.battery_trim, 4);
         $('deadbandInfo').textContent = `±${num(n.deadband_cm, 1)} cm (≈ ${num(n.deadband_l, 0)} L)`;
@@ -963,6 +1044,47 @@
         $('advToggle').checked = !!on;
         $('advLabel').textContent = on ? 'základní i pokročilé nastavení' : 'základní nastavení';
         try { localStorage.setItem('advSettings', on ? '1' : ''); } catch (e) { /* ignore */ }
+        layoutSettingsColumns();
+    }
+
+    // Karty „Všechny nádrže“ ve sloupcích: každá karta do nejkratšího sloupce (v pořadí),
+    // poslední karta sloupce se roztáhne → spodky všech sloupců na jedné lince.
+    // 1 sloupec pod 1280 px, 2 do 1700 px, jinak 3. Spouští se při změně šířky/režimu/obsahu.
+    let colsKey = '';
+    function layoutSettingsColumns() {
+        const host = $('setCols');
+        if (!host) return;
+        const cards = Array.from(document.querySelectorAll('#nastaveni .col-card'))
+            .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
+        const n = window.innerWidth >= 1700 ? 3 : window.innerWidth >= 1280 ? 2 : 1;
+        let cols = Array.from(host.children);
+        if (cols.length !== n) {
+            host.textContent = '';
+            cols = [];
+            for (let i = 0; i < n; i++) { const c = document.createElement('div'); c.className = 'set-col'; host.appendChild(c); cols.push(c); }
+            colsKey = '';
+        }
+        host.dataset.cols = String(n);
+        if (!$('nastaveni').classList.contains('active') || !SET_ALL) return;    // skryté: změřit nejde
+        // změřit výšky v jednom sloupci (stejná šířka jako ve výsledku)
+        const heights = cards.map((c) => {
+            cols[0].appendChild(c);                     // v původním pořadí
+            c.classList.remove('fill');
+            return c.offsetHeight;
+        });
+        const sum = new Array(n).fill(0), plan = [];
+        cards.forEach((c, i) => {
+            let k = 0;
+            for (let j = 1; j < n; j++) if (sum[j] < sum[k] - 1) k = j;
+            plan.push(k);
+            sum[k] += heights[i] + 16;
+        });
+        cards.forEach((c, i) => { cols[plan[i]].appendChild(c); });
+        cols.forEach((col) => {
+            const vis = Array.from(col.children).filter((c) => c.offsetParent !== null);
+            if (vis.length) vis[vis.length - 1].classList.add('fill');
+        });
+        colsKey = plan.join(',');
     }
 
     function renderBackups(d) {
@@ -983,7 +1105,13 @@
     }
 
     function renderTelegramAdmin(t) {
-        $('tgAdminStatus').textContent = tgStatusText(t);
+        const pill = $('tgAdminStatus');
+        pill.textContent = 'Bot: ' + tgStatusText(t);
+        pill.className = 'status-pill ' + (!t || !t.configured ? '' : t.connected ? 'online' : 'stale');
+        const configured = !!(t && t.configured);
+        $('tgChangeBtn').classList.toggle('hidden', !configured);
+        if (!configured) $('tgSetup').classList.remove('hidden');
+        else if (!TG_EDIT) $('tgSetup').classList.add('hidden');
         const body = $('tgChatsBody');
         body.textContent = '';
         const list = (t && t.chats) || [];
@@ -1003,8 +1131,27 @@
         });
     }
 
+    // NetBird: instalace z webu (root helper retencka-control, průběh v s.install)
+    let NB_POLL = null;
+    function renderNetbirdInstall(s) {
+        const ins = s.install || {};
+        const running = ins.state === 'queued' || ins.state === 'installing';
+        $('nbInstallBox').classList.toggle('hidden', s.installed || running);
+        $('servisBox').classList.toggle('hidden', !s.installed);
+        $('nbProgress').classList.toggle('hidden', !running);
+        $('nbProgressText').textContent = ins.message || 'Instaluji…';
+        const res = $('nbResult');
+        const fresh = ins.updated_at && Date.now() / 1000 - ins.updated_at < 3600;
+        res.className = !running && fresh && ins.state === 'done' ? 'alert-info'
+            : !running && fresh && ins.state === 'error' ? 'alert-danger' : 'hidden';
+        res.textContent = ins.message || '';
+        clearTimeout(NB_POLL);
+        if (running) NB_POLL = setTimeout(() => api('GET', '/api/servis').then(renderServis).catch(() => {}), 3000);
+    }
+
     function renderServis(s) {
         if (!s) return;
+        renderNetbirdInstall(s);
         let txt;
         if (!s.installed) txt = 'NetBird není nainstalován';
         else if (s.mode === 'on') txt = 'zapnuto trvale';
@@ -1014,6 +1161,8 @@
         $('servisStatus').textContent = txt;
         setSelect($('servisMode'), s.mode || 'off');
     }
+
+    let TG_EDIT = false;
 
     async function loadTelegramMine() {
         const t = await api('GET', '/api/telegram/mine').catch(() => null);
@@ -1039,15 +1188,17 @@
     }
 
     async function loadSettingsTab() {
-        const [st, nodes, ha, sys, bk, tg, sv] = await Promise.all([
+        const [st, nodes, ha, sys, bk, tg, sv, defs] = await Promise.all([
             api('GET', '/api/settings').catch(() => null),
             api('GET', '/api/nodes').catch(() => null),
             api('GET', '/api/ha').catch(() => null),
             api('GET', '/api/system').catch(() => null),
             api('GET', '/api/backup').catch(() => null),
             api('GET', '/api/telegram').catch(() => null),
-            api('GET', '/api/servis').catch(() => null)
+            api('GET', '/api/servis').catch(() => null),
+            api('GET', '/api/node-defaults').catch(() => null)
         ]);
+        if (defs) fillForm($('defForm'), defs.defaults);
         renderBackups(bk);
         if (tg) renderTelegramAdmin(tg);
         renderServis(sv);
@@ -1055,6 +1206,8 @@
         if (st) applySettings(st.settings);
         if (ha) renderHa(ha);
         if (sys) renderSystem(sys);
+        if (!CURRENT_NODE && !SET_ALL) setSettingsScope(true);
+        layoutSettingsColumns();
     }
 
     const nq = () => 'node=' + encodeURIComponent(CURRENT_NODE || '');
@@ -1102,6 +1255,18 @@
                 loadSettingsTab(); pollState(); histCache.clear(); flowsCache.clear();
             });
         });
+        document.querySelectorAll('#nastaveni .col-card').forEach((c, i) => { c.dataset.order = String(i); });
+        let resizeT = null;
+        window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(layoutSettingsColumns, 150); });
+        $('defForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            action(() => api('POST', '/api/node-defaults', formData(e.target))).then((r) => {
+                if (!r) return;
+                fillForm($('defForm'), r.defaults);
+                toast(r.changed.length ? 'Výchozí nastavení uloženo – platí pro nádrže bez vlastní hodnoty.' : 'Beze změn.');
+                loadSettingsTab(); pollState(); histCache.clear(); flowsCache.clear();
+            });
+        });
         $('sysForm').addEventListener('submit', (e) => {
             e.preventDefault();
             action(() => api('POST', '/api/settings', formData(e.target))).then((r) => {
@@ -1111,6 +1276,44 @@
                 pollState();
                 if (r.changed.includes('telegram_token')) setTimeout(loadSettingsTab, 4000);   // bot se připojuje
             });
+        });
+        $('tgChangeBtn').addEventListener('click', () => {
+            TG_EDIT = !TG_EDIT;
+            $('tgSetup').classList.toggle('hidden', !TG_EDIT);
+            if (TG_EDIT) $('tgToken').focus();
+            layoutSettingsColumns();
+        });
+        $('tgSave').addEventListener('click', async () => {
+            const token = $('tgToken').value.trim();
+            const msg = $('tgSetupMsg');
+            if (!/^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(token)) { msg.textContent = 'Token má tvar 123456789:AA… – zkopírujte ho celý ze zprávy od @BotFather.'; return; }
+            $('tgSave').disabled = true;
+            msg.textContent = 'Ověřuji token…';
+            const r = await action(() => api('POST', '/api/settings', { telegram_token: token }));
+            if (!r) { $('tgSave').disabled = false; msg.textContent = ''; return; }
+            $('tgToken').value = '';
+            let t = null;
+            for (let i = 0; i < 12; i++) {                 // bot se připojuje na pozadí
+                await new Promise((res) => setTimeout(res, 1500));
+                t = await api('GET', '/api/telegram').catch(() => null);
+                if (t && (t.connected || (t.error && i > 2))) break;
+            }
+            $('tgSave').disabled = false;
+            if (t && t.connected) {
+                msg.textContent = '';
+                TG_EDIT = false;
+                toast(`Telegram bot @${t.bot} je připojený.`);
+            } else msg.textContent = (t && t.error) ? `Nepodařilo se připojit: ${t.error}.` : 'Bot se zatím nepřipojil – zkontrolujte token a připojení k internetu.';
+            if (t) renderTelegramAdmin(t);
+            layoutSettingsColumns();
+        });
+        $('nbInstallBtn').addEventListener('click', () => {
+            const key = $('nbKey').value.trim(), url = $('nbUrl').value.trim();
+            if (!/^[A-Za-z0-9-]{20,80}$/.test(key)) { toast('Setup key má 20–80 znaků (písmena, číslice, pomlčky).', true); return; }
+            if (url && !/^https:\/\//i.test(url)) { toast('Adresa serveru musí začínat https://', true); return; }
+            if (!confirm('Nainstalovat vzdálený servis (NetBird)? Servisní přístup bude povolen na 24 hodin.')) return;
+            action(() => api('POST', '/api/servis/install', { setup_key: key, management_url: url }), 'Instalace spuštěna.')
+                .then((r) => { if (r) { $('nbKey').value = ''; api('GET', '/api/servis').then(renderServis).catch(() => {}); } });
         });
         $('servisSave').addEventListener('click', () => {
             const mode = $('servisMode').value;
@@ -1150,9 +1353,6 @@
         $('haRotate').addEventListener('click', () => {
             if (!confirm('Vygenerovat nový token? Starý přestane v Home Assistantu fungovat.')) return;
             action(() => api('POST', '/api/ha/rotate', {}), 'Nový token vygenerován.').then(loadSettingsTab);
-        });
-        $('updateBtn').addEventListener('click', () => {
-            action(() => api('POST', '/api/system/update', {}), (r) => r.message);
         });
     }
 
@@ -1203,7 +1403,7 @@
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id, force: true }), 'Čidlo odebráno.').then(done);
                 });
             } else {
-                btn('Nastavit', 'btn-outline', () => { selectNode(n.id); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+                btn('Nastavit', 'btn-outline', () => { selectNode(n.id); setSettingsScope(false); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
                 btn('Odpárovat', 'btn-danger', () => {
                     if (!confirm(`Odpárovat čidlo ${n.name} (${n.id})?\nDokončí se po vyjmutí a vložení baterie do čidla. Naměřená data zůstanou.`)) return;
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id }), (r) => r.removed ? 'Čidlo odebráno.' : 'Vyjměte a vložte do čidla baterii.').then(done);
@@ -1330,14 +1530,354 @@
     }
 
     function renderSystem(d) {
-        const up = d.update || {};
         $('sysInfo').innerHTML = `
             <dt>Verze</dt><dd>${esc(d.version)}</dd>
             <dt>Adresa v síti</dt><dd>${(d.hostnames || []).map((h) => 'http://' + esc(h)).join('<br>')}</dd>
             <dt>Běží</dt><dd>${fmtDuration(d.uptime_s)}</dd>
             <dt>Paměť procesu</dt><dd>${d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–'}</dd>
-            <dt>Databáze / volné místo</dt><dd>${num(d.db_mb, 1, ' MB')} / ${num(d.disk_free_mb, 0, ' MB')}</dd>
-            <dt>Aktualizace</dt><dd>${up.checked_at ? esc(up.message || '') + ' (' + fmtDateTime(up.checked_at * 1000) + ')' : 'zatím nekontrolováno'}</dd>`;
+            <dt>Databáze / volné místo</dt><dd>${num(d.db_mb, 1, ' MB')} / ${num(d.disk_free_mb, 0, ' MB')}</dd>`;
+        setUpdateBadge({ status: d.update, running: d.version, prefs: d.update_prefs });
+    }
+
+    // ------------------------------------------------------------ updates
+    // Dialog nad stránkou: kontrola → výběr → instalace s průběhem. Stav píše root updater
+    // do update-status.json, web ho čte přes /api/update/status (viz server/retencka/updates.py).
+    const UPD_STEPS = [['downloading', 'Stahuji'], ['verifying', 'Ověřuji podpis'], ['installing', 'Instaluji'], ['restarting', 'Restartuji']];
+    const UPD = {
+        open: false, mode: null, since: 0, target: null, timer: null, failSince: null,
+        last: null, opener: null, pendingSince: null
+    };
+
+    function fmtIsoDate(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+        return m ? `${+m[3]}. ${+m[2]}. ${m[1]}` : '';
+    }
+
+    // Bezpečné vykreslení podmnožiny Markdownu (nadpisy, odrážky, odstavce, **tučně**, `kód`,
+    // [odkaz](https://…)) – jen createElement + textContent, nikdy innerHTML z cizího textu.
+    function mdInline(parent, text) {
+        const re = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
+        let last = 0, m;
+        while ((m = re.exec(text))) {
+            if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+            const t = m[0];
+            if (t.startsWith('**')) {
+                const b = document.createElement('strong'); b.textContent = t.slice(2, -2); parent.appendChild(b);
+            } else if (t.startsWith('`')) {
+                const c = document.createElement('code'); c.textContent = t.slice(1, -1); parent.appendChild(c);
+            } else {
+                const mm = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(t);
+                if (mm && /^https:\/\//i.test(mm[2])) {
+                    const a = document.createElement('a');
+                    a.textContent = mm[1]; a.href = mm[2]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    parent.appendChild(a);
+                } else parent.appendChild(document.createTextNode(mm ? mm[1] : t));
+            }
+            last = m.index + t.length;
+        }
+        if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+    }
+    function renderMarkdown(md) {
+        const root = document.createElement('div');
+        root.className = 'md';
+        let list = null, para = null;
+        String(md || '').split(/\r?\n/).forEach((raw) => {
+            const line = raw.trimEnd();
+            const h = /^(#{1,6})\s+(.*)$/.exec(line);
+            const li = /^\s*[-*+]\s+(.*)$/.exec(line);
+            if (!line.trim()) { list = null; para = null; return; }
+            if (h) {
+                list = null; para = null;
+                const el = document.createElement('h4');
+                mdInline(el, h[2]);
+                root.appendChild(el);
+            } else if (li) {
+                para = null;
+                if (!list) { list = document.createElement('ul'); root.appendChild(list); }
+                const el = document.createElement('li');
+                mdInline(el, li[1]);
+                list.appendChild(el);
+            } else if (list && /^\s{2,}/.test(raw)) {
+                list.lastChild.appendChild(document.createTextNode(' '));
+                mdInline(list.lastChild, line.trim());
+            } else {
+                list = null;
+                if (!para) { para = document.createElement('p'); root.appendChild(para); } else para.appendChild(document.createTextNode(' '));
+                mdInline(para, line.trim());
+            }
+        });
+        return root;
+    }
+
+    function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
+    }
+    function updButton(label, cls, fn) {
+        const b = el('button', 'btn ' + cls, label);
+        b.type = 'button';
+        b.addEventListener('click', fn);
+        return b;
+    }
+
+    function updView(kind, sum) {
+        const body = $('updBody'), foot = $('updFoot');
+        body.textContent = '';
+        foot.textContent = '';
+        const st = (sum && sum.status) || {};
+        const running = (sum && sum.running) || ME.version;
+        const close = () => updButton('Zavřít', 'btn-outline', closeUpdateDialog);
+        $('updModal').classList.toggle('busy', kind === 'install' || kind === 'restart');
+        if (kind === 'checking') {
+            const row = el('div', 'upd-wait');
+            row.append(el('span', 'spinner'), el('span', '', 'Hledám aktualizace…'));
+            body.appendChild(row);
+            foot.appendChild(close());
+        } else if (kind === 'up_to_date') {
+            body.appendChild(el('p', 'upd-big', `Máte nejnovější verzi ${running}.`));
+            if (st.updated_at) body.appendChild(el('p', 'muted small', 'Zkontrolováno ' + fmtDateTime(st.updated_at * 1000)));
+            foot.appendChild(close());
+        } else if (kind === 'available') {
+            const head = el('div', 'upd-avail');
+            head.appendChild(el('p', 'upd-big', `K dispozici je verze ${st.latest}`));
+            const meta = [`nainstalovaná ${running}`];
+            if (st.published_at) meta.push('vydáno ' + fmtIsoDate(st.published_at));
+            head.appendChild(el('p', 'muted small', meta.join(' · ')));
+            body.appendChild(head);
+            if (st.failed_before) body.appendChild(el('div', 'alert-warning', 'Tuto verzi se dříve nepodařilo spustit (hub se vrátil k předchozí). Instalaci lze zkusit znovu.'));
+            if (st.message && /už není nejnovější/.test(st.message)) body.appendChild(el('div', 'alert-info', st.message));
+            const notes = Array.isArray(st.notes) ? st.notes : [];
+            if (notes.length) {
+                const box = el('div', 'upd-notes');
+                notes.forEach((n) => {
+                    if (!n || typeof n !== 'object') return;
+                    box.appendChild(el('h3', '', `Verze ${n.version}` + (n.date ? ' · ' + fmtIsoDate(n.date) : '')));
+                    box.appendChild(renderMarkdown(n.markdown));
+                });
+                body.appendChild(box);
+            } else body.appendChild(el('p', 'muted small', 'Poznámky k vydání nejsou k dispozici.'));
+            foot.append(updButton('Později', 'btn-outline', closeUpdateDialog),
+                updButton(`Aktualizovat na ${st.latest}`, 'btn-primary', () => startInstall(st.latest)));
+        } else if (kind === 'error') {
+            body.appendChild(el('div', 'alert-danger', st.message || 'Kontrola aktualizací selhala.'));
+            foot.append(close(), updButton('Zkusit znovu', 'btn-primary', () => openUpdateDialog('check')));
+        } else if (kind === 'install' || kind === 'restart') {
+            body.appendChild(el('p', 'upd-big', `Aktualizace na verzi ${UPD.target}`));
+            const ol = el('ol', 'upd-steps');
+            const idx = kind === 'restart' ? 3 : Math.max(0, UPD_STEPS.findIndex(([k]) => k === st.state));
+            UPD_STEPS.forEach(([, label], i) => {
+                const li = el('li', i < idx ? 'done' : i === idx ? 'active' : '');
+                li.appendChild(el('span', 'step-dot'));
+                li.appendChild(el('span', '', label));
+                if (i === idx) li.setAttribute('aria-current', 'step');
+                ol.appendChild(li);
+            });
+            body.appendChild(ol);
+            const msg = el('div', 'upd-wait');
+            msg.append(el('span', 'spinner'), el('span', '', kind === 'restart' ? 'Čekám na restart…'
+                : (UPD_STEPS.some(([k]) => k === st.state) && st.message) || 'Připravuji instalaci…'));
+            body.appendChild(msg);
+            body.appendChild(el('p', 'muted small', 'Nezavírejte prosím stránku, hub se během aktualizace krátce restartuje.'));
+        } else if (kind === 'done') {
+            body.appendChild(el('p', 'upd-big ok', `Aktualizováno na ${running}`));
+            body.appendChild(el('p', 'muted small', 'Načtěte stránku znovu, ať se použije nová verze webu.'));
+            foot.appendChild(updButton('Načíst znovu', 'btn-primary', () => window.location.reload()));
+        } else if (kind === 'failed') {
+            body.appendChild(el('div', 'alert-danger', st.message || 'Aktualizace se nezdařila.'));
+            body.appendChild(el('p', 'muted small', `Dál běží předchozí verze ${running}, data ani nastavení se nezměnila.`));
+            foot.append(close(), updButton('Zkusit znovu', 'btn-primary', () => openUpdateDialog('check')));
+        } else if (kind === 'timeout') {
+            body.appendChild(el('div', 'alert-danger', UPD.timeoutMsg || 'Služba aktualizací neodpovídá.'));
+            foot.append(close(), updButton('Zkusit znovu', 'btn-primary', () => openUpdateDialog('check')));
+        }
+        // po překreslení držet fokus v dialogu (po otevření na hlavní akci)
+        if (UPD.open && (UPD.needFocus || !$('updModal').contains(document.activeElement))) {
+            UPD.needFocus = false;
+            focusFirst();
+        }
+    }
+
+    function focusables() {
+        return Array.from($('updModal').querySelectorAll('button, [href], input, select, [tabindex]:not([tabindex="-1"])'))
+            .filter((e) => !e.disabled && e.offsetParent !== null);
+    }
+    function focusFirst() {
+        const f = $('updFoot').querySelector('.btn-primary') || $('updFoot').querySelector('button') || $('updClose');
+        (f || $('updModal').querySelector('.modal')).focus();
+    }
+
+    function viewFor(sum) {
+        const st = (sum && sum.status) || {};
+        const s = st.state;
+        if (UPD.mode === 'install') {
+            if (s === 'done' && sum.running === UPD.target) return 'done';
+            if (s === 'rolled_back' || (s === 'error' && (st.updated_at || 0) >= UPD.since - 1)) return 'failed';
+            if (s === 'restarting' || s === 'done') return 'restart';      // čeká se na novou verzi
+            return 'install';
+        }
+        if (UPD.mode === 'check' && ((st.updated_at || 0) < UPD.since - 1 || s === 'checking' || sum.pending)) return 'checking';
+        if (s === 'available') return 'available';
+        if (s === 'up_to_date') return 'up_to_date';
+        if (s === 'error' || s === 'rolled_back') return 'error';
+        if (s === 'done') return sum.running === st.current ? 'up_to_date' : 'available';
+        if (['downloading', 'verifying', 'installing', 'restarting'].includes(s) && sum.busy) {
+            UPD.mode = 'install'; UPD.target = st.target || st.latest; UPD.since = st.started_at || 0;
+            return 'install';
+        }
+        return s ? 'checking' : 'up_to_date';
+    }
+
+    async function updPoll() {
+        clearTimeout(UPD.timer);
+        if (!UPD.open) return;
+        let sum = null;
+        try {
+            const r = await fetch('/api/update/status', { credentials: 'same-origin' });
+            if (r.status === 401) { window.location.replace('/login'); return; }
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            sum = await r.json();
+        } catch (e) {
+            sum = null;
+        }
+        if (!UPD.open) return;
+        if (!sum) {                                   // server se restartuje
+            if (UPD.mode === 'install') {
+                UPD.failSince = UPD.failSince || Date.now();
+                if (Date.now() - UPD.failSince > 180000) {
+                    UPD.timeoutMsg = 'Hub se po restartu neozval do 3 minut. Zkuste stránku načíst znovu za chvíli.';
+                    updView('timeout');
+                    return;
+                }
+                updView('restart', UPD.last);
+            }
+            UPD.timer = setTimeout(updPoll, 1500);
+            return;
+        }
+        UPD.failSince = null;
+        UPD.last = sum;
+        setUpdateBadge(sum);
+        const kind = viewFor(sum);
+        if (kind === 'checking' && sum.pending) {
+            UPD.pendingSince = UPD.pendingSince || Date.now();
+            if (Date.now() - UPD.pendingSince > 45000) {        // žádost nikdo nevyzvedl
+                UPD.timeoutMsg = 'Služba aktualizací na žádost nereaguje (retencka-update.path). Zkuste to později nebo zkontrolujte journalctl -u retencka-update.';
+                updView('timeout', sum);
+                return;
+            }
+        } else UPD.pendingSince = null;
+        updView(kind, sum);
+        if (['checking', 'install', 'restart'].includes(kind)) UPD.timer = setTimeout(updPoll, 1500);
+    }
+
+    async function openUpdateDialog(mode) {
+        const m = $('updModal');
+        if (!UPD.open) {
+            UPD.opener = document.activeElement;
+            m.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            UPD.open = true;
+            UPD.needFocus = true;
+        }
+        UPD.mode = mode;
+        UPD.failSince = null;
+        UPD.pendingSince = null;
+        if (mode === 'check') {
+            updView('checking');
+            UPD.since = Math.floor(Date.now() / 1000);
+            const r = await action(() => api('POST', '/api/update/check', {}));
+            if (!r) {                                  // 409 = právě probíhá → jen ukázat stav
+                UPD.mode = 'show';
+            }
+        }
+        updPoll();
+    }
+
+    async function startInstall(ver) {
+        UPD.target = ver;
+        UPD.mode = 'install';
+        UPD.since = Math.floor(Date.now() / 1000);
+        updView('install', { status: { state: 'downloading', message: 'Odesílám žádost…' } });
+        const r = await action(() => api('POST', '/api/update/install', { version: ver }));
+        if (!r) { UPD.mode = 'show'; }
+        updPoll();
+    }
+
+    function closeUpdateDialog() {
+        if (!UPD.open || $('updModal').classList.contains('busy')) return;
+        UPD.open = false;
+        clearTimeout(UPD.timer);
+        $('updModal').classList.add('hidden');
+        document.body.classList.remove('modal-open');
+        // řádek v kartě Systém se po zavření překreslí → fokus na stálé tlačítko
+        const back = UPD.opener && UPD.opener.isConnected && !$('sysUpdate').contains(UPD.opener) ? UPD.opener : $('updateBtn');
+        if (back && back.offsetParent !== null) back.focus(); else if (document.activeElement) document.activeElement.blur();
+        refreshUpdateStatus();
+    }
+
+    function setUpdateBadge(sum) {
+        const st = (sum && sum.status) || {};
+        const avail = st.state === 'available' && st.latest && st.latest !== (sum.running || ME.version);
+        $('avatarDot').classList.toggle('hidden', !avail);
+        $('menuUpdDot').classList.toggle('hidden', !avail);
+        renderUpdateLine(sum);
+        applyUpdatePrefs(sum && sum.prefs);
+    }
+
+    function renderUpdateLine(sum) {
+        const box = $('sysUpdate');
+        if (!box) return;
+        box.textContent = '';
+        const st = (sum && sum.status) || {};
+        const when = st.updated_at || st.checked_at;
+        if (st.state === 'available' && st.latest) {
+            const row = el('div', 'upd-avail-line');
+            row.appendChild(el('span', 'badge-dot'));
+            row.appendChild(el('strong', '', `K dispozici verze ${st.latest}`));
+            row.appendChild(updButton('Zobrazit', 'btn-primary btn-sm', () => openUpdateDialog('show')));
+            box.appendChild(row);
+        }
+        const last = !when ? 'Zatím nekontrolováno.'
+            : `Poslední kontrola ${fmtDateTime(when * 1000)}: ${st.message || st.state || ''}`;
+        box.appendChild(el('p', 'muted small', last));
+    }
+
+    function applyUpdatePrefs(p) {
+        if (!p) return;
+        document.querySelectorAll('.upd-auto').forEach((c) => { c.checked = !!p.auto; });
+        document.querySelectorAll('.upd-channel-sel').forEach((s) => { s.value = p.channel; });
+    }
+
+    async function refreshUpdateStatus() {
+        if (ME.role !== 'admin') return;
+        try { setUpdateBadge(await api('GET', '/api/update/status')); } catch (e) { /* ignore */ }
+    }
+
+    function bindUpdates() {
+        $('updateBtn').addEventListener('click', () => openUpdateDialog('check'));
+        $('updClose').addEventListener('click', closeUpdateDialog);
+        $('updModal').addEventListener('mousedown', (e) => { if (e.target === $('updModal')) closeUpdateDialog(); });
+        $('updModal').addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeUpdateDialog(); return; }
+            if (e.key !== 'Tab') return;
+            const f = focusables();
+            if (!f.length) return;
+            const i = f.indexOf(document.activeElement);
+            if (e.shiftKey && (i <= 0)) { e.preventDefault(); f[f.length - 1].focus(); }
+            else if (!e.shiftKey && (i === -1 || i === f.length - 1)) { e.preventDefault(); f[0].focus(); }
+        });
+        const save = (src) => {
+            const box = src.closest('.upd-prefs');
+            const auto = box.querySelector('.upd-auto').checked;
+            const channel = box.querySelector('.upd-channel-sel').value;
+            action(() => api('POST', '/api/update/prefs', { auto, channel }),
+                auto ? 'Aktualizace se budou instalovat automaticky v noci.' : 'Aktualizace jen ručně.')
+                .then((r) => { if (r) applyUpdatePrefs(r.prefs); else refreshUpdateStatus(); });
+        };
+        document.querySelectorAll('.upd-auto, .upd-channel-sel').forEach((c) => c.addEventListener('change', () => save(c)));
+        refreshUpdateStatus();
+        setInterval(() => { if (!document.hidden && !UPD.open) refreshUpdateStatus(); }, 60000);
     }
 
     // ---------------------------------------------------------------- audit
@@ -1552,7 +2092,7 @@
             api('POST', '/api/auth/logout', {}).finally(() => window.location.replace('/login'));
         });
         bindRefill();
-        if (ME.role === 'admin') { bindSettings(); }
+        if (ME.role === 'admin') { bindSettings(); bindUpdates(); }
         bindUsers();
         bindTelegram();
 

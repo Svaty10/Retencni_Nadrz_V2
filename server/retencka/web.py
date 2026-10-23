@@ -23,9 +23,9 @@ from typing import Any, Callable, Optional
 
 from . import httpserver as web
 
-from . import __version__, auth, model
+from . import __version__, auth, model, updates
 from .core import Core
-from .settings import SettingsError
+from .settings import INHERITABLE, SettingsError
 
 log = logging.getLogger("retencka.web")
 
@@ -644,8 +644,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     async def api_node_config(request):
         nid = node_of(request)
         data = await read_json(request)
+        reset = data.pop("reset", None)
+        if reset is not None and (not isinstance(reset, list) or not all(isinstance(k, str) for k in reset)):
+            return jerr("reset: seznam klíčů")
         try:
-            changed = core.nodes.update(nid, data)
+            changed = core.nodes.update(nid, data, reset=reset)
         except SettingsError as e:
             return jerr(str(e))
         node = core.nodes.get(nid)
@@ -657,6 +660,24 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         recalc = bool(set(changed) & {"cal_points", "sensor_offset_cm", "max_depth_cm", "tank_area_m2",
                                       "probe_accuracy_pct", "probe_range_cm"})
         return jresp({"ok": True, "changed": changed, "recalc_suggested": recalc, "node": node_public(node)})
+
+    @need("admin")
+    async def api_node_defaults_get(request):
+        return jresp({"defaults": core.nodes.defaults(), "keys": list(INHERITABLE)})
+
+    @need("admin")
+    async def api_node_defaults_post(request):
+        """Shared defaults of all tanks; tanks with their own value (override) keep it."""
+        data = await read_json(request)
+        try:
+            changed = core.nodes.set_defaults(data)
+        except SettingsError as e:
+            return jerr(str(e))
+        if changed:
+            core.invalidate()
+            core.audit("SETTINGS_CHANGED", "Výchozí nastavení nádrží: " + labels(changed), *user_of(request))
+        return jresp({"ok": True, "changed": changed, "defaults": core.nodes.defaults(),
+                      "nodes": [node_public(n) for n in core.nodes.all()]})
 
     @need("admin")
     async def api_cal_point(request):
@@ -899,10 +920,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             info["db_mb"] = round(os.path.getsize(db.path) / 1048576, 1)
         except OSError:
             pass
-        try:
-            info["update"] = json.loads(Path(core.data_dir, "update-status.json").read_text())
-        except (OSError, ValueError):
-            info["update"] = None
+        info["update"] = updates.read_status(core.data_dir)
+        info["update_prefs"] = updates.read_prefs(core.data_dir)
         return jresp(info)
 
     @need("admin")
@@ -1014,6 +1033,17 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         return jresp(core.servis_state())
 
     @need("admin")
+    async def api_servis_install(request):
+        data = await read_json(request)
+        try:
+            st = core.netbird_install(data.get("setup_key"), data.get("management_url") or "", *user_of(request))
+        except ValueError as e:
+            return jerr(str(e))
+        except OSError:
+            return jerr("Žádost se nepodařilo uložit.", 500)
+        return jresp({"ok": True, "install": st})
+
+    @need("admin")
     async def api_servis_set(request):
         data = await read_json(request)
         mode = str(data.get("mode") or "")
@@ -1021,11 +1051,62 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jerr("Neplatná volba.")
         return jresp({"ok": True, **core.set_servis(mode, *user_of(request))})
 
+    # ------------------------------------------------------------ updates
+    # The root updater (system/bin/retencka-update.py) is driven by files in the data
+    # directory, see updates.py. A check never installs; install is a separate request.
+    def update_request(request, action: str, version: Optional[str] = None):
+        st = updates.read_status(core.data_dir)
+        if updates.busy(st) and (action == "install" or st.get("state") != "checking"):
+            return jerr("Aktualizace právě probíhá.", 409)
+        try:
+            updates.request(core.data_dir, action, version)
+        except ValueError as e:
+            return jerr(str(e))
+        except OSError:
+            return jerr("Žádost se nepodařilo uložit.", 500)
+        if action == "install":
+            core.audit("UPDATE_REQUESTED", f"Instalace verze {version}", *user_of(request))
+        else:
+            core.audit("UPDATE_REQUESTED", "Ruční kontrola aktualizací", *user_of(request))
+        return jresp({"ok": True, **updates.summary(core.data_dir, __version__),
+                      "message": "Kontrola aktualizací spuštěna." if action == "check" else
+                                 f"Instalace verze {version} spuštěna."})
+
     @need("admin")
-    async def api_system_update(request):
-        Path(core.data_dir, "update-request").write_text(str(int(time.time())))
-        core.audit("UPDATE_REQUESTED", "Ruční kontrola aktualizací", request["session"]["username"], request["ip"])
-        return jresp({"ok": True, "message": "Kontrola aktualizací spuštěna."})
+    async def api_system_update(request):          # old route = check (kept for older clients)
+        return update_request(request, "check")
+
+    @need("admin")
+    async def api_update_check(request):
+        return update_request(request, "check")
+
+    @need("admin")
+    async def api_update_install(request):
+        data = await read_json(request)
+        ver = data.get("version")
+        if not updates.valid_version(ver):
+            return jerr("Neplatná verze.")
+        st = updates.read_status(core.data_dir) or {}
+        if st.get("state") not in ("available", "error", "rolled_back") or st.get("latest") != ver:
+            return jerr("Tato verze není k dispozici – nejprve zkontrolujte aktualizace.", 409)
+        return update_request(request, "install", ver)
+
+    @need("admin")
+    async def api_update_status(request):
+        return jresp(updates.summary(core.data_dir, __version__))
+
+    @need("admin")
+    async def api_update_prefs(request):
+        data = await read_json(request)
+        try:
+            p = updates.write_prefs(core.data_dir, data.get("auto"), data.get("channel"))
+        except ValueError as e:
+            return jerr(str(e))
+        except OSError:
+            return jerr("Nastavení se nepodařilo uložit.", 500)
+        core.audit("SETTINGS_CHANGED", "Aktualizace: " + ("automaticky" if p["auto"] else "jen ručně")
+                   + (", kanál beta" if p["channel"] == "beta" else ", kanál stabilní"), *user_of(request))
+        return jresp({"ok": True, "prefs": p})
 
     r = app.router
     r.add_get("/", page_index)
@@ -1047,6 +1128,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_get("/api/settings", api_settings_get)
     r.add_post("/api/settings", api_settings_post)
     r.add_post("/api/node", api_node_config)
+    r.add_get("/api/node-defaults", api_node_defaults_get)
+    r.add_post("/api/node-defaults", api_node_defaults_post)
     r.add_post("/api/calibration/point", api_cal_point)
     r.add_post("/api/calibration/recompute", api_cal_recompute)
     r.add_post("/api/calibration/battery", api_battery_cal)
@@ -1069,12 +1152,17 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/ha/rotate", api_ha_rotate)
     r.add_get("/api/system", api_system)
     r.add_post("/api/system/update", api_system_update)
+    r.add_post("/api/update/check", api_update_check)
+    r.add_post("/api/update/install", api_update_install)
+    r.add_get("/api/update/status", api_update_status)
+    r.add_post("/api/update/prefs", api_update_prefs)
     r.add_get("/api/telegram", api_telegram)
     r.add_get("/api/telegram/mine", api_telegram_mine)
     r.add_post("/api/telegram/link", api_telegram_link)
     r.add_post("/api/telegram/unlink", api_telegram_unlink)
     r.add_get("/api/servis", api_servis)
     r.add_post("/api/servis", api_servis_set)
+    r.add_post("/api/servis/install", api_servis_install)
     r.add_get("/api/backup", api_backup_list)
     r.add_get("/api/backup/download", api_backup_download)
     r.add_post("/api/backup/import", api_backup_import)

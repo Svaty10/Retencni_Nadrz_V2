@@ -4,4 +4,4 @@ Description=Retenční nádrž – akce s právy roota na žádost aplikace (res
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /var/lib/retencka/app/current/system/bin/retencka-control.py
-TimeoutStartSec=3min
+TimeoutStartSec=15min

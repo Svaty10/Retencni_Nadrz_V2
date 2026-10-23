@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.1.2-2b6cb0)
+![verze](https://img.shields.io/badge/verze-1.2.0-2b6cb0)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -55,10 +55,13 @@ flowchart LR
 - Dopouštění jde kdykoli zrušit – před startem i za chodu, ruční i automatické; bez čerstvých dat ventil nepustí.
 - Přihlášení s rolemi (admin / uživatel); menu účtu vpravo nahoře (Můj účet, Nastavení, Správa uživatelů,
   Logování). Přehledný log s filtry, nastavení **základní / pokročilé**, jen pro admina.
+- Nastavení podle nádrží: společné **výchozí hodnoty** pro všechny nádrže a u každé nádrže vlastní
+  hodnoty, které změna výchozích nepřepíše. Telegram bot i vzdálený servis (NetBird) se nastaví z webu.
 - Střídmý vzhled, světlý i tmavý režim podle systému; využívá celou šířku monitoru a je plně funkční na mobilu.
 - Home Assistant přes REST (YAML se vygeneruje sám), CSV export.
 - Záloha i obnova přes web (nahraná data se sloučí bez duplicit), noční zálohy. Data se nemažou (~10 MB na čidlo a rok).
-- Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem.
+- Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem
+  – na webu v okně se seznamem změn a průběhem, instalace po potvrzení nebo automaticky v noci.
 - Proces ~28–35 MB RAM, bez Dockeru a bez pip – jen standardní knihovna Pythonu.
 
 <p align="center">

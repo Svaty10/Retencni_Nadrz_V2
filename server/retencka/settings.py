@@ -1,7 +1,8 @@
 """Typed, validated settings stored in SQLite (atomic writes, survives power loss).
 
 * Settings  – global hub settings (weather, Hydrawise, refill rules, system)
-* Nodes     – one row per sensor node: name + its own tank geometry and calibration
+* Nodes     – one row per sensor node: name + its own tank geometry and calibration,
+              plus overrides of the shared tank defaults (INHERITABLE)
 """
 
 from __future__ import annotations
@@ -71,6 +72,13 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
 }
 NODE_SECRET_KEYS = {"hydrawise_api_key"}
 NODE_INTERNAL_KEYS = {"real_flow_rate_lpm"}
+# Keys with a shared default for all tanks ("Výchozí nastavení nádrží"); a tank may override
+# them. Everything else in NODE_SCHEMA is the tank's own (geometry, calibration, valve …).
+INHERITABLE = ("probe_accuracy_pct", "probe_range_cm", "notify_low_pct", "runoff_coef", "battery_type",
+               "refill_threshold_pct", "auto_refill_target_pct", "max_refill_pct",
+               "rain_wait_enabled", "rain_wait_hours", "rain_wait_max_below_pct", "rain_wait_max_drop_pct",
+               "max_refill_minutes", "flow_rate_lpm")
+DEFAULTS_KEY = "node_defaults"           # settings row with the shared defaults (JSON)
 
 SECRET_KEYS = {"hydrawise_api_key", "telegram_token"}
 INTERNAL_KEYS = {"ha_token"}
@@ -146,22 +154,88 @@ class Settings:
 
 
 class Nodes:
-    """Registered sensor nodes with their per-node configuration (cached)."""
+    """Registered sensor nodes with their per-node configuration (cached).
+
+    Effective config of a node = schema default ← shared default (INHERITABLE keys, one
+    settings row) ← the node's own value. A node stores only its per-tank keys and the
+    inheritable keys it overrides, so changing a shared default reaches every node that
+    does not override that key and never touches an override.
+    """
 
     def __init__(self, db: Database):
         self.db = db
         self._lock = threading.Lock()
         self._cache: dict[int, dict] = {}
+        self._defaults: dict[str, Any] = schema_defaults()
         self.reload()
 
+    # ------------------------------------------------------- shared defaults
+    def _load_defaults(self) -> dict[str, Any]:
+        out = schema_defaults()
+        try:
+            stored = json.loads(self.db.scalar("SELECT value FROM settings WHERE key=?", (DEFAULTS_KEY,), "{}"))
+        except ValueError:
+            stored = {}
+        if isinstance(stored, dict):
+            for k in INHERITABLE:
+                if k in stored:
+                    try:
+                        out[k] = coerce(NODE_SCHEMA, k, stored[k])
+                    except SettingsError:
+                        pass                 # a broken value falls back to the schema default
+        return out
+
+    def defaults(self) -> dict[str, Any]:
+        with self._lock:
+            return dict(self._defaults)
+
+    def set_defaults(self, changes: dict) -> list[str]:
+        """Change shared defaults; refuses a value that would make any inheriting tank's
+        refill rules inconsistent (the tank is named in the error)."""
+        new = self.defaults()
+        changed = []
+        for k, raw in changes.items():
+            if k not in INHERITABLE:
+                raise SettingsError(f"Nastavení {k} nelze nastavit jako výchozí pro všechny nádrže")
+            v = coerce(NODE_SCHEMA, k, raw)
+            if new[k] != v:
+                new[k] = v
+                changed.append(k)
+        if not changed:
+            return []
+        _check_refill(new, "Výchozí nastavení")
+        for n in self.all():
+            eff = dict(n)
+            eff.update({k: new[k] for k in INHERITABLE if k not in n["_overrides"]})
+            _check_refill(eff, f"Nádrž „{n['name']}“")
+        self.db.execute("INSERT INTO settings(key, value) VALUES(?, ?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (DEFAULTS_KEY, json.dumps(new)))
+        self.reload()
+        return sorted(changed)
+
+    # ------------------------------------------------------------- nodes
+    def _stored(self, node_id: int) -> dict:
+        raw = self.db.scalar("SELECT config FROM nodes WHERE node_id=?", (node_id,), "{}")
+        try:
+            v = json.loads(raw)
+        except ValueError:
+            return {}
+        return v if isinstance(v, dict) else {}
+
     def reload(self) -> None:
+        defaults = self._load_defaults()
         nodes = {}
         for r in self.db.query("SELECT node_id, name, config, sort, secret, paired_at, unpair_at FROM nodes ORDER BY sort, node_id"):
             cfg = {k: v[0] for k, v in NODE_SCHEMA.items()}
+            cfg.update(defaults)
             try:
-                cfg.update(json.loads(r["config"]))
+                stored = json.loads(r["config"])
             except ValueError:
-                pass
+                stored = {}
+            if not isinstance(stored, dict):
+                stored = {}
+            cfg.update(stored)
+            cfg["_overrides"] = sorted(k for k in stored if k in INHERITABLE)
             cfg["name"] = r["name"]
             cfg["node_id"] = r["node_id"]
             cfg["sort"] = r["sort"]
@@ -171,6 +245,7 @@ class Nodes:
             nodes[r["node_id"]] = cfg
         with self._lock:
             self._cache = nodes
+            self._defaults = defaults
 
     def ids(self) -> list[int]:
         with self._lock:
@@ -196,10 +271,13 @@ class Nodes:
         if len(self.ids()) >= MAX_NODES:
             raise SettingsError(f"Maximálně {MAX_NODES} čidel.")
         name = _clean_name(name) or f"Nádrž {node_id:04X}"
-        cfg = {k: v[0] for k, v in NODE_SCHEMA.items()}
+        cfg = {k: v[0] for k, v in NODE_SCHEMA.items() if k not in INHERITABLE}
+        defaults = self.defaults()
         for k, v in (config or {}).items():
             if k in NODE_SCHEMA:
-                cfg[k] = coerce(NODE_SCHEMA, k, v)
+                val = coerce(NODE_SCHEMA, k, v)
+                if k not in INHERITABLE or val != defaults[k]:      # same as default = inherit
+                    cfg[k] = val
         sort = len(self.ids())
         self.db.execute("INSERT INTO nodes(node_id, name, config, created, sort) VALUES(?,?,?,?,?)",
                         (node_id, name, json.dumps(cfg), int(time.time()), sort))
@@ -233,16 +311,30 @@ class Nodes:
         out["id"] = f"{node_id:04X}"
         out["paired"] = bool(n.get("_secret"))
         out["unpairing"] = bool(n.get("_unpair"))
+        out["overrides"] = list(n["_overrides"])
+        out["inherited"] = [k for k in INHERITABLE if k not in n["_overrides"]]
         return out
 
-    def update(self, node_id: int, changes: dict, allow_internal: bool = False) -> list[str]:
+    def update(self, node_id: int, changes: dict, allow_internal: bool = False,
+               reset: Optional[list] = None) -> list[str]:
+        """Change a node. An inheritable key becomes an override only when its value differs
+        from the inherited one (or it already is an override); `reset` removes overrides."""
         cur = self.get(node_id)
         if not cur:
             raise SettingsError("Čidlo neexistuje.")
         changed = []
         name = cur["name"]
-        cfg = {k: cur[k] for k in NODE_SCHEMA}
+        stored = self._stored(node_id)
+        reset = list(reset or [])
+        for k in reset:
+            if k not in INHERITABLE:
+                raise SettingsError(f"Nastavení {k} nemá výchozí hodnotu")
+            if k in stored:
+                del stored[k]
+                changed.append(k)
         for k, raw in changes.items():
+            if k in reset:
+                continue
             if k == "name":
                 n = _clean_name(raw)
                 if not n:
@@ -256,24 +348,57 @@ class Nodes:
                 if k in NODE_SECRET_KEYS and isinstance(raw, str) and raw.startswith("•"):
                     continue
                 v = coerce(NODE_SCHEMA, k, raw)
-                if cfg[k] != v:
-                    cfg[k] = v
-                    changed.append(k)
+                if k in INHERITABLE and k not in stored:
+                    if v != cur[k]:              # edited inherited value → own override
+                        stored[k] = v
+                        changed.append(k)
+                else:                            # per-tank key or an existing override
+                    if stored.get(k, cur[k]) != v:
+                        changed.append(k)
+                    stored[k] = v
             else:
                 raise SettingsError(f"Neznámé nastavení čidla: {k}")
-        if cfg["auto_refill_target_pct"] <= cfg["refill_threshold_pct"]:
-            raise SettingsError("Cíl automatického dopouštění musí být vyšší než spouštěcí hranice")
-        if cfg["auto_refill_target_pct"] > cfg["max_refill_pct"]:
-            raise SettingsError("Cíl automatického dopouštění nesmí překročit maximální limit")
+        eff = {k: v[0] for k, v in NODE_SCHEMA.items()}
+        eff.update(self.defaults())
+        eff.update(stored)
+        _check_refill(eff)
         if changed:
             self.db.execute("UPDATE nodes SET name=?, config=? WHERE node_id=?",
-                            (name, json.dumps(cfg), node_id))
+                            (name, json.dumps(stored), node_id))
             self.reload()
         return changed
 
     def remove(self, node_id: int) -> None:
         self.db.execute("DELETE FROM nodes WHERE node_id=?", (node_id,))
         self.reload()
+
+
+def schema_defaults() -> dict[str, Any]:
+    return {k: NODE_SCHEMA[k][0] for k in INHERITABLE}
+
+
+def strip_schema_defaults(cfg: dict) -> dict:
+    """Old full node config (before shared defaults) → only real overrides: inheritable
+    keys whose value equals the schema default become inherited (used for old backups;
+    the DB migration v9 does the same in SQL)."""
+    out = {}
+    for k, v in cfg.items():
+        if k in INHERITABLE:
+            try:
+                if coerce(NODE_SCHEMA, k, v) == NODE_SCHEMA[k][0]:
+                    continue
+            except SettingsError:
+                continue
+        out[k] = v
+    return out
+
+
+def _check_refill(cfg: dict, who: str = "") -> None:
+    pre = f"{who}: " if who else ""
+    if cfg["auto_refill_target_pct"] <= cfg["refill_threshold_pct"]:
+        raise SettingsError(pre + "Cíl automatického dopouštění musí být vyšší než spouštěcí hranice")
+    if cfg["auto_refill_target_pct"] > cfg["max_refill_pct"]:
+        raise SettingsError(pre + "Cíl automatického dopouštění nesmí překročit maximální limit")
 
 
 def mask(v: Any) -> str:

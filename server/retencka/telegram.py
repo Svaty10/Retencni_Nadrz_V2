@@ -28,7 +28,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Optional
 
-from . import __version__, model, pngchart
+from . import __version__, model, pngchart, updates
 
 log = logging.getLogger("retencka.telegram")
 
@@ -291,7 +291,7 @@ class TelegramBot:
                       "obnovit [nádrž] – znovu zapnout zrušenou automatiku",
                       "", "<b>Servis</b>", "diag – diagnostika", "log – poslední záznamy",
                       "restart – restart aplikace", "reboot – restart zařízení",
-                      "aktualizovat – zkontrolovat aktualizace",
+                      "aktualizovat – zkontrolovat a případně nainstalovat aktualizace",
                       "servis zap / 24h / vyp – vzdálený servisní přístup"]
         lines += ["", "odhlasit – odpojit tento chat"]
         return "\n".join(lines)
@@ -309,6 +309,53 @@ class TelegramBot:
                     rest.pop(i)
                     return nid, rest
         return ids[0], rest
+
+    async def _update(self, cid: int, who: str, args: list[str]) -> None:
+        """aktualizovat → check and report; button / "aktualizovat instalovat X" → install."""
+        d = self.core.data_dir
+        st = updates.read_status(d) or {}
+        if updates.busy(st) and st.get("state") != "checking":
+            await self.send(cid, "⏳ Aktualizace právě probíhá: " + html.escape(str(st.get("message") or "")))
+            return
+        if args and _plain(args[0]) in ("instalovat", "install"):
+            ver = args[1] if len(args) > 1 else ""
+            if (not updates.valid_version(ver) or st.get("latest") != ver
+                    or st.get("state") not in ("available", "error", "rolled_back")):
+                await self.send(cid, "Tato verze není k dispozici – nejprve pošlete <b>aktualizovat</b>.")
+                return
+            updates.request(d, "install", ver)
+            self.core.audit("UPDATE_REQUESTED", f"Instalace verze {ver} z Telegramu", who)
+            await self.send(cid, f"⬆️ Instaluji verzi {html.escape(ver)}. Hub se na chvíli restartuje; "
+                                 "výsledek uvidíte v Nastavení → Systém.")
+            return
+        updates.request(d, "check")
+        self.core.audit("UPDATE_REQUESTED", "Kontrola aktualizací z Telegramu", who)
+        await self.send(cid, "🔎 Hledám aktualizace…")
+        if self.loop is not None:
+            self.loop.create_task(self._update_report(cid, time.time()))
+
+    async def _update_report(self, cid: int, since: float, timeout: float = 120.0) -> None:
+        """Wait for the updater's answer to a check and send it (with an install button)."""
+        end = time.time() + timeout
+        while time.time() < end:
+            await asyncio.sleep(2.0)
+            st = updates.read_status(self.core.data_dir) or {}
+            if (st.get("updated_at") or 0) < since - 1 or st.get("state") not in ("available", "up_to_date", "error"):
+                continue
+            msg = html.escape(str(st.get("message") or ""))
+            if st["state"] == "available" and updates.valid_version(st.get("latest")):
+                ver = st["latest"]
+                notes = [n for n in (st.get("notes") or []) if isinstance(n, dict)]
+                text = f"⬆️ <b>{msg}</b>"
+                if notes:
+                    body = str(notes[0].get("markdown") or "")[:1200]
+                    text += "\n\n" + html.escape(body)
+                await self.send(cid, text, [[{"text": f"Aktualizovat na {ver}",
+                                              "callback_data": f"aktualizovat:instalovat {ver}"}]])
+            else:
+                await self.send(cid, ("✅ " if st["state"] == "up_to_date" else "⚠️ ") + msg)
+            return
+        await self.send(cid, "⚠️ Kontrola aktualizací neodpověděla – zkuste to později (Nastavení → Systém).")
 
     async def _command(self, cid: int, user: dict, cmd: str, args: list[str]) -> None:
         admin = user["role"] == "admin"
@@ -387,9 +434,7 @@ class TelegramBot:
                 await self.send(cid, "Restartovat celé zařízení?", [[{"text": "Ano, restartovat zařízení",
                                                                       "callback_data": "reboot:ano"}]])
         elif cmd in ("aktualizovat", "update"):
-            self.core.control_request("update")
-            self.core.audit("UPDATE_REQUESTED", "Kontrola aktualizací z Telegramu", who)
-            await self.send(cid, "⬆️ Kontrola aktualizací spuštěna.")
+            await self._update(cid, who, args)
         elif cmd == "servis":
             mode = {"zap": "24h", "24h": "24h", "trvale": "on", "vyp": "off", "off": "off"}.get(
                 _plain(args[0]) if args else "", None)
