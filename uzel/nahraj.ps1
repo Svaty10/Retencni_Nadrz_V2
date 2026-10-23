@@ -122,7 +122,7 @@ function Invoke-Avrdude([string[]]$extra) {
         throw ("Signál se nevrací. Zkuste odpojit drát UPDI od čidla a test spustit znovu:`n" +
                "  • pak 'Arduino OK' -> linku drží čidlo: nemá napájení (baterie / 3,3 V z Uno)`n" +
                "    nebo je drát na jiném pinu než UPDI (pin 10 ATtiny1624),`n" +
-               "  • pořád nic -> zapojení Arduina: drát RESET – GND, D0 (přes diodu) a D1 spojené`n" +
+               "  • pořád nic -> zapojení Arduina: drát RESET – GND, D0 (přes odpor) a D1 spojené`n" +
                "    v jednom bodě. Klony s CH340 to často neumí – použijte 0-priprav-arduino.cmd.")
     }
     Write-Host "3/3 Komunikuji s čipem v čidle…"
@@ -142,12 +142,12 @@ function Invoke-Avrdude([string[]]$extra) {
     if ($prog -eq "jtag2updi" -and $text -notmatch "RSP_|FW version") {
         throw ("Arduino neodpovídá ani jako převodník (piny 0/1), ani jako programátor jtag2updi (pin 6).`n" +
                "  • klon Uno/Nano s CH340: jednou spusťte 0-priprav-arduino.cmd (bez drátů na Arduinu),`n" +
-               "    pak zapojte pin 6 přes diodu na UPDI (viz docs\programovani_uzlu.md),`n" +
-               "  • nebo zapojení přes piny 0/1: drát RESET – GND, D0 přes diodu a D1 spojené na UPDI.")
+               "    pak zapojte pin 6 přes 4,7 kΩ na UPDI,`n" +
+               "  • nebo zapojení přes piny 0/1: drát RESET – GND, D0 přes odpor a D1 spojené na UPDI.")
     }
     if ($prog -eq "jtag2updi") {
         throw ("Arduino (jtag2updi) je v pořádku, ale čip v čidle neodpovídá:`n" +
-               "  • drát z pinu 6 Arduina přes diodu (proužek k Arduinu) na UPDI (pin 10), pull-upy 10k/4k7, GND na GND,`n" +
+               "  • drát z pinu 6 Arduina přes 4,7 kΩ na UPDI (pin 10 ATtiny1624), GND na GND,`n" +
                "  • napájení čidla (baterie, nebo 3,3 V z Arduina Uno – ne obojí),`n" +
                "  • drát RESET – GND na Arduinu NESMÍ být zapojený (jtag2updi by neběželo).")
     }
@@ -168,7 +168,7 @@ function Install-Jtag2updi {
         if ($LASTEXITCODE -eq 0) {
             Write-Host ""
             Write-Host "Hotovo – Arduino je teď programátor jtag2updi." -ForegroundColor Green
-            Write-Host "Zapojení: pin 6 → dioda (proužek k Arduinu) → UPDI čidla + pull-upy 10k (5V) / 4k7 (3,3 V čidla), GND → GND, napájení čidla; RESET–GND NEzapojovat."
+            Write-Host "Zapojení: pin 6 → 4,7 kΩ → UPDI čidla, GND → GND, napájení čidla; RESET–GND NEzapojovat."
             return
         }
     }
