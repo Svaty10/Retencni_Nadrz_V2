@@ -971,7 +971,8 @@ class Core:
         # energy model from the global settings, battery capacity of this tank (inheritable)
         energy = {**self.settings.all(), "battery_capacity_mah": node["battery_capacity_mah"],
                   "battery_capacity_alk_mah": node["battery_capacity_alk_mah"]}
-        days = model.battery_days_left(pct, cpd, energy, heats, kind) if cpd else None
+        quick = (last.get("fw") or 0) >= model.QUICK_CHECK_FW
+        days = model.battery_days_left(pct, cpd, energy, heats, kind, quick) if cpd else None
         low = pct < model.BATTERY_LOW_PCT or bool(last["flags"] & model.FLAG_BAT_LOW)
         sag = last.get("vbat_sag_mv")
         # the node switches itself off below the cut-off (at rest or under TX load)
@@ -1531,21 +1532,23 @@ class Core:
             bucket = int(math.ceil(bucket / 3600.0)) * 3600
             rows = self.db.query(
                 "SELECT (hour/?)*? AS t, AVG(level_mm) l, AVG(volume_l) v, AVG(temp) te, AVG(hum) hu, "
-                "AVG(vbat) vb, MAX(refilling) rf, AVG(rssi) rs FROM hourly WHERE node_id=? AND hour >= ? AND hour < ? "
+                "AVG(vbat) vb, MAX(refilling) rf, AVG(rssi) rs, NULL pr, NULL sg FROM hourly WHERE node_id=? AND hour >= ? AND hour < ? "
                 "GROUP BY t ORDER BY t", (bucket, bucket, nid, t_from, t_to))
             scale_t = scale_h = scale_r = 1.0
         else:
             rows = self.db.query(
                 "SELECT (ts/?)*? AS t, AVG(level_mm) l, AVG(volume_l) v, AVG(temp_x100) te, "
-                "AVG(hum_x100) hu, AVG(vbat_mv) vb, MAX(refilling) rf, AVG(rssi_x2) rs FROM measurements "
+                "AVG(hum_x100) hu, AVG(vbat_mv) vb, MAX(refilling) rf, AVG(rssi_x2) rs, AVG(probe_100uv) pr, "
+                "AVG(vbat_sag_mv) sg FROM measurements "
                 "WHERE node_id=? AND ts >= ? AND ts < ? GROUP BY t ORDER BY t",
                 (bucket, bucket, nid, t_from, t_to))
             scale_t = scale_h = 0.01
             scale_r = 0.5
         max_mm = float(node["max_depth_cm"]) * 10.0
         trim = float(node["battery_trim"])
-        out = {"bucket_s": bucket, "t": [], "level_pct": [], "level_cm": [], "volume_l": [],
-               "temp": [], "hum": [], "vbat": [], "rssi": [], "refill": []}
+        kind = node.get("battery_type") or "lifes2"
+        out = {"bucket_s": bucket, "t": [], "level_pct": [], "level_cm": [], "volume_l": [], "probe_mv": [],
+               "temp": [], "hum": [], "vbat": [], "bat_pct": [], "sag_mv": [], "rssi": [], "refill": []}
 
         def r1(x, k=1.0, nd=2):
             return None if x is None else round(x * k, nd)
@@ -1565,7 +1568,11 @@ class Core:
             out["volume_l"].append(r1(r["v"], 1.0, 0))
             out["temp"].append(r1(r["te"], scale_t, 2))
             out["hum"].append(r1(r["hu"], scale_h, 1))
+            out["probe_mv"].append(r1(r["pr"], 0.1, 1))
             out["vbat"].append(r1(r["vb"], 0.001 * trim, 3))
+            out["bat_pct"].append(None if r["vb"] is None
+                                  else round(model.battery_percent(r["vb"] * 0.001 * trim, kind=kind), 1))
+            out["sag_mv"].append(r1(r["sg"], 1.0, 0))
             out["rssi"].append(r1(r["rs"], scale_r, 1))
             out["refill"].append(int(r["rf"] or 0))
         out["bands"] = self.bands(nid, t_from, t_to)

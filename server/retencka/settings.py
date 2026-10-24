@@ -28,6 +28,7 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "telegram_token":            ("", "str", 0, 100),
     # node energy model (same hardware for all nodes); battery capacity is per tank
     "node_cycle_mAs":            (3.3, "float", 0.01, 100.0),
+    "node_check_mAs":            (1.4, "float", 0.0, 100.0),    # quick probe-only check (fw >= 11)
     "node_sleep_uA":             (1.5, "float", 0.0, 1000.0),
     "node_heat_mAs":             (66.0, "float", 0.0, 1000.0),   # one heating = 2 x 110 mW / 1 s
     # system

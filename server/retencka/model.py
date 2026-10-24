@@ -188,6 +188,8 @@ BATTERY_CURVES = {"lifes2": _LIFES2_CELL, "alkaline": _ALKALINE_CELL}
 BATTERY_SELF_DISCHARGE = {"lifes2": 0.02, "alkaline": 0.03}   # share of capacity per year
 BATTERY_LOW_PCT = 5.0
 BATTERY_CUTOFF_MV = 3000          # node switches itself off below this (uzel/include/config.h)
+QUICK_CHECK_FW = 11               # firmware from which the node checks the probe every minute
+QUICK_CHECKS_SLOTS = 1440         # one wake-up per minute: a full cycle or a quick check
 
 
 def battery_percent(vbat_v: float, cells: int = 3, kind: str = "lifes2") -> float:
@@ -204,14 +206,19 @@ def battery_percent(vbat_v: float, cells: int = 3, kind: str = "lifes2") -> floa
 
 
 def battery_days_left(percent: float, cycles_per_day: float, s: dict,
-                      heats_per_day: float = 0.0, kind: str = "lifes2") -> Optional[float]:
+                      heats_per_day: float = 0.0, kind: str = "lifes2",
+                      quick_checks: bool = False) -> Optional[float]:
     """Remaining runtime from an energy model (voltage trends of Li-FeS2 are useless).
-    Uses the real measurement rate and the real heater use of the last days."""
+    Uses the real measurement rate and the real heater use of the last days.
+    quick_checks: the node (fw >= QUICK_CHECK_FW) wakes every minute, each minute
+    without a transmission is a probe-only check."""
+    checks = max(0.0, QUICK_CHECKS_SLOTS - cycles_per_day) if quick_checks else 0.0
     cap_key = "battery_capacity_alk_mah" if kind == "alkaline" else "battery_capacity_mah"
     # capacity of the tank's battery (settings.NODE_SCHEMA, inheritable); typical 3x AA as fallback
     nominal_mas = float(s.get(cap_key) or (2500.0 if kind == "alkaline" else 3000.0)) * 3600.0
     cap_mas = nominal_mas * percent / 100.0
     per_day = (cycles_per_day * float(s["node_cycle_mAs"])      # measure + transmit
+               + checks * float(s.get("node_check_mAs", 1.4))   # quick probe checks
                + heats_per_day * float(s.get("node_heat_mAs", 66.0))   # SHT40 heater
                + float(s["node_sleep_uA"]) * 86.4               # sleep current
                + nominal_mas * BATTERY_SELF_DISCHARGE.get(kind, 0.02) / 365.0)   # self-discharge

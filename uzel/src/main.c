@@ -10,6 +10,11 @@
  * Interval: 300 s, 60 s while the level changes fast (adaptive) and for the first
  * BOOT_FAST_CYCLES after a reset (installation feedback).
  *
+ * Quick checks: in the normal mode the node also wakes every QUICK_CHECK_S and
+ * measures only the probe (no SHT40 / battery / radio). QUICK_CONFIRM changes in
+ * a row of at least FAST_DELTA_100UV against the last transmitted value start the
+ * full cycle right away and the fast mode. Timeline and decision: sched.h.
+ *
  * Pairing: after a battery change (power-on reset) the node sends a PAIR_REQ
  * every 5 s for PAIR_WINDOW_S and listens 0.6 s for the hub's answer.
  *  - paired node: keeps measuring with its key; accepts only an UNPAIR signed with
@@ -34,6 +39,7 @@
 #include "sht40.h"
 #include "cc1101.h"
 #include "link.h"
+#include "sched.h"
 #include <stddef.h>
 
 #define BOOT_FAST_CYCLES    10U     /* 10 x 60 s right after power-up */
@@ -55,6 +61,8 @@ typedef struct {
     uint8_t  fast_run;
     uint8_t  boot_fast_left;
     uint16_t interval_s;
+    uint16_t since_full_s;          /* time since the previous full cycle */
+    bool     force_fast;            /* quick checks confirmed a change */
 
     /* battery under TX load (measured hourly during the transmission) */
     uint16_t vbat_load_mv;
@@ -94,6 +102,7 @@ static bool radio_ready(void)
 static void sleep_s(uint16_t s)
 {
     power_sleep_seconds(s);
+    g.since_full_s = (g.since_full_s > 0xFFFFU - s) ? 0xFFFFU : (uint16_t)(g.since_full_s + s);
     g.since_bat_s += s;
     g.since_heat_s += s;
 }
@@ -132,16 +141,19 @@ static bool update_interval(bool probe_ok, uint16_t probe)
     if (probe_ok) {
         if (g.have_last_probe) {
             /* Normalise the change to a 300 s window so the decision does not
-             * depend on the interval that was just used. */
+             * depend on the time that has just passed (a full interval, or less
+             * when quick checks cut it short). */
+            uint16_t elapsed = (g.since_full_s < INTERVAL_FAST_S) ? INTERVAL_FAST_S : g.since_full_s;
             uint32_t d = abs_diff_u16(probe, g.last_probe);
-            d = d * INTERVAL_NORMAL_S / g.interval_s;
+            d = d * INTERVAL_NORMAL_S / elapsed;
             changed = (d > FAST_DELTA_100UV);
         }
         g.last_probe = probe;
         g.have_last_probe = true;
     }
 
-    if (changed) {
+    if (changed || g.force_fast) {
+        g.force_fast = false;
         g.calm_cycles = 0;
     } else if (g.calm_cycles < 255U) {
         g.calm_cycles++;
@@ -229,10 +241,11 @@ static void measure_and_send(void)
     t.hum_x100 = hum;
 
     /* ---------------- interval decision & transmit ---------------- */
-    uint16_t elapsed_s = g.interval_s;       /* time since the previous measurement */
+    uint16_t elapsed_s = g.since_full_s;     /* time since the previous measurement */
     if (update_interval(probe_ok && !clipped, probe)) {
         t.flags |= PKT_FLAG_FAST;
     }
+    g.since_full_s = 0;
     t.flags |= g.sticky_flags;
     t.diag = (uint8_t)(g.diag | (bat_now ? DIAG_BAT_FRESH : 0U));
     t.vbat_sag = g.sag;
@@ -284,6 +297,16 @@ static void measure_and_send(void)
     if (!g.cutoff) {
         maybe_heat(sht_ok, temp, hum, elapsed_s);
     }
+}
+
+/** Quick check: probe only. Returns true when the full cycle should run now. */
+static bool quick_check(uint8_t *hits)
+{
+    uint16_t probe = 0;
+    bool clipped = false;
+    wdt_kick();
+    bool ok = adc_measure_probe(&probe, &clipped) && !clipped && g.have_last_probe;
+    return sched_quick_trigger(hits, ok, probe, g.last_probe, FAST_DELTA_100UV, QUICK_CONFIRM);
 }
 
 /** Batteries already empty when inserted: two readings ~1-2 s apart, no frost.
@@ -386,7 +409,17 @@ int main(void)
             measure_and_send();                  /* last packet (sent twice), then off */
             power_off_forever();
         }
-        /* random jitter around the interval (average unchanged) */
-        sleep_s((uint16_t)(g.interval_s - JITTER_S / 2U + (rng_next() % JITTER_S)));
+        /* random jitter around the interval (average unchanged); quick checks
+         * on the way in the normal mode, the countdown restarts after every TX */
+        uint16_t remaining = (uint16_t)(g.interval_s - JITTER_S / 2U + (rng_next() % JITTER_S));
+        uint8_t hits = 0;
+        bool quick = true;
+        while (quick) {
+            sleep_s(sched_next_sleep(&remaining, QUICK_CHECK_S, &quick));
+            if (quick && quick_check(&hits)) {
+                g.force_fast = true;             /* confirmed change: report now */
+                break;
+            }
+        }
     }
 }

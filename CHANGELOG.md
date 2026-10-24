@@ -3,6 +3,16 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.9.0] - 2026-10-24
+
+### Přidáno
+- **Firmware čidla 11 – rychlá kontrola hladiny každou minutu:** mezi vysíláními (1× za 5 min) se čidlo každých 60 s krátce probudí a změří jen sondu (bez teploty, baterie a rádia). Když se hladina proti poslední odeslané hodnotě změní aspoň o 10 mV (≈ 6 mm) ve **dvou kontrolách po sobě**, hned odešle měření a přejde na minutový režim – začátek deště nebo odběru je v aplikaci do 2 minut místo až 5. Jedna náhodná výchylka nic nespustí. Průměrný odběr ~12 → ~31 µA, odhad výdrže 3× AA Li-FeS2 ~8 let, alkalických ~5 let (tabulka v README). **Firmware se neaktualizuje rádiem – čidlo je potřeba přeflashovat** (`uzel/3-aktualizace-firmwaru.cmd`), spárování zůstane.
+- Odhad výdrže baterie počítá u čidel s firmwarem ≥ 11 s rychlými kontrolami (1440 − počet vysílání za den, nové nastavení `node_check_mAs` = 1,4 mAs).
+- Popisek grafu hladiny ukazuje i napětí sondy v mV.
+
+### Změněno
+- Graf **Baterie a signál** má osu v **procentech** podle křivky typu baterie (Li-FeS2 / alkalické); popisek ukazuje „XX % · 3,84 V (při vysílání −55 mV)“. Historie (`/api/history`) má nové řady `bat_pct`, `sag_mv` a `probe_mv`.
+
 ## [1.8.1] - 2026-10-24
 
 ### Opraveno

@@ -41,7 +41,8 @@ mění bez přeflashování čidla a historii jde zpětně přepočítat.
 
 | Soubor | Obsah |
 |---|---|
-| `main.c` | hlavní smyčka: spánek (RTC PIT), měření, adaptivní interval 300 s / 60 s, párovací okno |
+| `main.c` | hlavní smyčka: spánek (RTC PIT), měření, adaptivní interval 300 s / 60 s, rychlé kontroly, párovací okno |
+| `sched.h` | čisté funkce plánovače a spouštěče rychlých kontrol (host test `tools/sched_test.c`, `make test`) |
 | `adc.c` | ADC0 tinyAVR-2: sonda 16 dávek × 64 vzorků, ořezaný průměr; baterie medián 4 dávek |
 | `sht40.c` | I²C, high-precision měření, CRC-8 |
 | `cc1101.c` | rádio, stejná sada registrů jako `server/retencka/radio.py` |
@@ -55,6 +56,21 @@ Přepočet ADC → napětí (vše v celých číslech, 32 bit):
 
 Rychlý režim: změna sondy > `FAST_DELTA_100UV` (10 mV ≈ 6 mm) → další měření za 60 s,
 zpět na 300 s po 3 klidných měřeních, max. 90 rychlých cyklů.
+
+Rychlé kontroly (fw ≥ 11): v normálním režimu se uzel probouzí každých `QUICK_CHECK_S` = 60 s
+a změří jen sondu (bez SHT40, baterie, rádia a ohřevu, ≈ 1,4 mAs). Jeden plánovač pro obojí –
+po každém vysílání se vylosuje perioda 300 s ± 8 s a uzel k ní kráčí po 60 s:
+
+```
+TX ──60── Q ──60── Q ──60── Q ──60── Q ──52…67── TX
+```
+
+Poslední krok je zbytek do plného cyklu, takže kontrola a plný cyklus nikdy nesplynou a jitter
+posouvá jen vysílání. Kontrola porovná sondu s poslední *odeslanou* hodnotou; |Δ| ≥
+`FAST_DELTA_100UV` (10 mV ≈ 6 mm) ve `QUICK_CONFIRM` = 2 kontrolách po sobě (šum jedné kontroly
+nespustí nic) → hned plný cyklus s vysíláním a rychlý režim. V rychlém režimu (perioda 60 s) se
+kontroly nekonají, stejně tak v párovacím okně, nespárovaném stavu a po odpojení baterie.
+Odhad výdrže na hubu (`node_check_mAs`) počítá 1440 − počet vysílání za den kontrol denně.
 
 ## 3. Hub (`server/retencka/`)
 

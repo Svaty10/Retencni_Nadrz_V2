@@ -54,6 +54,17 @@
  *  in step would otherwise collide packet after packet for hours. */
 #define JITTER_S                16U
 
+/** Quick level check between the full cycles: every QUICK_CHECK_S the node wakes,
+ *  measures only the probe (no SHT40, battery, radio or heater, ~1.4 mAs) and
+ *  compares it with the last transmitted value. |change| >= FAST_DELTA_100UV on
+ *  QUICK_CONFIRM checks in a row (noise filter) -> full cycle + TX right away and
+ *  the fast mode. Same timeline as the full cycle (see sched.h): the checks
+ *  subdivide the 300 s interval, the slot of the full cycle is never a check,
+ *  none in the fast mode, while unpaired / pairing or after the cut-off.
+ *  Cost: 4 checks per 5 min = ~+19 uA on average (~12 -> ~31 uA). */
+#define QUICK_CHECK_S           60U
+#define QUICK_CONFIRM           2U
+
 /* ========================================================================== */
 /* Battery (3x Li-FeS2 in series)                                             */
 /* ========================================================================== */
@@ -150,7 +161,7 @@
 #define PKT_UNPAIR_LEN          19U
 #define PAIR_REQ_PAIRED         0x01
 #define PKT_MAC_LEN             4U
-#define FW_VERSION              10U     /**< 1.0 – reported in every packet */
+#define FW_VERSION              11U     /**< 1.1 – reported in every packet (>= 11: quick checks) */
 
 #define PAIR_WINDOW_S           600U    /**< Pairing offered for 10 min after a battery change */
 #define PAIR_PERIOD_S           5U      /**< One PAIR_REQ every 5 s inside the window */

@@ -75,7 +75,7 @@ fuses:
 	$(AVRDUDE) -c $(PROGRAMMER) -p t1624 -P $(PORT) -b $(BAUD) \
 		-U fuse1:w:0x04:m -U fuse2:w:0x02:m -U fuse5:w:0xC5:m
 
-# crypto self-test on the host (needs a native C compiler)
+# crypto self-test and scheduler test on the host (needs a native C compiler)
 HOSTCC    ?= cc
 ifeq ($(OS),Windows_NT)
   EXE = .exe
@@ -83,11 +83,14 @@ else
   EXE =
 endif
 SELFTEST   = $(BUILD_DIR)/crypto_selftest$(EXE)
+SCHEDTEST  = $(BUILD_DIR)/sched_test$(EXE)
 
 test:
 	@$(MKDIR)
 	$(HOSTCC) -O2 -Wall -Iinclude tools/crypto_selftest.c src/crypto.c src/proto.c -o $(SELFTEST)
 	$(call RUN,$(SELFTEST))
+	$(HOSTCC) -O2 -Wall -Wextra -Iinclude tools/sched_test.c -o $(SCHEDTEST)
+	$(call RUN,$(SCHEDTEST))
 
 clean:
 	$(RMDIR)

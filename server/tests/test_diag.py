@@ -33,8 +33,8 @@ class DiagTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def frame(self, ctr, flags=0, vbat=4900, diag=0, sag=0xFF):
-        tel = crypto.build_telemetry(flags, vbat, 1500, 9000, 12000, diag=diag, sag=sag)
+    def frame(self, ctr, flags=0, vbat=4900, diag=0, sag=0xFF, fw=10):
+        tel = crypto.build_telemetry(flags, vbat, 1500, 9000, 12000, fw=fw, diag=diag, sag=sag)
         return crypto.build_data(KE, KM, NID, ctr, tel)
 
     def feed(self, *frames):
@@ -80,6 +80,25 @@ class DiagTest(unittest.TestCase):
         heated = model.battery_days_left(80, 288, s, heats_per_day=4)
         self.assertLess(heated, base)
         self.assertGreater(heated, base * 0.8)       # 4 heatings a day cost < 20 %
+
+    def test_quick_checks_in_battery_model(self):
+        s = self.core.settings.all()
+        base = model.battery_days_left(80, 288, s)
+        quick = model.battery_days_left(80, 288, s, quick_checks=True)
+        # 1152 checks x 1.4 mAs a day (~1.6 As) roughly double the daily budget
+        # incl. self-discharge (~1.7 As)
+        self.assertLess(quick, base * 0.6)
+        self.assertGreater(quick, base * 0.4)
+        # every minute a full cycle (fast mode all day): no room for quick checks
+        self.assertEqual(model.battery_days_left(80, 1440, s, quick_checks=True),
+                         model.battery_days_left(80, 1440, s))
+
+    def test_quick_checks_only_from_fw11(self):
+        self.feed(self.frame(1, fw=10))
+        old = self.core.battery(NID)["days_left"]
+        self.feed(self.frame(2, fw=model.QUICK_CHECK_FW))
+        new = self.core.battery(NID)["days_left"]
+        self.assertLess(new, old * 0.6)
 
 
 if __name__ == "__main__":

@@ -868,7 +868,8 @@
                             title: timeTooltip.callbacks.title,
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
-                                return `${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}`;
+                                const mv = d.probe_mv && d.probe_mv[i] != null ? ` · sonda ${num(d.probe_mv[i], 1, ' mV')}` : '';
+                                return `${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}${mv}`;
                             },
                             footer: (items) => items.length ? bandsAt(d.bands, items[0].parsed.x) : []
                         }
@@ -931,7 +932,7 @@
             plugins: [bootMarks],
             data: {
                 datasets: [
-                    line(T.s3, { label: 'Napětí baterie (V)', data: series(d.t, d.vbat), spanGaps: true, yAxisID: 'y' }),
+                    line(T.s3, { label: 'Baterie (%)', data: series(d.t, d.bat_pct || []), spanGaps: true, yAxisID: 'y' }),
                     line(T.s4, { label: 'Signál (dBm)', data: series(d.t, d.rssi || []), borderWidth: 1.5, yAxisID: 'y1' })
                 ]
             },
@@ -941,6 +942,12 @@
                     tooltip: {
                         callbacks: {
                             title: timeTooltip.callbacks.title,
+                            label: (ctx) => {
+                                const i = ctx.dataIndex;
+                                if (ctx.datasetIndex === 1) return 'Signál ' + num(ctx.parsed.y, 0, ' dBm');
+                                const sag = d.sag_mv && d.sag_mv[i] ? ` (při vysílání −${num(d.sag_mv[i], 0)} mV)` : '';
+                                return `Baterie ${num(d.bat_pct[i], 0, ' %')} · ${num(d.vbat[i], 2, ' V')}${sag}`;
+                            },
                             footer: (items) => {
                                 if (!items.length) return [];
                                 const xv = items[0].parsed.x, half = Math.max(d.bucket_s || 300, 900) * 1000;
@@ -952,7 +959,7 @@
                 },
                 scales: {
                     x: timeScale(r),
-                    y: { suggestedMin: 3.0, suggestedMax: 5.5, ticks: { callback: (v) => v.toFixed(1) + ' V', maxTicksLimit: 6 } },
+                    y: pctAxis(),
                     y1: { position: 'right', suggestedMin: -110, suggestedMax: -50, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' dBm', maxTicksLimit: 6 } }
                 }
             })
