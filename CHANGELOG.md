@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.8.1] - 2026-10-24
+
+### Opraveno
+- **Jméno uživatele nerozlišuje velikost písmen ani u diakritiky:** „MATĚJ“, „Matěj“ i „matěj“ jsou jeden účet (dříve se u Č, Ě, Š … přihlášení nezdařilo a šlo vytvořit druhý účet lišící se jen velikostí písmen). Přihlášení, session i Logování vždy používají jméno tak, jak bylo založeno. Zámek po chybných pokusech platí pro jméno v jakékoli podobě.
+
 ## [1.8.0] - 2026-10-24
 
 ### Změněno

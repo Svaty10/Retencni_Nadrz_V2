@@ -8,6 +8,7 @@ import hmac
 import secrets
 import threading
 import time
+import unicodedata
 from typing import Optional
 
 from .db import Database
@@ -91,6 +92,17 @@ def username_problem(username: str) -> Optional[str]:
     return None
 
 
+def name_key(username: str) -> str:
+    """One identity per name regardless of case or Unicode form ("MATĚJ" = "matěj");
+    SQLite's NOCASE folds only A–Z, so names are compared with this key instead."""
+    return unicodedata.normalize("NFC", username.strip()).casefold()
+
+
+def clean_username(username: str) -> str:
+    """The spelling stored for a new account (NFC, trimmed)."""
+    return unicodedata.normalize("NFC", username.strip())
+
+
 def _sid_hash(token: str) -> str:
     return hashlib.sha256(token.encode("ascii", "ignore")).hexdigest()
 
@@ -152,7 +164,7 @@ class LoginLocks:
 
     @staticmethod
     def _key(username: str, ip: str) -> tuple[str, str]:
-        return username.lower(), ip
+        return name_key(username), ip
 
     def locked(self, username: str, ip: str) -> bool:
         with self._lock:

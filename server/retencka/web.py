@@ -291,6 +291,14 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     def no_users() -> bool:
         return db.scalar("SELECT COUNT(*) FROM users", default=0) == 0
 
+    def find_user(name: str):
+        """The account for a typed name in any case (auth.name_key); its row carries
+        the stored spelling, which sessions and the audit log then use."""
+        key = auth.name_key(name)
+        if not key:
+            return None
+        return next((r for r in db.query("SELECT * FROM users") if auth.name_key(r["username"]) == key), None)
+
     app = web.Application(client_max_size=MAX_BODY,
                           middlewares=[security_headers,
                                        make_https_redirect(no_users, lambda: bool(settings.get("https_redirect"))),
@@ -431,7 +439,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                             secure=is_https(request), samesite="Strict")
             return resp
 
-        row = db.one("SELECT * FROM users WHERE username = ?", (username,)) if username else None
+        row = find_user(username)
         # locked (username, IP) pair: verify against nothing (same cost) and answer exactly
         # like a wrong password - no oracle for existing / locked accounts
         locked = login_locks.locked(username, ip)
@@ -472,7 +480,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         if not valid_ticket(request):
             return jerr("Platnost prvního přihlášení vypršela – přihlaste se znovu heslem ze štítku.", 403)
         data = await read_json(request)
-        username = str(data.get("username", "")).strip()
+        username = auth.clean_username(str(data.get("username", "")))
         password = str(data.get("password", ""))
         if username.lower() == "admin":
             return jerr("Zvolte si vlastní jméno – výchozí účet „admin“ bude zrušen.")
@@ -933,7 +941,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need("admin")
     async def api_users_add(request):
         data = await read_json(request)
-        username = str(data.get("username", "")).strip()
+        username = auth.clean_username(str(data.get("username", "")))
         password = str(data.get("password", ""))
         role = data.get("role", "user")
         if role not in ("user", "admin"):
@@ -941,8 +949,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         problem = auth.username_problem(username) or auth.password_problem(username, password)
         if problem:
             return jerr(problem)
-        if db.one("SELECT 1 FROM users WHERE username=?", (username,)):
-            return jerr("Uživatel již existuje.")
+        if find_user(username):
+            return jerr("Uživatel již existuje (velikost písmen se nerozlišuje).")
         h = await asyncio.get_running_loop().run_in_executor(None, auth.hash_password, password)
         now = int(time.time())
         db.execute("INSERT INTO users(username, pw_hash, role, created, pw_changed) VALUES(?,?,?,?,?)",
@@ -952,12 +960,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         return jresp({"ok": True})
 
     def _target_user(data, me):
-        username = str(data.get("username", "")).strip()
-        row = db.one("SELECT * FROM users WHERE username=?", (username,))
+        row = find_user(str(data.get("username", "")))
         if not row:
             raise web.HTTPNotFound(text=dumps({"ok": False, "error": "Uživatel nenalezen"}),
                                    content_type="application/json")
-        if row["username"].lower() == me.lower():
+        if auth.name_key(row["username"]) == auth.name_key(me):
             raise web.HTTPBadRequest(text=dumps({"ok": False, "error": "Tuto akci nelze provést na vlastním účtu."}),
                                      content_type="application/json")
         return row
