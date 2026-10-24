@@ -3,8 +3,7 @@
 Environment (systemd EnvironmentFile=/etc/default/retencka):
   RETENCKA_DATA      data directory           (/var/lib/retencka)
   RETENCKA_STATIC    static files directory   (<package>/../static)
-  RETENCKA_WEB_PORT  web UI port              (80; redirects to HTTPS once it runs)
-  RETENCKA_HTTPS_PORT web UI over HTTPS       (443; 0 = off) – the hub's own CA, see tls.py
+  RETENCKA_WEB_PORT  web UI port              (80)
   RETENCKA_HA_PORT   Home Assistant API port  (8081)
   RETENCKA_BIND      bind address             (0.0.0.0)
   RETENCKA_SPI_BUS / RETENCKA_SPI_DEV / RETENCKA_SPI_HZ / RETENCKA_GDO0_GPIO
@@ -31,7 +30,6 @@ from .radio import Receiver
 from .settings import Settings
 from .telegram import TelegramBot
 from .httpserver import Server
-from .tls import HttpsManager
 from .web import build_ha_app, build_web_app
 
 log = logging.getLogger("retencka")
@@ -129,11 +127,7 @@ async def main_async() -> None:
         srv = Server(app)
         await srv.start(bind, port)
         runners.append(srv)
-    https = HttpsManager(core, web_app, bind, int(env("RETENCKA_HTTPS_PORT", "443")))
-    core.https = https
-    await https.tick()
-    log.info("Retencka %s: web :%d%s, Home Assistant :%d, data %s", __version__, web_port,
-             f", HTTPS :{https.port}" if https.active else "", ha_port, data_dir)
+    log.info("Retencka %s: web :%d, Home Assistant :%d, data %s", __version__, web_port, ha_port, data_dir)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -166,7 +160,6 @@ async def main_async() -> None:
                 if now >= next_watch:
                     next_watch = now + 60
                     core.watch_tick()
-                    await https.tick()
                 if now >= next_hour:
                     next_hour = now + 3600 - now % 3600 + 60
                     await asyncio.to_thread(core.aggregate_hours)
@@ -187,7 +180,6 @@ async def main_async() -> None:
     task.cancel()
     bot.stop()
     radio.stop()
-    https.stop()
     for r in runners:
         await r.stop()
     await core.http.close()

@@ -107,12 +107,12 @@ class ControlHelper(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         d = Path(self.tmp.name)
         self.saved = {k: getattr(ctl, k) for k in ("DATA", "WANT", "STATUS", "NB_REQUEST", "NB_STATUS",
-                                                   "apply_servis", "retencka_tls")}
+                                                   "apply_servis", "OLD_TLS_DIRS")}
         ctl.DATA, ctl.WANT, ctl.STATUS = d, d / "servis.json", d / "servis-status.json"
         ctl.NB_REQUEST, ctl.NB_STATUS = d / "control-netbird-install", d / "netbird-install.json"
         self.applied = []
         ctl.apply_servis = lambda: self.applied.append(True)
-        ctl.retencka_tls = type("T", (), {"ensure": staticmethod(lambda: None)})
+        ctl.OLD_TLS_DIRS = (d / "tls-ca", d / "tls")
         self._quiet = contextlib.redirect_stdout(io.StringIO())
         self._quiet.__enter__()
 
@@ -128,6 +128,22 @@ class ControlHelper(unittest.TestCase):
         ctl.main()                                   # must not raise
         self.assertEqual(self.applied, [True])
         self.assertFalse((ctl.DATA / "control-servis").exists())
+
+    def test_old_https_files_removed_without_following_links(self):
+        outside = Path(self.tmp.name, "outside")
+        outside.mkdir()
+        (outside / "keep.txt").write_text("x")
+        ca = ctl.DATA / "tls-ca"
+        ca.mkdir()
+        (ca / "ca.key").write_text("k")
+        try:
+            os.symlink(outside, ctl.DATA / "tls")          # planted by the app
+        except (OSError, NotImplementedError):
+            (ctl.DATA / "tls").mkdir()
+        ctl.main()
+        self.assertFalse(ca.exists())
+        self.assertFalse(os.path.lexists(ctl.DATA / "tls"))
+        self.assertTrue((outside / "keep.txt").exists())
 
     def test_wanted_reads_only_a_small_regular_file(self):
         ctl.WANT.write_text('{"mode": "on"}' + " " * 10000)       # oversized

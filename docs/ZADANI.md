@@ -230,12 +230,12 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - 2FA se nepoužívá (rozhodnutí zadavatele) – venkovní přístup chránit Cloudflare Access.
 - Session na serveru: náhodný 256bit token, v DB jen SHA-256 hash; cookie `HttpOnly`, `SameSite=Lax`
   (Strict by rozbil návrat z Cloudflare Access),
-  `Secure` přes HTTPS (`__Host-` prefix); idle timeout 7 dní, absolutní 30 dní; změna hesla zneplatní
+  web běží v LAN po http (bez `Secure`); idle timeout 7 dní, absolutní 30 dní; změna hesla zneplatní
   všechny session.
 - CSRF: kontrola `Origin` + token v hlavičce `X-CSRF-Token` (bez něj žádná změna neprojde).
 - Rate limiting: per IP i per uživatel, exponenciální zpomalení, zámek po 5 chybách (15 min);
   IP z `CF-Connecting-IP` se věří jen u spojení z loopbacku (cloudflared).
-- Bezpečnostní hlavičky: striktní CSP (`default-src 'self'`, bez inline skriptů), HSTS přes HTTPS,
+- Bezpečnostní hlavičky: striktní CSP (`default-src 'self'`, bez inline skriptů),
   `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`.
 - **Všechny** `/api/*` vyžadují session (role `user` čte, `admin` mění). Tajné údaje (Hydrawise klíč)
   se do prohlížeče nikdy nevracejí celé.

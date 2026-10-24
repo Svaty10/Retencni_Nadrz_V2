@@ -95,7 +95,6 @@ class Core:
         self.geocoder = Geocoder(self.http)
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.radio = None                     # set by __main__
-        self.https = None                     # tls.HttpsManager, set by __main__
         self.started = time.time()
         self._disk: tuple[float, Optional[float]] = (0.0, None)
 
@@ -237,7 +236,7 @@ class Core:
     def control_request(self, kind: str) -> None:
         """Ask the root helper (retencka-control / retencka-update path units)."""
         name = {"update": "update-request", "reboot": "control-reboot", "poweroff": "control-poweroff",
-                "servis": "control-servis", "tls": "control-tls"}[kind]
+                "servis": "control-servis"}[kind]
         with open(os.path.join(self.data_dir, name), "w") as f:
             f.write(str(int(time.time())))
 
@@ -278,18 +277,6 @@ class Core:
         key, action, detail = ev
         self.mark_seen("update", key)
         self.audit(action, detail)
-
-    def tls_issued(self, status: dict) -> None:
-        """Audit a newly issued HTTPS certificate (status.json from retencka_tls)."""
-        key = str(status.get("issued_at") or "")
-        if not key or key == self.seen("tls"):
-            return
-        self.mark_seen("tls", key)
-        until = status.get("cert_not_after")
-        until_txt = datetime.fromtimestamp(until).strftime("%d.%m.%Y") if isinstance(until, (int, float)) else "?"
-        covers = ", ".join(list(status.get("names") or []) + list(status.get("ips") or []))
-        self.audit("TLS_CERT_ISSUED", f"Certifikát HTTPS vydán ({status.get('reason') or 'obnova'}), "
-                                      f"platí do {until_txt}: {covers}")
 
     def disk_free_mb(self) -> Optional[float]:
         """Free space on the data card, cached for a minute (polled by /api/state)."""

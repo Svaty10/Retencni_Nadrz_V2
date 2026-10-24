@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.10.0] - 2026-10-24
+
+### Odstraněno
+- **HTTPS s vlastní certifikační autoritou hubu** (z verzí 1.7–1.9): web běží v domácí síti jen po `http://` jako dřív. Zmizela karta *Zabezpečené připojení (HTTPS)*, přepínač *Vždy používat HTTPS*, stažení certifikátu a odkaz na přihlašovací stránce. Root pomocník při dalším běhu (do 5 minut) smaže certifikační autoritu (`/var/lib/retencka/tls-ca`) i `data/tls`; certifikát „Retencka CA“, pokud jste ho nainstalovali do telefonu nebo PC, můžete tam odebrat. Kdo měl web otevřený přes `https://`, přihlásí se jednou znovu přes `http://`.
+- Session cookie je opět jen `rt_sid` (HttpOnly, SameSite=Lax) bez příznaku Secure a prefixu `__Host-`.
+
 ## [1.9.0] - 2026-10-24
 
 ### Přidáno

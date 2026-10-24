@@ -32,7 +32,6 @@ from .settings import INHERITABLE, SettingsError
 log = logging.getLogger("retencka.web")
 
 COOKIE_PLAIN = "rt_sid"
-COOKIE_SECURE = "__Host-rt_sid"
 MAX_BODY = 64 * 1024
 
 FIELD_LABELS = {
@@ -70,7 +69,7 @@ AUDIT_CATEGORIES = {
     "system":   ["TIME_FIXED", "UPDATE_REQUESTED", "UPDATE_AVAILABLE", "UPDATE_INSTALLED", "UPDATE_ROLLED_BACK",
                  "UPDATE_ERROR", "UPDATE_UP_TO_DATE", "BACKUP_DOWNLOADED", "BACKUP_IMPORTED", "DISK_LOW",
                  "TELEGRAM_LINKED", "TELEGRAM_UNLINKED", "SERVICE_ACCESS", "SERVICE_RESTART", "SERVICE_REBOOT", "SERVICE_POWEROFF",
-                 "DATA_DELETED", "FACTORY_RESET", "TLS_CERT_ISSUED"],
+                 "DATA_DELETED", "FACTORY_RESET", "TLS_CERT_ISSUED"],      # TLS_*: old entries (1.7–1.9)
     "problems": ["LOGIN_FAILED", "SETUP_FAILED", "REFILL_ERROR", "REFILL_FAULT", "DISK_LOW",
                  "UPDATE_ROLLED_BACK", "UPDATE_ERROR"],
 }
@@ -114,12 +113,6 @@ def client_ip(request: web.Request) -> str:
         if xff:
             return xff.split(",")[0].strip()[:64]
     return peer
-
-
-def is_https(request: web.Request) -> bool:
-    if request.secure:
-        return True
-    return _is_loopback(request.remote) and request.headers.get("X-Forwarded-Proto", "").lower() == "https"
 
 
 async def read_json(request: web.Request) -> dict:
@@ -190,10 +183,6 @@ def _apply_security_headers(request: web.Request, h) -> None:
     h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
     h["Cross-Origin-Opener-Policy"] = "same-origin"
     h["Cross-Origin-Resource-Policy"] = "same-origin"
-    # HSTS only behind a proxy with a public certificate: with the hub's own CA a device
-    # that has not installed it yet (or an expired certificate) must stay reachable
-    if not request.secure and is_https(request):
-        h["Strict-Transport-Security"] = "max-age=31536000"
     if request.path.startswith("/api/"):
         h["Cache-Control"] = "no-store"
 
@@ -213,40 +202,9 @@ async def security_headers(request: web.Request, handler):
     return resp
 
 
-# http:// stays usable for these (CA download before it is trusted)
-PLAIN_HTTP_PATHS = ("/ca.crt", "/ca.pem")
-_HOST_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}\.)*[A-Za-z0-9-]{1,63}|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?$")
-
-
-def https_location(request: web.Request, port: int, path: Optional[str] = None) -> Optional[str]:
-    """https:// URL of the same page (or path), None for a Host header we do not trust."""
-    host = request.host.strip()
-    if not _HOST_RE.match(host):
-        return None
-    name = host.rsplit(":", 1)[0]
-    return f"https://{name}{'' if port == 443 else f':{port}'}{request.target if path is None else path}"
-
-
-def make_https_redirect(no_users: Callable[[], bool], enabled: Callable[[], bool]):
-    """Port 80 -> HTTPS when the admin switched it on and the HTTPS listener runs. Off by
-    default: a device without the hub's CA would get a browser warning. Never redirected:
-    the first setup (no account yet – the label password flow works over plain http), the
-    CA download and local proxies (cloudflared on loopback)."""
-    async def redirect(request: web.Request, handler):
-        port = request.app.get("https_port")
-        if (port and not request.secure and enabled() and not _is_loopback(request.remote)
-                and request.path not in PLAIN_HTTP_PATHS and not no_users()):
-            loc = https_location(request, port)
-            if loc:
-                return web.Response(status=302 if request.method in ("GET", "HEAD") else 307,
-                                    headers={"Location": loc})
-        return await handler(request)
-    return redirect
-
-
 def make_auth_middleware(core: Core):
     async def authenticate(request: web.Request, handler):
-        token = request.cookies.get(COOKIE_SECURE) or request.cookies.get(COOKIE_PLAIN)
+        token = request.cookies.get(COOKIE_PLAIN)
         request["session"] = core.sessions.lookup(token) if token else None
         request["token"] = token
         request["ip"] = client_ip(request)
@@ -300,22 +258,20 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         return next((r for r in db.query("SELECT * FROM users") if auth.name_key(r["username"]) == key), None)
 
     app = web.Application(client_max_size=MAX_BODY,
-                          middlewares=[security_headers,
-                                       make_https_redirect(no_users, lambda: bool(settings.get("https_redirect"))),
-                                       make_auth_middleware(core)])
+                          middlewares=[security_headers, make_auth_middleware(core)])
     app.prepare_hooks.append(lambda req, resp: _apply_security_headers(req, resp.headers))
     st = Static(static_dir)
     login_locks = app["login_locks"] = auth.LoginLocks()
     setup_lock = asyncio.Lock()
 
     def set_session_cookie(request: web.Request, resp: web.Response, token: str) -> None:
-        secure = is_https(request)
-        resp.set_cookie(COOKIE_SECURE if secure else COOKIE_PLAIN, token, max_age=auth.SESSION_ABSOLUTE_S,
-                        path="/", httponly=True, secure=secure, samesite="Lax")
+        # plain http on the LAN (no Secure flag / __Host- prefix; a session cookie of
+        # 1.7–1.9 with that prefix is never sent over http -> one new login)
+        resp.set_cookie(COOKIE_PLAIN, token, max_age=auth.SESSION_ABSOLUTE_S,
+                        path="/", httponly=True, samesite="Lax")
 
     def clear_cookies(resp: web.Response) -> None:
         resp.del_cookie(COOKIE_PLAIN, path="/")
-        resp.set_cookie(COOKIE_SECURE, "", max_age=0, path="/", secure=True, httponly=True, samesite="Lax")
 
     # ------------------------------------------------- first login (bootstrap)
     # While no user exists, the only way in is the default account "admin" with the
@@ -362,50 +318,9 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     async def favicon(request):
         return st.response(request, "favicon.svg", "public, max-age=604800")
 
-    # --------------------------------------------------------------- HTTPS
-    def tls_files():
-        return core.https.files if core.https is not None else None
-
-    async def ca_cert(request):
-        """The hub's CA certificate (public) for a one-time install on phones / PCs."""
-        files = tls_files()
-        pem = files.ca_pem() if files else None
-        if pem is None:
-            raise web.HTTPNotFound(text="Certifikát hubu zatím nevznikl – zkuste to za pár minut.")
-        host = (core.hostnames() or ["retencka"])[-1].split(".")[0]
-        ext = "pem" if request.path.endswith(".pem") else "crt"
-        return web.Response(body=pem, content_type="application/x-x509-ca-cert", headers={
-            "Content-Disposition": f'attachment; filename="{host}-ca.{ext}"', "Cache-Control": "no-cache"})
-
-    @need()
-    async def api_tls(request):
-        files = tls_files()
-        info = files.info() if files else {"available": False, "fingerprint": None, "ca_not_after": None,
-                                           "cert_not_after": None, "names": [], "ips": [], "issued_at": None}
-        port = request.app.get("https_port")
-        return jresp({**info, "active": bool(port), "secure": bool(request.secure),
-                      "redirect": bool(settings.get("https_redirect")),
-                      "https_url": https_location(request, port, "/") if port else None})
-
-    @need("admin")
-    async def api_tls_set(request):
-        """{"redirect": bool} – always use HTTPS. Turning it on only works over HTTPS, so
-        the admin has seen that the certificate is trusted on at least this device."""
-        data = await read_json(request)
-        on = data.get("redirect")
-        if not isinstance(on, bool):
-            return jerr("Neplatná hodnota.")
-        if on and not (request.app.get("https_port") and request.secure):
-            return jerr("Zapněte to z adresy https://… – tak ověříte, že certifikát hubu v tomto zařízení funguje.")
-        settings.update({"https_redirect": on}, allow_internal=True)
-        core.audit("SETTINGS_CHANGED", "HTTPS: " + ("vždy (http přesměruje)" if on else "http i https"),
-                   *user_of(request))
-        return jresp({"ok": True, "redirect": on})
-
     # ------------------------------------------------------------------ auth
     async def api_auth_mode(request):
-        files = core.https.files if core.https is not None else None
-        return jresp({"first_login": no_users(), "ca": bool(files and files.ca_pem())})
+        return jresp({"first_login": no_users()})
 
     async def api_login(request):
         ip = request["ip"]
@@ -436,7 +351,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             core.audit("SETUP_LOGIN", "První přihlášení výchozím účtem – vytváření vlastního účtu", "admin", ip)
             resp = jresp({"ok": True, "setup": True})
             resp.set_cookie(SETUP_COOKIE, tok, max_age=15 * 60, path="/", httponly=True,
-                            secure=is_https(request), samesite="Strict")
+                            samesite="Strict")
             return resp
 
         row = find_user(username)
@@ -506,14 +421,6 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
 
     @need()
     async def api_me(request):
-        resp = await _api_me(request)
-        if is_https(request) and request.cookies.get(COOKIE_PLAIN) == request["token"]:
-            # logged in over http before HTTPS ran: move the session to the Secure cookie
-            set_session_cookie(request, resp, request["token"])
-            resp.del_cookie(COOKIE_PLAIN, path="/")
-        return resp
-
-    async def _api_me(request):
         s = request["session"]
         theme = db.scalar("SELECT theme FROM users WHERE username=?", (s["username"],), "auto") or "auto"
         return jresp({"username": s["username"], "role": s["role"], "csrf": s["csrf"],
@@ -1384,10 +1291,6 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_get("/login", page_login)
     r.add_get("/setup", page_setup)
     r.add_get("/favicon.ico", favicon)
-    r.add_get("/ca.crt", ca_cert)
-    r.add_get("/ca.pem", ca_cert)
-    r.add_get("/api/tls", api_tls)
-    r.add_post("/api/tls", api_tls_set)
     r.add_get("/static/{path:.+}", static_file)
     r.add_get("/api/auth/mode", api_auth_mode)
     r.add_post("/api/auth/login", api_login)

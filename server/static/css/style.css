@@ -1175,17 +1175,9 @@ h3 .help-tip { margin-left: 6px; }
 .dlg-field .unified-input[aria-invalid="true"], .dlg-field .input-unit:has(input[aria-invalid="true"]) { border-color: var(--red); }
 .dlg-field .check { min-height: 36px; font-weight: 500; }
 
-/* --- Záloha, HTTPS, tovární nastavení ----------------------------------- */
+/* --- Záloha, tovární nastavení ----------------------------------- */
 .backup-note { font-size: 13px; margin-bottom: 14px; }
 .backup-note p { margin: 0 0 6px; }
 .backup-note p:last-child { margin: 0; }
-.howto > summary { font-weight: 500; }
-.howto-os { margin: 8px 0 0; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
-.howto-os > summary { display: flex; align-items: center; min-height: 40px; cursor: pointer; font-size: 14px; font-weight: 500; }
-.howto-os[open] { padding-bottom: 6px; }
-.howto .setup-steps { margin-bottom: 6px; }
-.fp { word-break: break-all; font-size: 12px; line-height: 1.5; }
 .danger-zone h3 { color: var(--red); }
 .danger-zone .alert-row p { flex: 1 1 240px; }
-.login-cert { margin: 18px 0 0; text-align: center; line-height: 1.5; }
-.login-cert a { font-weight: 500; }

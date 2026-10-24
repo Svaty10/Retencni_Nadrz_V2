@@ -51,8 +51,6 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    nebo `http://192.168.4.1`).
 3. Vybrat domácí síť, zadat heslo → zařízení se připojí, hotspot zmizí.
 4. Telefon zpět na domácí Wi-Fi → `http://retencka.local` (nebo `http://retencka-xxxx.local`).
-   Web jde otevřít i šifrovaně – `https://retencka.local`; aby prohlížeč nevaroval, nainstalujte do zařízení
-   jednou certifikát hubu – viz [HTTPS – certifikát hubu](#https--certifikát-hubu).
 5. První přihlášení: jméno **admin** + **heslo ze štítku** → vytvořit vlastní účet (jiné jméno i heslo);
    výchozí přístup se tím zruší. *Nastavení*, *Správa uživatelů*, *Logování* i *Můj účet* jsou v menu
    pod ikonou účtu vpravo nahoře.
@@ -63,7 +61,7 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    a **jednu záložku na každou nádrž** (všechny její parametry). Řádek s kartami pod záložkami vede rovnou
    na danou kartu.
 6. *Nastavení → Obecné → Poloha*: do pole *Obec / adresa* napsat obec a vybrat ji ze seznamu (souřadnice
-   pro předpověď počasí se doplní samy; přes HTTPS jde i *Použít polohu tohoto zařízení*, ruční
+   pro předpověď počasí se doplní samy; ruční
    souřadnice jsou v pokročilém režimu).
 7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Všechna čidla → Čidla → Spárovat* u jeho ID
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
@@ -133,44 +131,8 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 stažení zálohy, pak chce napsat **OBNOVIT** a vaše heslo. Smaže se vše: měření, nastavení nádrží, uživatelé,
 klíče čidel (čidla je potřeba znovu spárovat – u každého *Znovu spárovat* a vložit baterii), Telegram, token HA,
 zálohy na kartě; vzdálený servis se vypne. Zůstane identita zařízení (název `retencka-xxxx`, **heslo ze
-štítku** pro hotspot i první přihlášení) a certifikát HTTPS (zařízení, která mu důvěřují, nic znovu
-neinstalují). Aplikace se restartuje a čeká na první přihlášení `admin` + heslo ze štítku jako po instalaci.
+štítku** pro hotspot i první přihlášení). Aplikace se restartuje a čeká na první přihlášení `admin` + heslo ze štítku jako po instalaci.
 Ze zálohy jde vše vrátit (*Nahrát zálohu* s „včetně nastavení a uživatelů“).
-
-### HTTPS – certifikát hubu
-Hub nepotřebuje doménu ani internet: při prvním spuštění si vytvoří **vlastní certifikační autoritu**
-(platí 10 let, soukromý klíč jen pro root v `/var/lib/retencka/tls-ca/`) a podepíše jí certifikát webu pro
-`retencka.local`, `retencka-xxxx.local` a aktuální IP adresy v síti. Ten má 397 dní a obnovuje se sám
-(30 dní před koncem, a hned když se změní IP adresa nebo název) – stará se o to `retencka-control`
-(každých 5 minut). Web běží na `https://…` (port 443) i dál na `http://…` (port 80). Až mají certifikát
-nainstalovaný všechna vaše zařízení, zapněte v kartě HTTPS **Vždy používat HTTPS** (jde jen ze stránky
-otevřené přes `https://`): `http://` pak přesměruje na HTTPS – kromě prvního nastavení (dokud neexistuje účet),
-stažení certifikátu a hotspotu s portálem pro Wi-Fi, ty fungují po http vždy. API pro Home Assistant zůstává
-`http://…:8081` v LAN.
-
-Certifikát se do každého zařízení (telefon, PC) instaluje **jednou**. Stáhnete ho v *Nastavení → Obecné →
-Zabezpečené připojení (HTTPS) → Stáhnout certifikát hubu*, na přihlašovací stránce, nebo přímo z
-`http://retencka.local/ca.crt`. Před instalací porovnejte otisk SHA-256 se stránkou nastavení. Certifikační
-autorita smí podepsat jen názvy `.local` a soukromé IP adresy, nic jiného ve vašem zařízení nemůže ovlivnit.
-
-- **Android:** stáhnout `…-ca.crt` → *Nastavení → Zabezpečení (a soukromí) → Další nastavení zabezpečení →
-  Šifrování a pověření → Instalovat certifikát → Certifikát CA* → *Přesto nainstalovat* → vybrat soubor
-  (název položek se liší podle výrobce; hledejte v nastavení „certifikát CA“).
-- **iPhone / iPad:** otevřít odkaz v **Safari** → *Povolit* stažení profilu → *Nastavení → Profil stažen →
-  Instalovat* → pak **Nastavení → Obecné → Informace → Nastavení důvěryhodnosti certifikátů** a zapnout
-  „Retencka CA“ (bez tohoto kroku se certifikátu nedůvěřuje).
-- **Windows:** dvakrát kliknout na `…-ca.crt` → *Nainstalovat certifikát* → *Místní počítač* (nebo Aktuální
-  uživatel) → *Všechny certifikáty umístit do následujícího úložiště* → **Důvěryhodné kořenové certifikační
-  autority** → Dokončit; prohlížeč restartovat. Firefox má vlastní úložiště: *Nastavení → Soukromí a
-  zabezpečení → Certifikáty → Zobrazit certifikáty → Autority → Importovat* (zaškrtnout důvěru pro weby).
-- **macOS:** dvakrát kliknout na soubor → Klíčenka *Systém* → certifikát „Retencka CA“ otevřít → *Důvěra →
-  Při použití tohoto certifikátu: Vždy důvěřovat*.
-
-Pak `https://retencka.local` běží bez varování a prohlížeč dovolí i **zjištění polohy** (vyžaduje zabezpečené
-připojení). Bez instalace lze varování prohlížeče jednorázově odkliknout; hub záměrně neposílá HSTS, takže
-web zůstane dostupný i ze zařízení bez certifikátu. Vypnout HTTPS: `RETENCKA_HTTPS_PORT=0` v
-`/etc/default/retencka`. Obnovit certifikát hned: `sudo systemctl start retencka-control`
-(průběh `journalctl -u retencka-control`).
 
 ### Restart a vypnutí
 V menu účtu (vpravo nahoře, jen administrátor): **Restartovat aplikaci** (asi 10–30 s, měření se neztratí),
@@ -341,11 +303,11 @@ Pro vlastní nasazení s doménou (adresa typu `https://nadrz.mojedomena.cz`).
 
 1. Cloudflare Zero Trust → *Networks → Tunnels* → vytvořit tunel, zkopírovat token.
 2. `cd /opt/retencka-src && sudo ./system/install.sh --cloudflare-token <TOKEN>`
-3. *Public hostname* → `http://localhost:80` (z localhostu web na HTTPS nepřesměrovává). **Port 8081 (Home Assistant) do tunelu nedávejte.**
+3. *Public hostname* → `http://localhost:80`. **Port 8081 (Home Assistant) do tunelu nedávejte.**
 4. **Doporučeno:** *Access → Applications* → aplikace pro stejný hostname s politikou
    „e-mail je jeden z …“ (jednorázový kód e-mailem). Útočník se pak k přihlašovací stránce vůbec nedostane.
 
-Web sám o sobě: hesla scrypt, session na serveru (HttpOnly, SameSite, Secure přes HTTPS),
+Web sám o sobě: hesla scrypt, session na serveru (HttpOnly, SameSite),
 CSRF token + kontrola Origin, zpomalování a zamykání po neúspěšných pokusech, striktní CSP,
 všechna API jen po přihlášení, audit log.
 

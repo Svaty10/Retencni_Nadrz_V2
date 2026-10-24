@@ -830,59 +830,6 @@
                 </details>
             </section>
 
-            <section class="card col-card scope-general" id="genTls" data-nav="HTTPS">
-                <div class="card-title">
-                    <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-lock"/></svg></span>
-                    <div><h2>Zabezpečené připojení (HTTPS)</h2><p class="card-desc">Hub má vlastní certifikační autoritu, nepotřebuje internet ani doménu; certifikát stačí jednou nainstalovat do každého zařízení.</p></div>
-                </div>
-                <div class="tg-state"><span class="status-pill" id="tlsStatus">–</span></div>
-                <p class="muted small" id="tlsLead">Po instalaci certifikátu se hub otevře na <b>https://retencka.local</b> bez varování prohlížeče a půjde v něm zjistit poloha zařízení.</p>
-                <div class="backup-actions" id="tlsActions">
-                    <a class="btn btn-primary" id="tlsDownload" href="/ca.crt" download>Stáhnout certifikát hubu</a>
-                    <a class="small" id="tlsPem" href="/ca.pem" download>.pem</a>
-                    <a class="btn btn-outline hidden" id="tlsGo" href="#">Přejít na zabezpečené připojení</a>
-                </div>
-                <label class="toggle mt-20 hidden" id="tlsRedirectRow">
-                    <span class="toggle-text">Vždy používat HTTPS
-                        <span class="muted small" id="tlsRedirectHint">http:// adresa přesměruje na https://. Zapněte, až mají certifikát nainstalovaný všechna zařízení, ze kterých na hub chodíte – jinak prohlížeč ukáže varování.</span></span>
-                    <span class="switch"><input type="checkbox" id="tlsRedirect"><span class="slider"></span></span>
-                </label>
-                <dl class="kv mt-20 hidden" id="tlsInfo"></dl>
-                <details class="yaml-box howto" id="tlsHowto">
-                    <summary>Jak certifikát nainstalovat</summary>
-                    <p class="muted small">Instalace je potřeba jednou na každém zařízení (telefon, tablet, počítač). Pak už varování nevyskakuje.</p>
-                    <details class="howto-os"><summary>Android</summary>
-                        <ol class="setup-steps">
-                            <li>Stáhněte soubor <code>ca.crt</code> tlačítkem výše.</li>
-                            <li>Otevřete Nastavení a vyhledejte „Instalovat certifikát“ (obvykle Zabezpečení → Šifrování a přihlašovací údaje).</li>
-                            <li>Zvolte <b>Certifikát CA</b>, potvrďte varování a vyberte stažený soubor.</li>
-                            <li>Restartujte prohlížeč a otevřete <b>https://retencka.local</b>.</li>
-                        </ol>
-                    </details>
-                    <details class="howto-os"><summary>iPhone a iPad (iOS / iPadOS)</summary>
-                        <ol class="setup-steps">
-                            <li>Soubor stáhněte v Safari a povolte stažení konfiguračního profilu.</li>
-                            <li>V Nastavení klepněte na <b>Profil stažen</b> a profil nainstalujte.</li>
-                            <li>Pak otevřete Nastavení → Obecné → Informace → <b>Nastavení důvěry certifikátů</b> a zapněte důvěru pro certifikát hubu.</li>
-                        </ol>
-                    </details>
-                    <details class="howto-os"><summary>Windows</summary>
-                        <ol class="setup-steps">
-                            <li>Dvakrát klikněte na stažený <code>ca.crt</code> a zvolte <b>Nainstalovat certifikát</b>.</li>
-                            <li>Vyberte „Všechny certifikáty umístit do následujícího úložiště“ a <b>Důvěryhodné kořenové certifikační autority</b>.</li>
-                            <li>Dokončete průvodce a restartujte prohlížeč. Firefox má vlastní úložiště: Nastavení → Soukromí a zabezpečení → Certifikáty → Autority → Importovat.</li>
-                        </ol>
-                    </details>
-                    <details class="howto-os"><summary>macOS</summary>
-                        <ol class="setup-steps">
-                            <li>Dvakrát klikněte na stažený <code>ca.crt</code>, otevře se Přístup ke klíčence.</li>
-                            <li>Certifikát přidejte do klíčenky „Systém“ (nebo „Přihlášení“).</li>
-                            <li>Dvakrát na něj klikněte, rozbalte <b>Důvěřovat</b> a u „Při používání tohoto certifikátu“ zvolte <b>Vždy důvěřovat</b>.</li>
-                        </ol>
-                    </details>
-                </details>
-            </section>
-
             <section class="card col-card scope-general" id="genData" data-nav="Záloha a data">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-archive"/></svg></span>

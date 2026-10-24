@@ -5,7 +5,7 @@ Revize celého projektu (hub `server/`, root pomocníci `system/`, firmware `uze
 asyncio HTTP server v Pythonu (jen standardní knihovna), takže „PHP exploity“ se ho netýkají.
 
 Postup: ruční revize zaměřená na hranici oprávnění (aplikace `retencka` ↔ root), párování a kryptografii,
-přihlášení / session / CSRF / role, zálohy, aktualizace, HTTPS s vlastní CA, tovární reset, Telegram
+přihlášení / session / CSRF / role, zálohy, aktualizace, tovární reset, Telegram
 a odchozí volání. Plný automatický sken pluginem *claude-security* v této relaci nešel spustit (potřebuje
 nástroj Workflow); lze ho pustit později přes `/claude-security`.
 
@@ -39,13 +39,12 @@ na Linuxu, kde běží v CI před každým vydáním.
 
 ## Zkontrolováno bez nálezu
 
-- **Přihlášení a session**: scrypt s omezením parametrů, konstantní čas i pro neznámé jméno, zámek (jméno, IP) + exponenciální zdržení IP, náhodný token (v DB jen SHA-256), obnova session při přihlášení (bez fixace), `__Host-` cookie přes HTTPS, HttpOnly, SameSite=Lax.
+- **Přihlášení a session**: scrypt s omezením parametrů, konstantní čas i pro neznámé jméno, zámek (jméno, IP) + exponenciální zdržení IP, náhodný token (v DB jen SHA-256), obnova session při přihlášení (bez fixace), cookie HttpOnly + SameSite=Lax (web v LAN po http, bez Secure).
 - **CSRF**: kontrola `Origin` proti `Host` + povinný `X-CSRF-Token` session pro všechny změny; proxy hlavičky jen z loopbacku.
-- **Role**: všechny API cesty mají `@need` / `@need("admin")` kromě přihlášení, nastavení prvního účtu, stažení veřejného CA certifikátu a statických souborů; poslední admin nejde smazat ani degradovat.
+- **Role**: všechny API cesty mají `@need` / `@need("admin")` kromě přihlášení, nastavení prvního účtu a statických souborů; poslední admin nejde smazat ani degradovat.
 - **HTTP server**: limity hlaviček (16 KiB / 64), odmítnutý `Transfer-Encoding` a zdvojený `Content-Length` (žádný request smuggling), limit spojení, timeouty, bezpečnostní hlavičky (CSP, frame DENY, nosniff).
 - **Aktualizace**: Ed25519 podpis přes `openssl pkeyutl`, kontrola cest v archivu + `filter="data"`, jen novější verze, verze v balíku = verze vydání, rollback (symlink i systemd jednotky) při nezdravém startu, vadná verze se nezkouší znovu; požadavky aplikace čteny bez symlinků a striktně validovány. Nové testy `InstallAndRollback` se skutečným podpisem.
-- **HTTPS s vlastní CA**: klíč CA jen v `/var/lib/retencka/tls-ca` (root 0700), name constraints (.local a privátní IP), publikace přes dirfd s `O_NOFOLLOW`, podstrčený adresář `tls` se odsune.
-- **Tovární reset**: jen admin + heslo + slovo OBNOVIT, mazání až při dalším startu před otevřením DB, symlinky se mažou, ne procházejí; ponechá `setup_code` a `tls`.
+- **Tovární reset**: jen admin + heslo + slovo OBNOVIT, mazání až při dalším startu před otevřením DB, symlinky se mažou, ne procházejí; ponechá `setup_code`.
 - **Telegram**: jen soukromé chaty, role se ověřuje z DB u každého příkazu, jednorázové 8znakové kódy s platností a limitem pokusů, vypnutí jen s potvrzením.
 - **Hydrawise / geocoding / počasí**: pevné HTTPS adresy s ověřením certifikátu (žádné SSRF – uživatel URL nezadává), parametry kódované, API klíč maskovaný v logu, omezená velikost odpovědi.
 - **Rádio a firmware**: CTR nonce = ID + 32bit čítač s rezervou v EEPROM (dvě kopie, nikdy znovu použit), replay a duplikát rozlišené, odmítnutí low-order bodu X25519, MAC v konstantním čase, UNPAIR vázaný na čerstvý veřejný klíč bootu (nelze přehrát).
@@ -59,5 +58,5 @@ na Linuxu, kde běží v CI před každým vydáním.
 | Migrace DB v1 → nejnovější, z každé mezi-verze, přetočená verze, rollback chybné migrace | `test_migrations` |
 | Záloha + obnova (stažení, noční kopie, nekomprimovaná DB, opakovaný import, data bez účtů, vadné soubory, novější verze, gzip bomba) | `test_backup`, `test_pairing_scenarios.S1` |
 | Aktualizace + rollback (podpis, cesty, verze, zdravý / nezdravý start) | `test_updates` |
-| Tovární reset (celý cyklus až po první přihlášení, poškozená značka, symlinky) | `test_admin_tls.FactoryResetFiles`, `AdminServerTest.test_9_factory_reset` |
+| Tovární reset (celý cyklus až po první přihlášení, poškozená značka, symlinky) | `test_admin.FactoryResetFiles`, `AdminServerTest.test_9_factory_reset` |
 | Root pomocníci proti podstrčeným souborům | `test_root_helpers` |

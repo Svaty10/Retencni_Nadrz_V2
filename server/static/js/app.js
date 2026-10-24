@@ -1595,7 +1595,7 @@
         nav.classList.toggle('hidden', cards.length < 2);
     }
 
-    // Poloha: hledání obce (geocoding přes hub), poloha zařízení (jen HTTPS), ruční souřadnice (pokročilé)
+    // Poloha: hledání obce (geocoding přes hub), poloha zařízení (prohlížeč ji dá jen zabezpečené stránce), ruční souřadnice (pokročilé)
     function savePlace(lat, lon, name) {
         return action(() => api('POST', '/api/settings', { latitude: lat, longitude: lon, location_name: name }),
             name ? `Poloha nastavena: ${name}` : 'Poloha nastavena.')
@@ -1647,7 +1647,7 @@
         $('geoQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); geoSearch(); } });
         const secure = window.isSecureContext && 'geolocation' in navigator;
         $('geoHere').classList.toggle('hidden', !secure);
-        $('geoNote').textContent = secure ? '' : 'Poloha zařízení funguje jen přes zabezpečené připojení (HTTPS); tady vyhledejte obec.';
+        $('geoNote').textContent = secure ? '' : 'Vyhledejte obec podle názvu.';
         $('geoHere').addEventListener('click', () => {
             navigator.geolocation.getCurrentPosition(
                 (pos) => savePlace(Math.round(pos.coords.latitude * 1e5) / 1e5, Math.round(pos.coords.longitude * 1e5) / 1e5, 'Poloha zařízení'),
@@ -1779,66 +1779,6 @@
         });
     }
 
-    // HTTPS: stav z /api/tls (když endpoint chybí, karta jen zůstane s odkazem ke stažení)
-    const TLS_LEAD = $('tlsLead').textContent;
-    function fmtDate(sec) {
-        if (!sec) return '–';
-        const d = new Date(sec * 1000);
-        return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`;
-    }
-    function renderTls(t) {
-        const pill = $('tlsStatus'), info = $('tlsInfo'), go = $('tlsGo');
-        info.textContent = '';
-        if (!t) {
-            pill.className = 'status-pill';
-            pill.textContent = 'Stav HTTPS se nepodařilo zjistit';
-            info.classList.add('hidden');
-            go.classList.add('hidden');
-            return;
-        }
-        pill.className = 'status-pill ' + (t.active ? 'online' : t.available ? 'stale' : '');
-        pill.textContent = t.secure ? 'Používáte zabezpečené připojení' : t.active ? 'HTTPS běží'
-            : t.available ? 'Certifikát je připravený, HTTPS se zatím nespustilo' : 'Certifikát hubu se zatím nevytvořil';
-        $('tlsActions').classList.toggle('hidden', !t.available);
-        $('tlsLead').textContent = t.available ? TLS_LEAD : 'Certifikační autorita hubu se vytvoří při spuštění HTTPS; pak zde bude certifikát ke stažení.';
-        const sw = $('tlsRedirect');
-        $('tlsRedirectRow').classList.toggle('hidden', !t.active || ME.role !== 'admin');
-        sw.checked = !!t.redirect;
-        sw.disabled = !t.redirect && !t.secure;      // turning on only from an https:// page
-        $('tlsRedirectHint').textContent = !t.redirect && !t.secure
-            ? 'Zapnout jde jen z adresy https://… – tak ověříte, že certifikát v tomto zařízení funguje.'
-            : 'http:// adresa přesměruje na https://. Zapněte, až mají certifikát nainstalovaný všechna zařízení, ze kterých na hub chodíte – jinak prohlížeč ukáže varování.';
-        const show = !!t.active && !!t.https_url && /^https:\/\//i.test(t.https_url) && location.protocol === 'http:';
-        go.classList.toggle('hidden', !show);
-        if (show) go.href = t.https_url;
-        const rows = [];
-        if (t.fingerprint) rows.push(['Otisk SHA-256 (pro ověření)', `<code class="fp">${esc(t.fingerprint)}</code>`]);
-        if (t.ca_not_after) rows.push(['Certifikát hubu platí do', esc(fmtDate(t.ca_not_after))]);
-        if (t.cert_not_after) rows.push(['Certifikát serveru platí do', esc(fmtDate(t.cert_not_after))]);
-        const names = [].concat(t.names || [], t.ips || []);
-        if (names.length) rows.push(['Pokrývá adresy', names.map(esc).join(', ')]);
-        info.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-        info.classList.toggle('hidden', !rows.length);
-    }
-
-    function bindTls() {
-        const sw = $('tlsRedirect');
-        sw.addEventListener('change', async () => {
-            const on = sw.checked;
-            if (on) {
-                const ok = await confirmDialog({
-                    title: 'Vždy používat HTTPS?',
-                    body: ['Adresa http:// se bude přesměrovávat na https://.',
-                        'Zařízení bez nainstalovaného certifikátu hubu pak uvidí varování prohlížeče. Vypnout to jde kdykoli zde.'],
-                    confirm: 'Zapnout'
-                });
-                if (!ok) { sw.checked = false; return; }
-            }
-            const r = await action(() => api('POST', '/api/tls', { redirect: on }), on ? 'HTTPS se bude používat vždy.' : 'Hub je dostupný přes http i https.');
-            if (!r) sw.checked = !on;
-        });
-    }
-
     function tgStatusText(t) {
         if (!t || !t.configured) return 'nenastaveno';
         return t.connected ? `připojeno · @${t.bot}` : (t.error || 'připojuji…');
@@ -1928,7 +1868,7 @@
     }
 
     async function loadSettingsTab() {
-        const [st, nodes, ha, sys, bk, tg, sv, defs, tls] = await Promise.all([
+        const [st, nodes, ha, sys, bk, tg, sv, defs] = await Promise.all([
             api('GET', '/api/settings').catch(() => null),
             api('GET', '/api/nodes').catch(() => null),
             api('GET', '/api/ha').catch(() => null),
@@ -1936,12 +1876,10 @@
             api('GET', '/api/backup').catch(() => null),
             api('GET', '/api/telegram').catch(() => null),
             api('GET', '/api/servis').catch(() => null),
-            api('GET', '/api/node-defaults').catch(() => null),
-            api('GET', '/api/tls').catch(() => null)
+            api('GET', '/api/node-defaults').catch(() => null)
         ]);
         if (defs) fillForm($('defForm'), defs.defaults);
         renderBackups(bk);
-        renderTls(tls);
         if (tg) renderTelegramAdmin(tg);
         renderServis(sv);
         if (nodes) { nodesCache = nodes; renderNodes(nodes); applyNode(currentNodeCfg()); fillDeleteNodes(); }
@@ -2153,7 +2091,7 @@
                 list(['všechna naměřená data a historie', 'nastavení (poloha, klíč Hydrawise, Home Assistant)', 'všichni uživatelé včetně vás',
                     'klíče čidel – čidla bude nutné znovu spárovat', 'Telegram (token a propojené chaty)', 'zálohy uložené na kartě']),
                 para('Zůstane:', true),
-                list(['identita zařízení a heslo ze štítku', 'certifikát HTTPS']),
+                list(['identita zařízení a heslo ze štítku']),
                 para('Zálohy na kartě se smažou také, proto si ji stáhněte teď:'), dl],
             fields: [{ name: 'backup', type: 'checkbox', label: 'Zálohu mám / nepotřebuji' }],
             validate: (v) => (v.backup ? null : { field: 'backup', message: 'Potvrďte, že zálohu máte nebo ji nepotřebujete.' }),
@@ -2780,7 +2718,8 @@
         UPDATE_AVAILABLE: ['arrow-up', 'Dostupná aktualizace', 'info'], UPDATE_INSTALLED: ['check', 'Aktualizace nainstalována', 'ok'],
         UPDATE_ROLLED_BACK: ['restart', 'Aktualizace vrácena', 'bad'], UPDATE_ERROR: ['alert', 'Chyba aktualizace', 'bad'],
         UPDATE_UP_TO_DATE: ['check', 'Bez aktualizace', ''], FACTORY_RESET: ['restart', 'Tovární nastavení', 'warn'],
-        TLS_CERT_ISSUED: ['lock', 'Certifikát HTTPS', ''], NODE_PAIRING_CANCELLED: ['antenna', 'Párování zrušeno', '']
+        TLS_CERT_ISSUED: ['lock', 'Certifikát HTTPS', ''],          // jen staré záznamy (1.7–1.9)
+        NODE_PAIRING_CANCELLED: ['antenna', 'Párování zrušeno', '']
     };
     const LOG = { page: 1, cat: '', items: 0 };
     const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
@@ -3003,7 +2942,7 @@
             api('POST', '/api/auth/logout', {}).finally(() => window.location.replace('/login'));
         });
         bindRefill();
-        if (ME.role === 'admin') { bindSettings(); bindUpdates(); bindTls(); }
+        if (ME.role === 'admin') { bindSettings(); bindUpdates(); }
         bindUsers();
         bindTelegram();
 

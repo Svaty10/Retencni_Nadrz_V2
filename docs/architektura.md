@@ -289,7 +289,7 @@ importovat beze změny.
 | `retencka-portal.service` | captive portál pro zadání Wi-Fi (jen v režimu hotspotu) |
 | `retencka-alias.service` | mDNS alias `retencka.local` (jen první zařízení v síti) |
 | `retencka-update.timer/.path/.service` | denní / ruční aktualizace z GitHub Release, Ed25519 podpis, rollback |
-| `retencka-control.path/.timer/.service` | akce s právy roota na žádost aplikace: restart zařízení, servisní přístup NetBird (24 h / trvale / vypnuto), certifikát HTTPS hubu (`retencka_tls.py`: vlastní CA, serverový certifikát pro `.local` a IP, obnova) |
+| `retencka-control.path/.timer/.service` | akce s právy roota na žádost aplikace: restart zařízení, servisní přístup NetBird (24 h / trvale / vypnuto), úklid souborů HTTPS z verzí 1.7–1.9 |
 
 Read-only root (overlayfs), data na `/var/lib/retencka`, logy v RAM, HW watchdog.
 

@@ -7,8 +7,7 @@ the app runs). An interrupted wipe is simply repeated, the marker goes last.
 Deleted: the database (measurements, settings, users, sessions, sensor keys, Telegram,
 HA token), local backups, update / service-access preferences and every other file of
 the app. Kept: the device identity (setup_code = the label password, so the first login
-works again) and the HTTPS certificate directory (owned by root; devices that trust the
-hub's CA keep trusting it).
+works again).
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from typing import Optional
 log = logging.getLogger("retencka.reset")
 
 MARKER = "factory-reset"
-KEEP = {"setup_code", "tls", MARKER}
+KEEP = {"setup_code", MARKER}
 
 
 def request(data_dir: str, user: str) -> None:

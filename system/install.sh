@@ -222,6 +222,10 @@ else
         printf '# %s\n' "$line" >> "$DEF"
     done < "$SRC/system/config/default-retencka"
 fi
+# HTTPS s vlastní CA (verze 1.7–1.9) bylo odstraněno: pryč s jeho soubory a nastavením
+# (rm -rf u podstrčeného symlinku smaže jen odkaz)
+rm -rf /var/lib/retencka/tls-ca "$DATA/tls"
+sed -i '/RETENCKA_HTTPS_PORT=/d; /HTTPS s vlastní certifikační autoritou/d' "$DEF"
 install -d -m 755 /etc/retencka
 if [ -f "$SRC/system/keys/release.pub" ]; then
     install -m 644 "$SRC/system/keys/release.pub" /etc/retencka/release.pub

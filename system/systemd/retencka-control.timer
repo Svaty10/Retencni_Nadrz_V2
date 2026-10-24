@@ -1,5 +1,5 @@
 [Unit]
-Description=Retenční nádrž – kontrola servisního přístupu (vypršení 24 h, stav, certifikát HTTPS)
+Description=Retenční nádrž – kontrola servisního přístupu (vypršení 24 h, stav)
 
 [Timer]
 OnBootSec=2min

@@ -43,9 +43,6 @@ flowchart LR
 
 **Hub a web**
 - Více nádrží na jeden hub (až 16), přehled **Všechna čidla** i detail každé nádrže.
-- **HTTPS bez domény a internetu:** hub má vlastní certifikační autoritu (jen pro `.local` a místní IP),
-  certifikát se do telefonu / PC nainstaluje jednou z webu a obnovuje se sám; http funguje dál, přesměrování
-  na HTTPS se zapne jedním přepínačem (hotspot a první nastavení fungují po http vždy).
 - Grafy kreslí prohlížeč: hladina s vyznačeným **dopouštěním** a **přítokem z deště** (jemně podbarvené
   úseky, v tooltipu litry), spotřeba, dopouštění, klima, počasí, baterie a signál (s vyznačenou výměnou
   baterie); rozsah 24 h / 7 dní / 30 dní / rok nebo vlastní od–do.
