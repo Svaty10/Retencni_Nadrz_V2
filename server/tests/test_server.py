@@ -499,6 +499,48 @@ class ServerTest(unittest.TestCase):
             self.core.http.get = orig
             self.req("POST", "/api/settings", {"hydrawise_api_key": ""}, headers=h)
 
+    def test_1f_power_and_data_delete(self):
+        from unittest import mock
+        h = self.login()
+        d = self.tmp.name
+        # CSRF / login required
+        for path in ("/api/system/restart", "/api/system/reboot", "/api/system/poweroff", "/api/data/delete"):
+            st, _, _ = self.req("POST", path, {}, headers={"Cookie": h["Cookie"]})
+            self.assertEqual(st, 403, path)
+        with mock.patch("os.kill") as kill:
+            st, js, _ = self.req("POST", "/api/system/restart", {}, headers=h)
+            self.assertEqual(st, 200, js)
+            time.sleep(1.5)                                    # restart is scheduled after the response
+            self.assertTrue(kill.called)
+        st, js, _ = self.req("POST", "/api/system/reboot", {}, headers=h)
+        self.assertEqual(st, 200)
+        self.assertTrue(os.path.exists(os.path.join(d, "control-reboot")))
+        st, js, _ = self.req("POST", "/api/system/poweroff", {}, headers=h)
+        self.assertEqual(st, 200)
+        self.assertTrue(os.path.exists(os.path.join(d, "control-poweroff")))
+        actions = [r["action"] for r in self.core.db.query("SELECT action FROM audit ORDER BY id DESC LIMIT 3")]
+        self.assertEqual(actions, ["SERVICE_POWEROFF", "SERVICE_REBOOT", "SERVICE_RESTART"])
+        for f in ("control-reboot", "control-poweroff"):
+            os.remove(os.path.join(d, f))
+        # deleting data: dry run first, validation, audit entry
+        node = f"{self.core.nodes.ids()[0]:04X}"
+        st, js, _ = self.req("POST", "/api/data/delete", {"node": node, "dry_run": True}, headers=h)
+        self.assertEqual(st, 200, js)
+        before = js["counts"]["measurements"]
+        self.assertGreater(before, 0)
+        self.assertEqual(self.core.db.scalar("SELECT COUNT(*) FROM measurements WHERE node_id=?",
+                                             (int(node, 16),)), before)
+        for bad in ({"node": node, "from": 100, "to": 50, "dry_run": False}, {"from": "x", "dry_run": False},
+                    {"node": "FFFE", "dry_run": False}):
+            st, _, _ = self.req("POST", "/api/data/delete", bad, headers=h)
+            self.assertIn(st, (400, 404), bad)
+        now = int(time.time())
+        st, js, _ = self.req("POST", "/api/data/delete", {"node": node, "from": now + 86400, "to": now + 2 * 86400,
+                                                          "dry_run": False}, headers=h)
+        self.assertEqual((st, js["total"]), (200, 0))                       # empty range: nothing
+        row = self.core.db.one("SELECT detail FROM audit WHERE action='DATA_DELETED' ORDER BY id DESC")
+        self.assertIn(node, row["detail"])
+
     def test_1c_node_defaults_api(self):
         h = self.login()
         st, js, _ = self.req("GET", "/api/node-defaults", headers=h)

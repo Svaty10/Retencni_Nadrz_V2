@@ -101,6 +101,110 @@
         select.value = String(value);
     }
 
+    // ------------------------------------------- potvrzovací dialog (obecný)
+    // confirmDialog({title, body: [text | Node], confirm, danger}) → Promise<boolean>
+    function confirmDialog(o) {
+        return new Promise((resolve) => {
+            const m = $('cfmModal'), body = $('cfmBody'), foot = $('cfmFoot');
+            const opener = document.activeElement;
+            $('cfmTitle').textContent = o.title;
+            body.textContent = '';
+            (Array.isArray(o.body) ? o.body : [o.body]).forEach((x) => {
+                if (x == null) return;
+                if (typeof x === 'string') { const p = document.createElement('p'); p.textContent = x; body.appendChild(p); } else body.appendChild(x);
+            });
+            foot.textContent = '';
+            const done = (v) => {
+                m.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+                m.removeEventListener('keydown', onKey, true);
+                if (opener && opener.focus && opener.offsetParent !== null) opener.focus();
+                resolve(v);
+            };
+            const cancel = document.createElement('button');
+            cancel.type = 'button'; cancel.className = 'btn btn-outline'; cancel.textContent = o.cancel || 'Zrušit';
+            cancel.addEventListener('click', () => done(false));
+            const ok = document.createElement('button');
+            ok.type = 'button'; ok.className = 'btn ' + (o.danger ? 'btn-danger-solid' : 'btn-primary'); ok.textContent = o.confirm || 'Potvrdit';
+            ok.addEventListener('click', () => done(true));
+            foot.append(cancel, ok);
+            const onKey = (e) => {
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); return; }
+                if (e.key !== 'Tab') return;
+                const f = Array.from(m.querySelectorAll('button, [href], input, select')).filter((x) => !x.disabled && x.offsetParent !== null);
+                const i = f.indexOf(document.activeElement);
+                if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+            };
+            m.addEventListener('keydown', onKey, true);
+            $('cfmClose').onclick = () => done(false);
+            m.onmousedown = (e) => { if (e.target === m) done(false); };
+            m.classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            cancel.focus();                              // the safe choice has focus
+        });
+    }
+
+    // Po restartu: překryv „Čekám na zařízení…“ a samo se znovu připojí
+    function waitForHub(kind) {
+        const ov = $('waitOverlay'), text = $('waitText'), title = $('waitTitle');
+        ov.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        title.textContent = kind === 'poweroff' ? 'Zařízení se vypíná…' : 'Čekám na zařízení…';
+        text.textContent = kind === 'restart' ? 'Aplikace se restartuje, obvykle do 30 sekund.'
+            : kind === 'reboot' ? 'Zařízení se restartuje, obvykle do 2 minut. Stránka se pak načte sama.'
+                : 'Až zhasne, můžete odpojit napájení. Znovu ho zapnete odpojením a připojením napájení.';
+        const start = Date.now();
+        let wentDown = false;
+        const tick = async () => {
+            let ok = false;
+            try { ok = (await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' })).ok; } catch (e) { ok = false; }
+            const t = Date.now() - start;
+            if (!ok) wentDown = true;
+            if (kind === 'poweroff') {
+                if (wentDown) { title.textContent = 'Zařízení je vypnuté'; return; }
+                if (t < 120000) setTimeout(tick, 3000);
+                return;
+            }
+            if (ok && (wentDown || t > (kind === 'restart' ? 25000 : 120000))) { window.location.reload(); return; }
+            if (t > 300000) {
+                title.textContent = 'Zařízení se zatím neozvalo';
+                text.textContent = 'Zkontrolujte napájení a síť a zkuste stránku načíst znovu.';
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = 'Načíst znovu';
+                b.addEventListener('click', () => window.location.reload());
+                text.after(b);
+                return;
+            }
+            setTimeout(tick, 2000);
+        };
+        setTimeout(tick, 2000);
+    }
+
+    function bindPowerMenu() {
+        const run = async (kind, opts) => {
+            if (!await confirmDialog(opts)) return;
+            const r = await action(() => api('POST', '/api/system/' + kind, {}));
+            if (r) waitForHub(kind);
+        };
+        $('menuRestart').addEventListener('click', () => run('restart', {
+            title: 'Restartovat aplikaci?',
+            body: ['Aplikace hubu se ukončí a systém ji hned spustí znovu (asi 10–30 s). Měření z čidel se mezitím uloží, nic se neztratí.',
+                'Běžící dopouštění se po restartu obnoví podle nastavení.'],
+            confirm: 'Restartovat aplikaci'
+        }));
+        $('menuReboot').addEventListener('click', () => run('reboot', {
+            title: 'Restartovat zařízení?',
+            body: ['Celé zařízení se restartuje (asi 1–2 minuty). Po dobu restartu hub neměří a nedopouští; stránka se pak připojí sama.'],
+            confirm: 'Restartovat zařízení', danger: true
+        }));
+        $('menuPoweroff').addEventListener('click', () => run('poweroff', {
+            title: 'Vypnout zařízení?',
+            body: ['Zařízení se vypne: přestane měřit, dopouštět i posílat upozornění.',
+                'Znovu ho zapnete odpojením a připojením napájení.'],
+            confirm: 'Vypnout zařízení', danger: true
+        }));
+    }
+
     // ------------------------------------------------------- účet (menu)
     function bindAccountMenu() {
         const btn = $('accountBtn'), menu = $('accountMenu');
@@ -223,13 +327,19 @@
         seg.className = 'seg';
         seg.setAttribute('role', 'group');
         seg.setAttribute('aria-label', 'Rozsah');
+        // zvolený rozsah si graf pamatuje (localStorage, jen v tomto prohlížeči)
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem('range:' + key) || 'null'); } catch (e) { saved = null; }
+        if (!saved || !PRESETS[kind].some(([v]) => v === saved.preset)) saved = null;
+        if (saved && saved.preset === 'custom' && !(saved.fromIso && saved.toIso)) saved = null;
+        const initial = saved ? saved.preset : el.dataset.default;
         const segBtns = PRESETS[kind].map(([v, label, title]) => {
             const b = document.createElement('button');
             b.type = 'button';
             b.dataset.range = v;
             b.textContent = label;
             b.title = title;
-            b.setAttribute('aria-pressed', v === el.dataset.default ? 'true' : 'false');
+            b.setAttribute('aria-pressed', v === initial ? 'true' : 'false');
             seg.appendChild(b);
             return b;
         });
@@ -245,17 +355,33 @@
         const [inFrom, inTo] = custom.querySelectorAll('input[type="date"]');
         inFrom.setAttribute('aria-label', 'Od');
         inTo.setAttribute('aria-label', 'Do');
+        const state = { key, preset: initial, from: null, to: null };
+        if (saved && saved.preset === 'custom') {
+            inFrom.value = saved.fromIso;
+            inTo.value = saved.toIso;
+            const f = new Date(saved.fromIso + 'T00:00:00'), t = new Date(saved.toIso + 'T00:00:00');
+            if (!isNaN(f) && !isNaN(t) && t >= f) {
+                state.from = Math.floor(f.getTime() / 1000);
+                state.to = Math.floor(t.getTime() / 1000) + 86400;
+                custom.classList.remove('hidden');
+            }
+        }
         czDateInput(inFrom);
         czDateInput(inTo);
-        const state = { key, preset: el.dataset.default, from: null, to: null };
         pickers[key] = state;
+        const remember = () => {
+            try {
+                localStorage.setItem('range:' + key, JSON.stringify(state.preset === 'custom'
+                    ? { preset: 'custom', fromIso: inFrom.value, toIso: inTo.value } : { preset: state.preset }));
+            } catch (e) { /* ignore */ }
+        };
 
         segBtns.forEach((b) => b.addEventListener('click', () => {
             const v = b.dataset.range;
             segBtns.forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
             state.preset = v;
             custom.classList.toggle('hidden', v !== 'custom');
-            if (v !== 'custom') reloadChart(key);
+            if (v !== 'custom') { remember(); reloadChart(key); }
         }));
         custom.querySelector('.range-apply').addEventListener('click', () => {
             const f = new Date(inFrom.value + 'T00:00:00');
@@ -263,6 +389,7 @@
             if (isNaN(f) || isNaN(t) || t < f) { toast('Zadejte platný rozsah od–do.', true); return; }
             state.from = Math.floor(f.getTime() / 1000);
             state.to = Math.floor(t.getTime() / 1000) + 86400;    // včetně celého dne "do"
+            remember();
             reloadChart(key);
         });
     }
@@ -817,6 +944,7 @@
         if ($('nastaveni').classList.contains('active')) { renderSettingsBar(nodes); return; }
         const tabWithNodes = $('dashboard').classList.contains('active');
         bar.classList.toggle('hidden', nodes.length < 2 || !tabWithNodes);
+        bar.dataset.mode = 'dash';
         bar.textContent = '';
         const onDash = $('dashboard').classList.contains('active');
         const allActive = VIEW_ALL && onDash;
@@ -866,12 +994,20 @@
         ['general', 'all', 'tank'].forEach((k) => document.body.classList.toggle('set-' + k, SET_SCOPE === k));
         if (lastState) renderSettingsBar(lastState.nodes || []);
         if (SET_SCOPE === 'tank') applyNode(currentNodeCfg());
+        layoutTries = 0;
         layoutSettingsColumns();
+        scheduleSettingsLayout();
     }
 
+    let settingsBarKey = '';
     function renderSettingsBar(nodes) {
         const bar = $('nodeBar');
         bar.classList.remove('hidden');
+        // rebuilt only on a real change (the 10 s poll must not churn the DOM)
+        const key = JSON.stringify([SET_SCOPE, CURRENT_NODE, nodes.map((n) => [n.id, n.name, n.status])]);
+        if (key === settingsBarKey && bar.dataset.mode === 'settings') return;
+        settingsBarKey = key;
+        bar.dataset.mode = 'settings';
         bar.textContent = '';
         const tab = (label, active, fn, extra) => {
             const b = document.createElement('button');
@@ -1035,7 +1171,7 @@
         renderCalPoints(n.cal_points);
         $('batTrim').textContent = num(n.battery_trim, 4);
         $('deadbandInfo').textContent = `±${num(n.deadband_cm, 1)} cm (≈ ${num(n.deadband_l, 0)} L)`;
-        $('realFlowHint').textContent = n.real_flow_rate_lpm ? `(naměřeno ${num(n.real_flow_rate_lpm, 1)})` : '';
+        $('realFlowHint').textContent = n.real_flow_rate_lpm ? `naměřeno ${num(n.real_flow_rate_lpm, 1)} L/min` : 'z řadu';
     }
 
     function applySettings(s) {
@@ -1055,13 +1191,28 @@
     // Karty aktuální záložky ve sloupcích: každá karta do nejkratšího sloupce (v pořadí),
     // poslední karta sloupce se roztáhne → spodky všech sloupců na jedné lince. Karty jiných
     // záložek čekají skryté v #setPark. 1 sloupec pod 1280 px, 2 do 1700 px, jinak 3.
+    // Moving a card in the DOM blurs a focused field and makes mobile browsers jump to
+    // the top, so: never while the user edits a field (re-run on focusout), and move
+    // only cards whose place actually changes.
+    let layoutPending = false;
+    function editingSettings() {
+        const a = document.activeElement;
+        return !!(a && a.closest && a.closest('#nastaveni') && a.matches('input, select, textarea'));
+    }
+    function placeCards(col, cards) {
+        const cur = Array.from(col.children);
+        if (cur.length === cards.length && cur.every((c, i) => c === cards[i])) return;
+        cards.forEach((c) => { if (c.parentNode !== col || col.lastElementChild !== c) col.appendChild(c); });
+    }
     function layoutSettingsColumns() {
         const host = $('setCols'), park = $('setPark');
         if (!host || !park) return;
+        if (editingSettings()) { layoutPending = true; return; }
+        layoutPending = false;
         const all = Array.from(document.querySelectorAll('#nastaveni .col-card'))
             .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
         const mine = all.filter((c) => c.classList.contains('scope-' + SET_SCOPE));
-        all.forEach((c) => { if (!mine.includes(c)) park.appendChild(c); });
+        all.forEach((c) => { if (!mine.includes(c) && c.parentNode !== park) park.appendChild(c); });
         const n = window.innerWidth >= 1700 ? 3 : window.innerWidth >= 1280 ? 2 : 1;
         let cols = Array.from(host.children);
         if (cols.length !== n) {
@@ -1071,13 +1222,29 @@
             for (let i = 0; i < n; i++) { const c = document.createElement('div'); c.className = 'set-col'; host.appendChild(c); cols.push(c); }
         }
         host.dataset.cols = String(n);
+        // Root cause of the "all cards in the left column" bug: after the Všechny nádrže tab
+        // (no column cards) the host stayed hidden, so the cards of the next tab were
+        // measured inside a display:none box (all heights 0 → everything into column 0).
+        host.classList.toggle('hidden', !mine.length);
         if (!$('nastaveni').classList.contains('active')) { renderSetNav(); return; }   // skryté: změřit nejde
+        if (n === 1) {                                   // one column: just the order, no measuring
+            placeCards(cols[0], mine);
+            cols[0].querySelectorAll('.col-card.fill').forEach((c) => c.classList.remove('fill'));
+            host.classList.toggle('hidden', !mine.length);
+            renderSetNav();
+            return;
+        }
         // změřit výšky v jednom sloupci (stejná šířka jako ve výsledku), v původním pořadí
         const heights = mine.map((c) => {
             cols[0].appendChild(c);
             c.classList.remove('fill');
             return c.offsetHeight;
         });
+        if (heights.every((h) => !h) && mine.length && layoutTries < 5) {   // not rendered yet: next frame
+            layoutTries++;
+            requestAnimationFrame(layoutSettingsColumns);
+            return;
+        }
         const sum = new Array(n).fill(0), plan = [];
         mine.forEach((c, i) => {
             let k = 0;
@@ -1085,13 +1252,36 @@
             plan.push(k);
             if (heights[i]) sum[k] += heights[i] + 16;
         });
-        mine.forEach((c, i) => { cols[plan[i]].appendChild(c); });
+        cols.forEach((col, k) => placeCards(col, mine.filter((c, i) => plan[i] === k)));
         cols.forEach((col) => {
             const vis = Array.from(col.children).filter((c) => c.offsetParent !== null);
             if (vis.length) vis[vis.length - 1].classList.add('fill');
         });
         host.classList.toggle('hidden', !mine.length);
+        // self-check: an empty column next to one with 2+ cards = a bad measurement → once more
+        const counts = cols.map((col) => Array.from(col.children).filter((c) => c.offsetParent !== null).length);
+        if (counts.some((x) => x === 0) && counts.some((x) => x >= 2) && layoutTries < 3) {
+            layoutTries++;
+            requestAnimationFrame(layoutSettingsColumns);
+            return;
+        }
+        layoutTries = 0;
+        lastHeights = new Map(mine.map((c) => [c, c.offsetHeight]));
         renderSetNav();
+    }
+
+    // Karta změnila výšku (data se načetla, rozbalil se detail…) → přeskládat, ale ne při psaní
+    let layoutTries = 0, lastHeights = new Map(), roT = null;
+    const cardObserver = window.ResizeObserver ? new ResizeObserver(() => {
+        clearTimeout(roT);
+        roT = setTimeout(() => {
+            if (!$('nastaveni').classList.contains('active')) return;
+            const moved = Array.from(lastHeights.entries()).some(([c, h]) => c.offsetParent !== null && Math.abs(c.offsetHeight - h) > 24);
+            if (moved) layoutSettingsColumns();
+        }, 300);
+    }) : null;
+    function scheduleSettingsLayout() {
+        requestAnimationFrame(() => requestAnimationFrame(layoutSettingsColumns));   // after the new tab is painted
     }
 
     // Rychlá navigace po kartách aktuální záložky (lepivá pod hlavičkou)
@@ -1197,43 +1387,94 @@
 
         // Zóny: výběr podle názvu, uloží se relay_id
         $('zoneLoad').addEventListener('click', async () => {
-            const sel = $('zoneSelect');
-            $('zoneInfo').textContent = 'Načítám zóny…';
-            let r;
-            try { r = await api('GET', '/api/hydrawise/zones?' + nq()); } catch (e) { $('zoneInfo').textContent = e.message; return; }
-            const relay = $('calForm').elements.namedItem('hydrawise_relay_id');
-            sel.textContent = '';
-            const none = document.createElement('option');
-            none.value = ''; none.textContent = '– bez zóny –';
-            sel.appendChild(none);
-            r.zones.forEach((z) => {
-                const o = document.createElement('option');
-                o.value = z.relay_id;
-                o.textContent = (z.number != null ? z.number + ' · ' : '') + z.name;
-                sel.appendChild(o);
-            });
-            sel.value = relay.value && r.zones.some((z) => z.relay_id === relay.value) ? relay.value : '';
-            $('zoneInfo').textContent = r.zones.length ? `Načteno ${r.zones.length} zón – vyberte a uložte.` : 'Účet nemá žádné zóny.';
+            const btn = $('zoneLoad');
+            btn.disabled = true;
+            $('zoneInfo').textContent = 'Načítám zóny z Hydrawise…';
+            try {
+                const r = await api('GET', '/api/hydrawise/zones?' + nq());
+                ZONES[CURRENT_NODE] = r.zones;
+                renderZoneInfo(currentNodeCfg() || {}, $('calForm').elements.namedItem('hydrawise_relay_id').value);
+                if (!r.zones.length) $('zoneInfo').textContent = 'Účet Hydrawise nemá žádné zóny.';
+            } catch (e) {
+                $('zoneInfo').textContent = e.message;
+            } finally { btn.disabled = false; }
         });
         $('zoneSelect').addEventListener('change', () => {
             const relay = $('calForm').elements.namedItem('hydrawise_relay_id');
             relay.value = $('zoneSelect').value;
             relay.dispatchEvent(new Event('input'));
-            $('zoneInfo').textContent = $('zoneSelect').value ? `Zóna ${$('zoneSelect').selectedOptions[0].textContent} – nezapomeňte uložit.` : 'Bez zóny – nezapomeňte uložit.';
+            zoneHint(relay.value, true);
         });
     }
 
-    function renderZoneInfo(n) {
+    // Zóna: v seznamu názvy (po načtení z Hydrawise), pod ním číslo; bez načtení uložená zóna
+    const ZONES = {};
+    function zoneHint(relay, changed) {
+        const zones = ZONES[CURRENT_NODE];
+        const z = zones && zones.find((x) => x.relay_id === relay);
+        let txt;
+        if (!relay) txt = zones ? 'Bez zóny.' : 'Názvy zón načtete tlačítkem vedle.';
+        else if (z) txt = (z.number != null ? `Zóna č. ${z.number} · ` : '') + `Relay ID ${relay}`;
+        else txt = zones ? `Relay ID ${relay} v účtu Hydrawise nenalezeno.` : 'Názvy zón načtete tlačítkem vedle.';
+        $('zoneInfo').textContent = txt + (changed ? ' Nezapomeňte uložit.' : '');
+    }
+    function renderZoneInfo(n, current) {
         const sel = $('zoneSelect');
-        if (!Array.from(sel.options).some((o) => o.value === n.hydrawise_relay_id)) {
-            sel.textContent = '';
-            const o = document.createElement('option');
-            o.value = n.hydrawise_relay_id || '';
-            o.textContent = n.hydrawise_relay_id ? `Relay ID ${n.hydrawise_relay_id}` : '– nenačteno –';
-            sel.appendChild(o);
-        }
-        sel.value = n.hydrawise_relay_id || '';
-        $('zoneInfo').textContent = n.hydrawise_relay_id ? '' : 'Zónu načtete z účtu Hydrawise tlačítkem vedle.';
+        const relay = current != null ? current : (n.hydrawise_relay_id || '');
+        const zones = ZONES[CURRENT_NODE];
+        sel.textContent = '';
+        const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
+        add('', '– bez zóny –');
+        if (zones) zones.forEach((z) => add(z.relay_id, z.name));
+        if (relay && !(zones && zones.some((z) => z.relay_id === relay))) add(relay, `Zóna ${relay} (načtěte názvy)`);
+        sel.value = relay;
+        zoneHint(relay, false);
+    }
+
+    // Smazat naměřená data: nádrž / všechny, rozsah od–do nebo vše; nejdřív počet (dry run)
+    function fillDeleteNodes() {
+        const sel = $('delNode');
+        const cur = sel.value;
+        sel.textContent = '';
+        const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
+        add('', 'Všechny nádrže');
+        ((nodesCache && nodesCache.nodes) || []).forEach((n) => add(n.id, `${n.name} (${n.id})`));
+        sel.value = Array.from(sel.options).some((o) => o.value === cur) ? cur : '';
+    }
+
+    function bindDataDelete() {
+        const today = isoDate(new Date());
+        $('delTo').max = today; $('delFrom').max = today;
+        $('delRange').addEventListener('change', () => { $('delDates').classList.toggle('hidden', $('delRange').value === 'all'); layoutSettingsColumns(); });
+        $('delBtn').addEventListener('click', async () => {
+            const node = $('delNode').value || null;
+            const body = { node, from: null, to: null, dry_run: true };
+            let rangeTxt = 'vše';
+            if ($('delRange').value !== 'all') {
+                const f = $('delFrom').value, t = $('delTo').value;
+                if (!f || !t || t < f) { toast('Zadejte platný rozsah od–do.', true); return; }
+                body.from = Math.floor(new Date(f + 'T00:00:00').getTime() / 1000);
+                body.to = Math.floor(new Date(t + 'T00:00:00').getTime() / 1000) + 86400;
+                rangeTxt = `${fmtCzDate(f)} – ${fmtCzDate(t)}`;
+            }
+            let dry;
+            try { dry = await api('POST', '/api/data/delete', body); } catch (e) { toast(e.message, true); return; }
+            const who = node ? $('delNode').selectedOptions[0].textContent : 'všechny nádrže';
+            if (!dry.total) { toast(`Ve zvoleném rozsahu (${who}, ${rangeTxt}) nejsou žádná data.`); return; }
+            const link = document.createElement('p');
+            link.innerHTML = 'Doporučujeme nejdřív <a href="/api/backup/download" download>stáhnout zálohu</a>.';
+            const ok = await confirmDialog({
+                title: 'Smazat naměřená data?',
+                body: [`Nádrž: ${who} · rozsah: ${rangeTxt}`,
+                    `Smaže se ${num(dry.counts.measurements, 0)} měření, ${num(dry.counts.hourly, 0)} hodinových souhrnů a ${num(dry.counts.refills, 0)} záznamů o dopouštění (historie dopouštění v rozsahu jde také pryč).`,
+                    'Nádrže, nastavení a záznamy v Logování zůstanou. Smazání nejde vrátit.', link],
+                confirm: `Smazat ${num(dry.total, 0)} záznamů`, danger: true
+            });
+            if (!ok) return;
+            body.dry_run = false;
+            const r = await action(() => api('POST', '/api/data/delete', body), (x) => `Smazáno ${num(x.total, 0)} záznamů.`);
+            if (r) { histCache.clear(); flowsCache.clear(); pollState(); }
+        });
     }
 
     function renderBackups(d) {
@@ -1351,7 +1592,7 @@
         renderBackups(bk);
         if (tg) renderTelegramAdmin(tg);
         renderServis(sv);
-        if (nodes) { nodesCache = nodes; renderNodes(nodes); applyNode(currentNodeCfg()); }
+        if (nodes) { nodesCache = nodes; renderNodes(nodes); applyNode(currentNodeCfg()); fillDeleteNodes(); }
         if (st) applySettings(st.settings);
         if (ha) renderHa(ha);
         if (sys) renderSystem(sys);
@@ -1362,7 +1603,10 @@
     const nq = () => 'node=' + encodeURIComponent(CURRENT_NODE || '');
 
     function bindSettings() {
-        document.querySelectorAll('#nastaveni .card').forEach((c, i) => { c.dataset.order = String(i); });
+        document.querySelectorAll('#nastaveni .card').forEach((c, i) => {
+            c.dataset.order = String(i);
+            if (cardObserver && c.classList.contains('col-card')) cardObserver.observe(c);
+        });
         let adv = false;
         try { adv = localStorage.getItem('advSettings') === '1'; } catch (e) { /* ignore */ }
         setAdvanced(adv);
@@ -1406,7 +1650,17 @@
             });
         });
         let resizeT = null;
-        window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(layoutSettingsColumns, 150); });
+        // only a width change can change the columns; mobile browsers fire resize on every
+        // scroll (address bar) and when the keyboard opens – those must not touch the DOM
+        let lastW = window.innerWidth;
+        window.addEventListener('resize', () => {
+            if (window.innerWidth === lastW) return;
+            lastW = window.innerWidth;
+            clearTimeout(resizeT); resizeT = setTimeout(layoutSettingsColumns, 150);
+        });
+        $('nastaveni').addEventListener('focusout', () => {
+            setTimeout(() => { if (layoutPending && !editingSettings()) layoutSettingsColumns(); }, 0);
+        });
         $('defForm').addEventListener('submit', (e) => {
             e.preventDefault();
             action(() => api('POST', '/api/node-defaults', formData(e.target))).then((r) => {
@@ -1429,6 +1683,7 @@
             });
         }));
         bindPlaceAndHydrawise();
+        bindDataDelete();
         $('tgChangeBtn').addEventListener('click', () => {
             TG_EDIT = !TG_EDIT;
             $('tgSetup').classList.toggle('hidden', !TG_EDIT);
@@ -2087,6 +2342,7 @@
         TIME_FIXED: ['clock', 'Oprava času', ''], UPDATE_REQUESTED: ['arrow-up', 'Aktualizace', ''],
         BACKUP_DOWNLOADED: ['archive', 'Stažení zálohy', ''], BACKUP_IMPORTED: ['archive', 'Nahrání zálohy', 'warn'],
         DISK_LOW: ['alert', 'Málo místa na kartě', 'bad'],
+        SERVICE_POWEROFF: ['power', 'Vypnutí zařízení', 'warn'], DATA_DELETED: ['archive', 'Smazání naměřených dat', 'warn'],
         TELEGRAM_LINKED: ['antenna', 'Telegram propojen', 'ok'], TELEGRAM_UNLINKED: ['antenna', 'Telegram odpojen', ''],
         SERVICE_ACCESS: ['lock', 'Vzdálený servis', 'warn'], SERVICE_RESTART: ['restart', 'Restart aplikace', ''],
         SERVICE_REBOOT: ['restart', 'Restart zařízení', 'warn']
@@ -2267,6 +2523,7 @@
         document.querySelectorAll('.range-picker').forEach(buildRangePicker);
         document.querySelectorAll('input[type="date"]').forEach(czDateInput);
         bindAccountMenu();
+        if (ME.role === 'admin') bindPowerMenu();
         // přepnutí světlý/tmavý motiv → grafy znovu s novými barvami
         if (window.matchMedia) {
             const mq = window.matchMedia('(prefers-color-scheme: dark)');

@@ -113,7 +113,20 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 - **Obnova (např. nová karta):** nainstalovat podle bodu 2, přihlásit se, *Nastavení → Obecné → Záloha a data → Nahrát zálohu*
   (zaškrtnout „včetně nastavení a uživatelů“). Data se přidají k současným, duplicity se přeskočí – import
   lze bezpečně opakovat. Vrátí se měření, čidla i s klíči (hned pokračují), nastavení, token HA a uživatelé.
-- Data se nemažou (8GB karta vystačí na desítky let); retenci lze nastavit v pokročilém nastavení.
+- Data se nemažou (8GB karta vystačí na desítky let); retenci lze nastavit v *Záloha a data →
+  Uchovávání dat*.
+- **Smazat naměřená data** (např. po zkušební montáži): *Nastavení → Obecné → Záloha a data → Smazat
+  naměřená data* – vybrat nádrž nebo všechny nádrže a rozsah *od – do* (nebo *vše*). Hub nejdřív ukáže,
+  kolik měření, hodinových souhrnů a záznamů o dopouštění smaže (historie dopouštění v rozsahu jde také
+  pryč) a nabídne stažení zálohy. Nádrže, nastavení a záznamy v *Logování* zůstanou; smazání se zapíše
+  do Logování. Nejde vrátit – jen nahráním zálohy.
+
+### Restart a vypnutí
+V menu účtu (vpravo nahoře, jen administrátor): **Restartovat aplikaci** (asi 10–30 s, měření se neztratí),
+**Restartovat zařízení** (1–2 min) a **Vypnout zařízení** (znovu ho zapnete odpojením a připojením
+napájení). Každá akce se nejdřív potvrdí a zapíše do Logování; po restartu stránka ukáže „Čekám na
+zařízení…“ a sama se znovu připojí. Před odpojením napájení je šetrnější zařízení vypnout (karta SD).
+Totéž v Telegramu: `restart`, `reboot`, `vypnout`.
 
 ## 4. Co se děje při problémech (bezúdržbovost)
 | Situace | Reakce |
@@ -234,7 +247,7 @@ v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administ
 | `dopustit [nádrž] [%]`, `stop [nádrž]` | admin | dopouštění na dálku; `stop` zruší i čekající nebo automatické dopouštění |
 | `obnovit [nádrž]` | admin | znovu zapne automatiku pozastavenou zrušením |
 | `diag`, `log` | admin | diagnostika (signál, ztráty, rušení, baterie, místo, verze), poslední záznamy |
-| `restart`, `reboot` | admin | restart aplikace / zařízení (s potvrzením) |
+| `restart`, `reboot`, `vypnout` | admin | restart aplikace / restart zařízení / vypnutí zařízení (vždy s potvrzením tlačítkem) |
 | `aktualizovat` | admin | zkontroluje aktualizace a pošle výsledek; je-li nová verze, s poznámkami a tlačítkem *Aktualizovat na X* (nebo `aktualizovat instalovat X`) |
 | `servis zap` / `trvale` / `vyp` | admin | vzdálený servisní přístup (NetBird, viz níže) |
 | `odhlasit` | všichni | odpojí chat |

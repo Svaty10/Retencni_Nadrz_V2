@@ -6,6 +6,7 @@ writes a request file into its data directory; retencka-control.path starts this
 helper, which carries the request out:
 
   control-reboot   restart the whole device
+  control-poweroff shut the device down (power it on again by unplugging / plugging in)
   control-servis   apply the wanted remote service access (servis.json):
                    NetBird up / down; "24h" expires automatically
   control-netbird-install
@@ -200,6 +201,12 @@ def apply_servis() -> None:
 
 
 def main() -> None:
+    if (DATA / "control-poweroff").exists() or (DATA / "control-poweroff").is_symlink():
+        (DATA / "control-poweroff").unlink(missing_ok=True)
+        (DATA / "control-reboot").unlink(missing_ok=True)
+        log("power-off requested from the hub")
+        subprocess.run(["systemctl", "poweroff"], check=False)
+        return
     if (DATA / "control-reboot").exists():
         (DATA / "control-reboot").unlink(missing_ok=True)
         log("reboot requested from the hub")

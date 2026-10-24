@@ -89,6 +89,17 @@ class TelegramTest(Base):
         self.link(1, "pepa")
         self.assertIn("oprávnění", self.msg(1, "aktualizovat")[-1])
 
+    def test_poweroff_needs_confirmation(self):
+        req = os.path.join(self.tmp.name, "control-poweroff")
+        self.link(2, "admin")
+        self.assertIn("Vypnout celé zařízení", self.msg(2, "vypnout")[-1])
+        self.assertFalse(os.path.exists(req))                           # only after "ano"
+        self.assertIn("vypíná", self.msg(2, "vypnout ano")[-1])
+        self.assertTrue(os.path.exists(req))
+        self.assertIn("vypnout", self.bot._help({"role": "admin"}))
+        self.link(1, "pepa")
+        self.assertIn("oprávnění", self.msg(1, "vypnout ano")[-1])
+
     def test_refill_target_validated(self):
         self.link(2, "admin")
         for bad in ("nan", "inf", "-5", "0", "101", "1e999"):

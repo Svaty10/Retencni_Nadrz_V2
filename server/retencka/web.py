@@ -15,6 +15,7 @@ import mimetypes
 import os
 import shutil
 import secrets
+import signal
 import time
 import zlib
 from datetime import datetime
@@ -66,7 +67,8 @@ AUDIT_CATEGORIES = {
     "sensors":  ["NODE_PAIRED", "NODE_PAIRING", "NODE_REMOVED", "NODE_UNPAIR_REQUESTED", "NODE_UNPAIRED",
                  "NODE_UNPAIR_CANCELLED", "NODE_BOOT"],
     "system":   ["TIME_FIXED", "UPDATE_REQUESTED", "BACKUP_DOWNLOADED", "BACKUP_IMPORTED", "DISK_LOW",
-                 "TELEGRAM_LINKED", "TELEGRAM_UNLINKED", "SERVICE_ACCESS", "SERVICE_RESTART", "SERVICE_REBOOT"],
+                 "TELEGRAM_LINKED", "TELEGRAM_UNLINKED", "SERVICE_ACCESS", "SERVICE_RESTART", "SERVICE_REBOOT", "SERVICE_POWEROFF",
+                 "DATA_DELETED"],
     "problems": ["LOGIN_FAILED", "SETUP_FAILED", "REFILL_ERROR", "REFILL_FAULT", "DISK_LOW"],
 }
 
@@ -1122,6 +1124,75 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                       "message": "Kontrola aktualizací spuštěna." if action == "check" else
                                  f"Instalace verze {version} spuštěna."})
 
+    # ---------------------------------------------------------- power controls
+    def restart_app() -> None:
+        """systemd (Restart=always) starts the app again after SIGTERM."""
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    @need("admin")
+    async def api_system_restart(request):
+        core.audit("SERVICE_RESTART", "Restart aplikace z webu", *user_of(request))
+        asyncio.get_running_loop().call_later(1.0, restart_app)     # let the response go out first
+        return jresp({"ok": True, "message": "Aplikace se restartuje, za chvíli bude zpět."})
+
+    @need("admin")
+    async def api_system_reboot(request):
+        try:
+            core.control_request("reboot")
+        except OSError:
+            return jerr("Žádost se nepodařilo uložit.", 500)
+        core.audit("SERVICE_REBOOT", "Restart zařízení z webu", *user_of(request))
+        return jresp({"ok": True, "message": "Zařízení se restartuje (asi 1 minuta)."})
+
+    @need("admin")
+    async def api_system_poweroff(request):
+        try:
+            core.control_request("poweroff")
+        except OSError:
+            return jerr("Žádost se nepodařilo uložit.", 500)
+        core.audit("SERVICE_POWEROFF", "Vypnutí zařízení z webu", *user_of(request))
+        return jresp({"ok": True, "message": "Zařízení se vypíná. Znovu ho zapnete odpojením a připojením napájení."})
+
+    # ------------------------------------------------------- deleting data
+    @need("admin")
+    async def api_data_delete(request):
+        """{node: "XXXX"|null, from: epoch|null, to: epoch|null, dry_run: bool} – measured data
+        (raw, hourly, finished refills) of a tank or all tanks; the audit log stays."""
+        data = await read_json(request)
+        raw_node = data.get("node")
+        nid = None
+        if raw_node not in (None, "", "all"):
+            nid = core.resolve_node(str(raw_node))
+            if nid is None:
+                return jerr("Neznámá nádrž.", 404)
+
+        def ts(key):
+            v = data.get(key)
+            if v in (None, ""):
+                return None
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v < 2 ** 40:
+                raise ValueError(key)
+            return int(v)
+        try:
+            t_from, t_to = ts("from"), ts("to")
+        except ValueError:
+            return jerr("Neplatný rozsah.")
+        if t_from is not None and t_to is not None and t_to <= t_from:
+            return jerr("Konec rozsahu musí být po začátku.")
+        if data.get("dry_run", True) is not False:
+            counts = await asyncio.to_thread(core.count_data, nid, t_from, t_to)
+            return jresp({"ok": True, "dry_run": True, "counts": counts, "total": sum(counts.values())})
+        counts = await asyncio.to_thread(core.delete_data, nid, t_from, t_to)
+        core.after_delete(nid)
+        fmt = lambda t: datetime.fromtimestamp(t).strftime("%d.%m.%Y %H:%M")   # noqa: E731
+        rng = ("vše" if t_from is None and t_to is None else
+               f"{fmt(t_from) if t_from is not None else 'začátek'} – {fmt(t_to) if t_to is not None else 'teď'}")
+        who = f"nádrž {(core.nodes.get(nid) or {}).get('name', '')} ({nid:04X})" if nid is not None else "všechny nádrže"
+        core.audit("DATA_DELETED", f"Smazána naměřená data: {who}, {rng}; {counts['measurements']} měření, "
+                                   f"{counts['hourly']} hodinových souhrnů, {counts['refills']} dopouštění",
+                   *user_of(request))
+        return jresp({"ok": True, "dry_run": False, "counts": counts, "total": sum(counts.values())})
+
     @need("admin")
     async def api_system_update(request):          # old route = check (kept for older clients)
         return update_request(request, "check")
@@ -1205,6 +1276,10 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/ha/rotate", api_ha_rotate)
     r.add_get("/api/system", api_system)
     r.add_post("/api/system/update", api_system_update)
+    r.add_post("/api/system/restart", api_system_restart)
+    r.add_post("/api/system/reboot", api_system_reboot)
+    r.add_post("/api/system/poweroff", api_system_poweroff)
+    r.add_post("/api/data/delete", api_data_delete)
     r.add_post("/api/update/check", api_update_check)
     r.add_post("/api/update/install", api_update_install)
     r.add_get("/api/update/status", api_update_status)

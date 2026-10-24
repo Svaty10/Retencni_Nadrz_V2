@@ -227,7 +227,8 @@ class Core:
     # ------------------------------------------------- root helper requests
     def control_request(self, kind: str) -> None:
         """Ask the root helper (retencka-control / retencka-update path units)."""
-        name = {"update": "update-request", "reboot": "control-reboot", "servis": "control-servis"}[kind]
+        name = {"update": "update-request", "reboot": "control-reboot", "poweroff": "control-poweroff",
+                "servis": "control-servis"}[kind]
         with open(os.path.join(self.data_dir, name), "w") as f:
             f.write(str(int(time.time())))
 
@@ -1561,16 +1562,59 @@ class Core:
         return self._daily_flows(nid, t_from, t_to)
 
     # ============================================================ maintenance
-    def aggregate_hours(self, since: Optional[int] = None) -> None:
+    def aggregate_hours(self, since: Optional[int] = None, until: Optional[int] = None) -> None:
         since = since if since is not None else int(time.time()) - 3 * 3600
         since -= since % 3600
+        until = until if until is not None else 2 ** 62
         self.db.execute(
             "INSERT OR REPLACE INTO hourly(node_id, hour, n, level_mm, level_min, level_max, volume_l, temp, "
             "hum, vbat, refilling, rssi) "
             "SELECT node_id, (ts/3600)*3600 h, COUNT(*), AVG(level_mm), MIN(level_mm), MAX(level_mm), "
             "AVG(volume_l), AVG(temp_x100)/100.0, AVG(hum_x100)/100.0, AVG(vbat_mv), MAX(refilling), "
             "AVG(rssi_x2)/2.0 "
-            "FROM measurements WHERE ts >= ? GROUP BY node_id, h", (since,))
+            "FROM measurements WHERE ts >= ? AND ts < ? GROUP BY node_id, h", (since, until))
+
+    # ------------------------------------------------------- deleting data
+    def _delete_where(self, nid: Optional[int], t_from: Optional[int], t_to: Optional[int]) -> dict:
+        """WHERE clauses of the per-node time series for a node (None = all) and a range
+        [t_from, t_to) (None = unbounded). A running refill is never deleted."""
+        def clause(col: str, floor_hour: bool = False) -> tuple[str, list]:
+            parts, params = [], []
+            if nid is not None:
+                parts.append("node_id = ?")
+                params.append(nid)
+            if t_from is not None:
+                parts.append(f"{col} >= ?")
+                params.append(t_from - t_from % 3600 if floor_hour else t_from)
+            if t_to is not None:
+                parts.append(f"{col} < ?")
+                params.append(t_to)
+            return " AND ".join(parts) or "1=1", params
+        m, h, r = clause("ts"), clause("hour", True), clause("start_ts")
+        return {"measurements": m, "hourly": h, "refills": (r[0] + " AND end_ts IS NOT NULL", r[1])}
+
+    def count_data(self, nid: Optional[int], t_from: Optional[int], t_to: Optional[int]) -> dict:
+        return {t: int(self.db.scalar(f"SELECT COUNT(*) FROM {t} WHERE {w}", p, 0))
+                for t, (w, p) in self._delete_where(nid, t_from, t_to).items()}
+
+    def delete_data(self, nid: Optional[int], t_from: Optional[int], t_to: Optional[int]) -> dict:
+        """Delete measured data (raw measurements, hourly aggregates, finished refills) of
+        one node or all nodes in a range. The audit log is never touched. Runs in a worker
+        thread; call after_delete() on the loop afterwards."""
+        counts = self.count_data(nid, t_from, t_to)
+        with self.db.transaction() as c:
+            for t, (w, p) in self._delete_where(nid, t_from, t_to).items():
+                c.execute(f"DELETE FROM {t} WHERE {w}", p)
+        if t_from is not None or t_to is not None:
+            # the partly kept hours at the edges of the range: from the remaining raw data
+            for edge in (t_from, t_to):
+                if edge is not None:
+                    self.aggregate_hours(since=edge - 3600, until=edge + 3600)
+        return counts
+
+    def after_delete(self, nid: Optional[int]) -> None:
+        for i in ([nid] if nid is not None else list(self.nodes.ids())):
+            self.after_recompute(i)
 
     def maintenance(self) -> None:
         """Daily: retention, low-disk guard, session purge, local backup."""

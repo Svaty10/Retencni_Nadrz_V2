@@ -44,6 +44,7 @@
         <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15l5.5-5.5"/></symbol>
         <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/></symbol>
         <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+        <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7 6.5a7.5 7.5 0 1 0 10 0"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
     </defs>
 </svg>
@@ -79,6 +80,13 @@
                     <svg class="ico" aria-hidden="true"><use href="#i-users"/></svg>Správa uživatelů</button>
                 <button class="menu-item tab-btn admin-only hidden" data-tab="logovani" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-list"/></svg>Logování</button>
+                <div class="menu-sep admin-only hidden" role="separator"></div>
+                <button class="menu-item admin-only hidden" id="menuRestart" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-restart"/></svg>Restartovat aplikaci</button>
+                <button class="menu-item admin-only hidden" id="menuReboot" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-restart"/></svg>Restartovat zařízení</button>
+                <button class="menu-item admin-only hidden" id="menuPoweroff" type="button" role="menuitem">
+                    <svg class="ico" aria-hidden="true"><use href="#i-power"/></svg>Vypnout zařízení</button>
                 <div class="menu-sep" role="separator"></div>
                 <button class="menu-item" id="logoutBtn" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg>Odhlásit</button>
@@ -564,7 +572,7 @@
                     <div><h2>Dopouštění</h2><p class="card-desc">Ventil Hunter Hydrawise, zóna a pravidla automatického dopouštění z řadu.</p></div>
                 </div>
                 <div class="alert-warning hidden" id="zoneNote"></div>
-                <div class="form-row">
+                <div class="field-grid g2">
                     <div class="form-group">
                         <label>Ventil</label>
                         <select name="refill_provider" class="unified-select" form="calForm">
@@ -574,28 +582,32 @@
                     </div>
                     <div class="form-group">
                         <label for="zoneSelect">Zóna</label>
-                        <div class="zone-pick">
-                            <select id="zoneSelect" class="unified-select" aria-label="Zóna Hydrawise">
-                                <option value="">– nenačteno –</option>
-                            </select>
-                            <button type="button" class="btn btn-outline" id="zoneLoad">Načíst zóny z Hydrawise</button>
+                        <div class="select-action">
+                            <select id="zoneSelect" class="unified-select"><option value="">– bez zóny –</option></select>
+                            <button type="button" class="btn btn-outline btn-icon" id="zoneLoad" title="Načíst zóny z Hydrawise" aria-label="Načíst zóny z Hydrawise">
+                                <svg class="ico" aria-hidden="true"><use href="#i-restart"/></svg></button>
                         </div>
-                        <p class="muted small field-note" id="zoneInfo"></p>
+                        <p class="field-hint" id="zoneInfo"></p>
                     </div>
                 </div>
-                <div class="form-row adv">
-                    <div class="form-group">
-                        <label>Zóna ručně (Relay ID)</label>
-                        <input type="text" name="hydrawise_relay_id" class="unified-input" autocomplete="off" inputmode="numeric" form="calForm">
-                    </div>
-                    <div class="form-group">
-                        <label>Vlastní Hydrawise API klíč <span class="muted">(jinak klíč účtu z Obecné)</span></label>
-                        <input type="password" name="hydrawise_api_key" class="unified-input" autocomplete="off" form="calForm">
+                <div class="sub adv">
+                    <h3>Ruční nastavení</h3>
+                    <div class="field-grid g2">
+                        <div class="form-group">
+                            <label>Zóna – Relay ID</label>
+                            <input type="text" name="hydrawise_relay_id" class="unified-input" autocomplete="off" inputmode="numeric" form="calForm">
+                            <p class="field-hint">číslo zóny, když názvy nejde načíst</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Vlastní API klíč</label>
+                            <input type="password" name="hydrawise_api_key" class="unified-input" autocomplete="off" form="calForm">
+                            <p class="field-hint">jen když nádrž patří jinému účtu Hydrawise</p>
+                        </div>
                     </div>
                 </div>
                 <div class="sub">
                     <h3>Pravidla</h3>
-                    <div class="form-row toggles">
+                    <div class="field-grid g2 toggles">
                         <label class="toggle">
                             <span class="toggle-text">Automatické dopouštění</span>
                             <span class="switch"><input type="checkbox" name="auto_refill_enabled" form="calForm"><span class="slider"></span></span>
@@ -605,46 +617,50 @@
                             <span class="switch"><input type="checkbox" name="rain_wait_enabled" form="calForm"><span class="slider"></span></span>
                         </label>
                     </div>
-                <div class="form-row">
+                    <div class="field-grid rule-grid">
                     <div class="form-group">
                         <label>Dopouštět pod</label>
                         <div class="input-unit"><input type="number" step="1" name="refill_threshold_pct" form="calForm"><span class="unit">%</span></div>
+                        <p class="field-hint">spouštěcí hladina</p>
                     </div>
                     <div class="form-group">
                         <label>Dopustit na</label>
                         <div class="input-unit"><input type="number" step="1" name="auto_refill_target_pct" form="calForm"><span class="unit">%</span></div>
+                        <p class="field-hint">cílová hladina</p>
                     </div>
-                </div>
-                <div class="form-row">
                     <div class="form-group">
-                        <label>Nečekat na déšť pod prahem o víc než</label>
+                        <label>Max. pod prahem</label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_below_pct" form="calForm"><span class="unit">%</span></div>
+                        <p class="field-hint">víc pod prahem se na déšť nečeká</p>
                     </div>
                     <div class="form-group">
-                        <label>Přestat čekat po poklesu o</label>
+                        <label>Max. pokles</label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_drop_pct" form="calForm"><span class="unit">%</span></div>
+                        <p class="field-hint">pak se přestane čekat na déšť</p>
                     </div>
-                </div>
-                <div class="form-row adv">
+                    </div>
+                    <div class="field-grid rule-grid adv">
                     <div class="form-group">
                         <label>Výhled deště</label>
                         <div class="input-unit"><input type="number" step="1" min="1" max="72" name="rain_wait_hours" form="calForm"><span class="unit">h</span></div>
+                        <p class="field-hint">jak daleko dopředu</p>
                     </div>
                     <div class="form-group">
                         <label>Nejvýš dopustit na</label>
                         <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct" form="calForm"><span class="unit">%</span></div>
+                        <p class="field-hint">horní limit</p>
                     </div>
-                </div>
-                <div class="form-row adv">
                     <div class="form-group">
-                        <label>Průtok <small class="muted" id="realFlowHint"></small></label>
+                        <label>Průtok</label>
                         <div class="input-unit"><input type="number" step="0.1" name="flow_rate_lpm" form="calForm"><span class="unit">L/min</span></div>
+                        <p class="field-hint"><span id="realFlowHint">z řadu</span></p>
                     </div>
                     <div class="form-group">
                         <label>Nejdelší dopouštění</label>
                         <div class="input-unit"><input type="number" step="1" name="max_refill_minutes" form="calForm"><span class="unit">min</span></div>
+                        <p class="field-hint">pojistka času</p>
                     </div>
-                </div>
+                    </div>
                 </div>
                 <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit</button></div>
             </section>
@@ -820,6 +836,29 @@
                     </div>
                     <div class="form-actions"><button type="submit" class="btn btn-primary">Uložit</button></div>
                 </form>
+                <div class="sub" id="delSection">
+                    <h3>Smazat naměřená data</h3>
+                    <p class="muted small">Smaže měření, hodinové souhrny a historii dopouštění ve zvoleném rozsahu.
+                        Nádrže, nastavení a záznamy (Logování) zůstanou.</p>
+                    <div class="field-grid g2">
+                        <div class="form-group">
+                            <label for="delNode">Nádrž</label>
+                            <select id="delNode" class="unified-select"><option value="">Všechny nádrže</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="delRange">Rozsah</label>
+                            <select id="delRange" class="unified-select">
+                                <option value="range">Od – do</option>
+                                <option value="all">Vše</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field-grid g2" id="delDates">
+                        <div class="form-group"><label for="delFrom">Od</label><input type="date" id="delFrom" class="unified-input"></div>
+                        <div class="form-group"><label for="delTo">Do (včetně)</label><input type="date" id="delTo" class="unified-input"></div>
+                    </div>
+                    <div class="form-actions"><button type="button" class="btn btn-danger" id="delBtn">Smazat naměřená data…</button></div>
+                </div>
             </section>
 
             <section class="card col-card scope-general" id="genSys" data-nav="Systém">
@@ -996,6 +1035,28 @@
                 </div>
         </div>
         <div class="modal-foot" id="updFoot"></div>
+    </div>
+</div>
+
+<!-- Obecný potvrzovací dialog (vypnutí, restart, mazání dat) -->
+<div class="modal-backdrop hidden" id="cfmModal">
+    <div class="modal modal-sm" role="alertdialog" aria-modal="true" aria-labelledby="cfmTitle" aria-describedby="cfmBody" tabindex="-1">
+        <div class="modal-head">
+            <h2 id="cfmTitle">Potvrzení</h2>
+            <button class="icon-btn" id="cfmClose" type="button" aria-label="Zavřít">
+                <svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+        </div>
+        <div class="modal-body" id="cfmBody"></div>
+        <div class="modal-foot" id="cfmFoot"></div>
+    </div>
+</div>
+
+<!-- Čekání na zařízení po restartu -->
+<div class="wait-overlay hidden" id="waitOverlay" role="alertdialog" aria-modal="true" aria-labelledby="waitTitle">
+    <div class="wait-box">
+        <span class="spinner"></span>
+        <h2 id="waitTitle">Čekám na zařízení…</h2>
+        <p class="muted" id="waitText"></p>
     </div>
 </div>
 

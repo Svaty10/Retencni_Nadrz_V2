@@ -290,7 +290,7 @@ class TelegramBot:
             lines += ["dopustit [nádrž] [%] – spustit dopouštění", "stop [nádrž] – zastavit / zrušit dopouštění (i automatické)",
                       "obnovit [nádrž] – znovu zapnout zrušenou automatiku",
                       "", "<b>Servis</b>", "diag – diagnostika", "log – poslední záznamy",
-                      "restart – restart aplikace", "reboot – restart zařízení",
+                      "restart – restart aplikace", "reboot – restart zařízení", "vypnout – vypnutí zařízení",
                       "aktualizovat – zkontrolovat a případně nainstalovat aktualizace",
                       "servis zap / 24h / vyp – vzdálený servisní přístup"]
         lines += ["", "odhlasit – odpojit tento chat"]
@@ -433,6 +433,15 @@ class TelegramBot:
             else:
                 await self.send(cid, "Restartovat celé zařízení?", [[{"text": "Ano, restartovat zařízení",
                                                                       "callback_data": "reboot:ano"}]])
+        elif cmd in ("vypnout", "poweroff"):
+            if args and args[0] == "ano":
+                self.core.audit("SERVICE_POWEROFF", "Vypnutí zařízení z Telegramu", who)
+                self.core.control_request("poweroff")
+                await self.send(cid, "⏻ Zařízení se vypíná. Znovu ho zapnete odpojením a připojením napájení.")
+            else:
+                await self.send(cid, "Vypnout celé zařízení? Hub přestane měřit a dopouštět; znovu ho zapnete "
+                                     "odpojením a připojením napájení.",
+                                [[{"text": "Ano, vypnout zařízení", "callback_data": "vypnout:ano"}]])
         elif cmd in ("aktualizovat", "update"):
             await self._update(cid, who, args)
         elif cmd == "servis":

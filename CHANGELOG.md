@@ -3,6 +3,18 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.5.0] - 2026-10-24
+
+### Přidáno
+- **Restart a vypnutí** v menu účtu (admin): restart aplikace, restart zařízení, vypnutí zařízení – s potvrzením a automatickým připojením po restartu. Telegram: `vypnout`.
+- **Mazání naměřených dat** (*Obecné → Záloha a data*): pro jednu nebo všechny nádrže, v rozsahu od–do nebo vše; nejdřív ukáže, kolik záznamů smaže. Záznamy (audit log) zůstávají.
+- **Grafy si pamatují zvolený rozsah** (24 h / 7 dní / … / vlastní) – i po obnovení stránky a přepnutí nádrže.
+
+### Opraveno
+- **Nastavení na mobilu skákalo nahoru a nešlo do něj psát** (při posouvání a otevření klávesnice se karty přeskládávaly).
+- Po přepnutí záložek v Nastavení se karty občas nahrnuly do jednoho sloupce a bylo nutné stránku obnovit.
+- Karta *Dopouštění* u nádrže: ventil a zóna v jedné rovině, zóna s tlačítkem pro načtení názvů, pravidla v pravidelné mřížce, ruční nastavení zvlášť.
+
 ## [1.4.0] - 2026-10-23
 
 ### Změněno
