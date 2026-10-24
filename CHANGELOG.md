@@ -3,6 +3,23 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.7.0] - 2026-10-24
+
+### Přidáno
+- **HTTPS bez domény a internetu:** hub si vytvoří vlastní certifikační autoritu (10 let, smí podepsat jen názvy `.local` a místní IP adresy) a certifikát webu pro `retencka.local`, `retencka-xxxx.local` a své IP; ten se obnovuje sám (30 dní před koncem a při změně IP/názvu). Web běží na `https://` (port 443), port 80 přesměruje – kromě prvního nastavení, stažení certifikátu a hotspotu. Certifikát hubu jde stáhnout v *Nastavení → Obecné → Zabezpečené připojení (HTTPS)* i na přihlašovací stránce, s návodem pro Android, iOS, Windows a macOS. Po instalaci certifikátu funguje v prohlížeči i zjištění polohy. API pro Home Assistant zůstává http na :8081.
+- **Obnova továrního nastavení** (*Obecné → Systém*, admin): nabídne zálohu, chce napsat OBNOVIT a heslo; smaže data, nastavení, uživatele, klíče čidel a zálohy, ponechá identitu zařízení, heslo ze štítku a certifikát HTTPS.
+- Správa uživatelů: změna role a nové heslo jinému uživateli v dialogu s potvrzením; vždy zůstane aspoň jeden administrátor.
+- Krátké popisy bloků na přehledu, nápověda „?“ u méně zřejmých polí nastavení (funguje i dotykem).
+- Ukazatel hladiny se stupnicí a jemnou animací hladiny (vypnutá při „omezit pohyb“).
+- Akce v dialozích se zadáním a potvrzením: ruční dopouštění, zastavení, přidání čidla, mazání uživatele.
+- Varování „málo místa na kartě“ na přehledu a v kartě Systém; v kartě Záloha a data vysvětlení automatických denních záloh (posledních 7 na kartě) a proč stahovat zálohu mimo zařízení.
+- Logování: výsledky aktualizací (dostupná verze, nainstalováno, vráceno, chyba – stejná chyba jen jednou), vydání certifikátu HTTPS, obnova továrního nastavení, zrušené párování.
+
+### Změněno
+- Záložka nastavení a volba v liště se jmenují **Všechna čidla** (dříve Všechny nádrže).
+- Logování je kompaktnější (jeden řádek na záznam).
+- Session cookie se po přechodu na HTTPS přesune do `__Host-` cookie s příznakem Secure; HSTS se s vlastní CA neposílá (web zůstane dostupný i ze zařízení bez certifikátu).
+
 ## [1.6.0] - 2026-10-24
 
 ### Přidáno

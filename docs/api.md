@@ -17,20 +17,26 @@ Hlavička `Authorization: Bearer <token>` (token: *Nastavení → Obecné → Ho
 
 `GET /health` (bez tokenu) → `{"status":"ok","version":"1.0.0","radio":"gdo0"}`; 503 = rádio nepracuje.
 
-## Webová aplikace – port 80
+## Webová aplikace – port 443 (HTTPS) a 80
+Po vytvoření prvního účtu web běží na HTTPS s certifikátem vlastní certifikační autority hubu a `http://` (port 80)
+přesměruje na `https://` (302, u POST 307). Bez přesměrování zůstává: první nastavení (dokud neexistuje
+uživatel), `GET /ca.crt` a `GET /ca.pem` (certifikát CA hubu, bez přihlášení, 404 dokud nevznikl) a požadavky
+z localhostu (proxy, cloudflared). HSTS se s vlastní CA neposílá.
+
 Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `export.csv`). Vše pod `/api/` vyžaduje přihlášení (cookie session). Změnové požadavky navíc hlavičku
 `X-CSRF-Token` (hodnota z `GET /api/me`). Role `user` = čtení, `admin` = vše.
 
 | Metoda | Cesta | Role | Popis |
 |---|---|---|---|
-| GET | `/api/auth/mode` | – | `{"first_login": true}` dokud neexistuje uživatel |
+| GET | `/api/auth/mode` | – | `{"first_login": true}` dokud neexistuje uživatel; `ca`: certifikát hubu ke stažení existuje |
 | POST | `/api/auth/login` | – | `username`, `password` → cookie; při prvním přihlášení `admin` + heslo ze štítku → `{"setup": true}` |
 | POST | `/api/auth/setup` | (setup) | vlastní admin účet (`username`, `password`), jen s lístkem z prvního přihlášení |
 | POST | `/api/auth/logout` | user | |
-| GET | `/api/me` | user | jméno, role, CSRF token, verze |
+| GET | `/api/me` | user | jméno, role, CSRF token, verze; po HTTPS přesune session z cookie `rt_sid` do `__Host-rt_sid` (Secure) |
+| GET | `/api/tls` | user | HTTPS: `available` (CA existuje), `active` (HTTPS běží), `secure` (tento požadavek je po HTTPS), `https_url`, `fingerprint` (SHA-256 certifikátu CA), `ca_not_after`, `cert_not_after`, `issued_at` (epoch s), `names`, `ips` |
 | POST | `/api/me/password` | user | `old_password`, `new_password` |
 | POST | `/api/me/theme` | user | `theme`: `auto` / `light` / `dark` – motiv uložený u účtu (`GET /api/me` ho vrací v `theme`) |
-| GET | `/api/state` | user | kompletní živý stav pro dashboard |
+| GET | `/api/state` | user | kompletní živý stav pro dashboard; `disk_low` (na kartě méně než 300 MB), `disk_free_mb` |
 | GET | `/api/history?range=24h\|7d\|30d\|365d` nebo `?from=&to=` (epoch s) | user | zprůměrovaná řada (max ~600 bodů): hladina, objem, klima, baterie, `rssi`, `refill`, `bands` (úseky dopouštění a přítoku z deště: `kind`, `start`, `end`, `litres`), `boots` (vložení baterie / restart čidla) |
 | GET | `/api/flows?…` | user | denní spotřeba / přítok ze srážek / dopouštění |
 | GET | `/api/weather` | user | předpověď 7 dní (Open-Meteo, cache 1 h) |
@@ -49,10 +55,11 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | POST | `/api/refill/resume?node=` | admin | znovu zapne automatiku pozastavenou zrušením |
 | GET | `/api/nodes` · POST `/api/nodes/remove` · `/api/nodes/unpair/cancel` | admin | čidla, slyšená čidla (`archived` = hub má uschovaný klíč, `key_match` = čidlo s ním vysílá → „Spárovat znovu“), stav párování, statistiky rádia; `remove` = odpárování s potvrzením čidlem, `{"force": true}` = odebrat hned (klíč do archivu) |
 | GET | `/api/pairing` · POST `/api/pairing/start` · `/api/pairing/cancel` | admin | párování (`node_id` hex, `name`); stav: `requests` (+ `archived`), `targets`, `pending` (klíč odeslán, čeká na první data ≤ 24 h); `cancel` zruší i čekající klíč |
-| GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů |
-| GET | `/api/audit?page=&category=&who=&q=&from=&to=` | admin | log: `category` = login/users/settings/refill/sensors/system/problems, `who` = people/system/jméno, `q` = text |
+| GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů: `role` `{username, role: user\|admin}`, `password` `{username, password}` (nové heslo jinému uživateli, odhlásí ho), `delete` `{username}`; nejde na vlastním účtu a nikdy nezůstane žádný administrátor („Musí zůstat alespoň jeden administrátor.“) |
+| GET | `/api/audit?page=&category=&who=&q=&from=&to=` | admin | log: `category` = login/users/settings/refill/sensors/system/problems, `who` = people/system/jméno, `q` = text. Výsledky root updateru zapisuje aplikace podle `update-status.json`: `UPDATE_AVAILABLE`, `UPDATE_INSTALLED`, `UPDATE_ROLLED_BACK`, `UPDATE_ERROR` (stejná chyba jen jednou), `UPDATE_UP_TO_DATE` (jen po ruční kontrole); dále `TLS_CERT_ISSUED`, `FACTORY_RESET`, `NODE_PAIRING_CANCELLED` |
 | GET | `/api/ha` · POST `/api/ha/rotate` | admin | token pro HA |
-| GET | `/api/system` | admin | stav systému; `update` = poslední `update-status.json`, `update_prefs` |
+| GET | `/api/system` | admin | stav systému; `disk_free_mb`, `disk_low`, `low_disk_mb` (300), `update` = poslední `update-status.json`, `update_prefs` |
+| POST | `/api/system/factory-reset` | admin | `{"password": "heslo přihlášeného admina", "confirm": "OBNOVIT"}` – obnova továrního nastavení: zapíše `data/factory-reset` a restartuje aplikaci, ta před otevřením databáze smaže obsah datového adresáře kromě `setup_code` (heslo ze štítku) a `tls/`; 403 při špatném hesle |
 | POST | `/api/system/restart` · `/api/system/reboot` · `/api/system/poweroff` | admin | restart aplikace (SIGTERM, systemd ji spustí znovu) / restart zařízení / vypnutí zařízení (root helper `retencka-control`: `control-reboot`, `control-poweroff`); zapíše se do auditu |
 | POST | `/api/data/delete` | admin | `{"node": "XXXX" \| null (všechny), "from": epoch \| null, "to": epoch \| null, "dry_run": true}` – smaže měření, hodinové souhrny a dokončená dopouštění v rozsahu `[from, to)`; `dry_run` (výchozí) jen spočítá: `{"counts": {measurements, hourly, refills}, "total"}`. Audit se nemaže, smazání se do něj zapíše |
 | POST | `/api/update/check` | admin | požádá root updater o kontrolu (nikdy neinstaluje); 409 když právě probíhá instalace. Stará cesta `POST /api/system/update` dělá totéž |
@@ -61,7 +68,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | POST | `/api/update/prefs` | admin | `{"auto": true\|false, "channel": "stable"\|"beta"}` – automatická instalace v noci a kanál (přísná validace) |
 | GET | `/api/servis` · POST `/api/servis` | admin | vzdálený servis: stav (`installed`, `connected`, `ip`, `mode`, `until`, `install` = průběh instalace z webu `{state: queued/installing/done/error, message}`); POST `{"mode": "off"\|"24h"\|"on"}` |
 | POST | `/api/servis/install` | admin | `{"setup_key": "…", "management_url": "https://…" (nepovinné)}` – instalace NetBird přes root helper; klíč se nevrací ani nezapisuje do záznamů |
-| GET | `/api/backup` · `/api/backup/download` | admin | seznam nočních záloh; stažení aktuální zálohy (`.db.gz`) |
+| GET | `/api/backup` · `/api/backup/download` | admin | `{"backups": [{name, size_mb, ts}], "keep": 7, "dir": "…/backup"}` – automatické denní zálohy na kartě; stažení aktuální zálohy (`.db.gz`) |
 | POST | `/api/backup/import[?full=1]` | admin | tělo = soubor zálohy (`.db.gz` / `.db`, max 1 GB, streamuje se); sloučení bez duplicit, `full=1` i nastavení a uživatelé; vrací počty |
 
 `/api/state` navíc obsahuje `outlook` (`days_left`, `use_per_day_l`, `rain_7d_mm`, `inflow_7d_l`, `pct_after_rain`)

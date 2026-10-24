@@ -10,6 +10,7 @@ import hmac
 import io
 import ipaddress
 import json
+import re
 import logging
 import mimetypes
 import os
@@ -24,8 +25,8 @@ from typing import Any, Callable, Optional
 
 from . import httpserver as web
 
-from . import __version__, auth, model, updates
-from .core import Core
+from . import __version__, auth, model, reset, updates
+from .core import BACKUP_KEEP, LOW_DISK_MB, Core
 from .settings import INHERITABLE, SettingsError
 
 log = logging.getLogger("retencka.web")
@@ -65,11 +66,13 @@ AUDIT_CATEGORIES = {
     "settings": ["SETTINGS_CHANGED", "CALIBRATION"],
     "refill":   ["MANUAL_REFILL", "AUTO_REFILL", "REFILL_ERROR", "REFILL_FAULT", "RAIN_WAIT"],
     "sensors":  ["NODE_PAIRED", "NODE_PAIRING", "NODE_REMOVED", "NODE_UNPAIR_REQUESTED", "NODE_UNPAIRED",
-                 "NODE_UNPAIR_CANCELLED", "NODE_BOOT"],
-    "system":   ["TIME_FIXED", "UPDATE_REQUESTED", "BACKUP_DOWNLOADED", "BACKUP_IMPORTED", "DISK_LOW",
+                 "NODE_UNPAIR_CANCELLED", "NODE_BOOT", "NODE_PAIRING_CANCELLED"],
+    "system":   ["TIME_FIXED", "UPDATE_REQUESTED", "UPDATE_AVAILABLE", "UPDATE_INSTALLED", "UPDATE_ROLLED_BACK",
+                 "UPDATE_ERROR", "UPDATE_UP_TO_DATE", "BACKUP_DOWNLOADED", "BACKUP_IMPORTED", "DISK_LOW",
                  "TELEGRAM_LINKED", "TELEGRAM_UNLINKED", "SERVICE_ACCESS", "SERVICE_RESTART", "SERVICE_REBOOT", "SERVICE_POWEROFF",
-                 "DATA_DELETED"],
-    "problems": ["LOGIN_FAILED", "SETUP_FAILED", "REFILL_ERROR", "REFILL_FAULT", "DISK_LOW"],
+                 "DATA_DELETED", "FACTORY_RESET", "TLS_CERT_ISSUED"],
+    "problems": ["LOGIN_FAILED", "SETUP_FAILED", "REFILL_ERROR", "REFILL_FAULT", "DISK_LOW",
+                 "UPDATE_ROLLED_BACK", "UPDATE_ERROR"],
 }
 
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
@@ -184,10 +187,12 @@ def _apply_security_headers(request: web.Request, h) -> None:
     h["X-Content-Type-Options"] = "nosniff"
     h["X-Frame-Options"] = "DENY"
     h["Referrer-Policy"] = "no-referrer"
-    h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
     h["Cross-Origin-Opener-Policy"] = "same-origin"
     h["Cross-Origin-Resource-Policy"] = "same-origin"
-    if is_https(request):
+    # HSTS only behind a proxy with a public certificate: with the hub's own CA a device
+    # that has not installed it yet (or an expired certificate) must stay reachable
+    if not request.secure and is_https(request):
         h["Strict-Transport-Security"] = "max-age=31536000"
     if request.path.startswith("/api/"):
         h["Cache-Control"] = "no-store"
@@ -206,6 +211,36 @@ async def security_headers(request: web.Request, handler):
         resp = jerr("Interní chyba serveru", 500)
     _apply_security_headers(request, resp.headers)
     return resp
+
+
+# http:// stays usable for these (CA download before it is trusted)
+PLAIN_HTTP_PATHS = ("/ca.crt", "/ca.pem")
+_HOST_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}\.)*[A-Za-z0-9-]{1,63}|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?$")
+
+
+def https_location(request: web.Request, port: int, path: Optional[str] = None) -> Optional[str]:
+    """https:// URL of the same page (or path), None for a Host header we do not trust."""
+    host = request.host.strip()
+    if not _HOST_RE.match(host):
+        return None
+    name = host.rsplit(":", 1)[0]
+    return f"https://{name}{'' if port == 443 else f':{port}'}{request.target if path is None else path}"
+
+
+def make_https_redirect(no_users: Callable[[], bool]):
+    """Port 80 -> HTTPS once the HTTPS listener runs. Not redirected: the first setup
+    (no account yet – the label password flow works over plain http), the CA download
+    and local proxies (cloudflared on loopback)."""
+    async def redirect(request: web.Request, handler):
+        port = request.app.get("https_port")
+        if (port and not request.secure and not _is_loopback(request.remote)
+                and request.path not in PLAIN_HTTP_PATHS and not no_users()):
+            loc = https_location(request, port)
+            if loc:
+                return web.Response(status=302 if request.method in ("GET", "HEAD") else 307,
+                                    headers={"Location": loc})
+        return await handler(request)
+    return redirect
 
 
 def make_auth_middleware(core: Core):
@@ -250,16 +285,17 @@ def need(role: Optional[str] = None):
 
 # ================================================================= web app
 def build_web_app(core: Core, static_dir: str) -> web.Application:
-    app = web.Application(client_max_size=MAX_BODY,
-                          middlewares=[security_headers, make_auth_middleware(core)])
-    app.prepare_hooks.append(lambda req, resp: _apply_security_headers(req, resp.headers))
-    st = Static(static_dir)
     db, settings = core.db, core.settings
-    login_locks = app["login_locks"] = auth.LoginLocks()
-    setup_lock = asyncio.Lock()
 
     def no_users() -> bool:
         return db.scalar("SELECT COUNT(*) FROM users", default=0) == 0
+
+    app = web.Application(client_max_size=MAX_BODY,
+                          middlewares=[security_headers, make_https_redirect(no_users), make_auth_middleware(core)])
+    app.prepare_hooks.append(lambda req, resp: _apply_security_headers(req, resp.headers))
+    st = Static(static_dir)
+    login_locks = app["login_locks"] = auth.LoginLocks()
+    setup_lock = asyncio.Lock()
 
     def set_session_cookie(request: web.Request, resp: web.Response, token: str) -> None:
         secure = is_https(request)
@@ -315,9 +351,34 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     async def favicon(request):
         return st.response(request, "favicon.svg", "public, max-age=604800")
 
+    # --------------------------------------------------------------- HTTPS
+    def tls_files():
+        return core.https.files if core.https is not None else None
+
+    async def ca_cert(request):
+        """The hub's CA certificate (public) for a one-time install on phones / PCs."""
+        files = tls_files()
+        pem = files.ca_pem() if files else None
+        if pem is None:
+            raise web.HTTPNotFound(text="Certifikát hubu zatím nevznikl – zkuste to za pár minut.")
+        host = (core.hostnames() or ["retencka"])[-1].split(".")[0]
+        ext = "pem" if request.path.endswith(".pem") else "crt"
+        return web.Response(body=pem, content_type="application/x-x509-ca-cert", headers={
+            "Content-Disposition": f'attachment; filename="{host}-ca.{ext}"', "Cache-Control": "no-cache"})
+
+    @need()
+    async def api_tls(request):
+        files = tls_files()
+        info = files.info() if files else {"available": False, "fingerprint": None, "ca_not_after": None,
+                                           "cert_not_after": None, "names": [], "ips": [], "issued_at": None}
+        port = request.app.get("https_port")
+        return jresp({**info, "active": bool(port), "secure": bool(request.secure),
+                      "https_url": https_location(request, port, "/") if port else None})
+
     # ------------------------------------------------------------------ auth
     async def api_auth_mode(request):
-        return jresp({"first_login": no_users()})
+        files = core.https.files if core.https is not None else None
+        return jresp({"first_login": no_users(), "ca": bool(files and files.ca_pem())})
 
     async def api_login(request):
         ip = request["ip"]
@@ -418,6 +479,14 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
 
     @need()
     async def api_me(request):
+        resp = await _api_me(request)
+        if is_https(request) and request.cookies.get(COOKIE_PLAIN) == request["token"]:
+            # logged in over http before HTTPS ran: move the session to the Secure cookie
+            set_session_cookie(request, resp, request["token"])
+            resp.del_cookie(COOKIE_PLAIN, path="/")
+        return resp
+
+    async def _api_me(request):
         s = request["session"]
         theme = db.scalar("SELECT theme FROM users WHERE username=?", (s["username"],), "auto") or "auto"
         return jresp({"username": s["username"], "role": s["role"], "csrf": s["csrf"],
@@ -491,7 +560,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need()
     async def api_state(request):
         nid = core.resolve_node(request.query.get("node"))
-        return jresp(await core.state(nid))
+        state = await core.state(nid)
+        if isinstance(state, dict):
+            free = core.disk_free_mb()
+            state = {**state, "disk_low": core.disk_low(), "disk_free_mb": None if free is None else round(free)}
+        return jresp(state)
 
     @need()
     async def api_history(request):
@@ -627,7 +700,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need("admin")
     async def api_pairing_cancel(request):
         data = await read_json(request)
-        core.cancel_pairing(parse_node_id(data.get("node_id")))
+        nid = parse_node_id(data.get("node_id"))
+        waiting = nid in core.pair_targets
+        core.cancel_pairing(nid)
+        if waiting:
+            core.audit("NODE_PAIRING_CANCELLED", f"Zrušeno čekání na párování čidla {nid:04X}", *user_of(request))
         return jresp({"ok": True, "pairing": core.pairing_status()})
 
     @need("admin")
@@ -866,6 +943,10 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                                      content_type="application/json")
         return row
 
+    def last_admin(row) -> bool:
+        return row["role"] == "admin" and db.scalar(
+            "SELECT COUNT(*) FROM users WHERE role='admin'", default=0) <= 1
+
     @need("admin")
     async def api_users_role(request):
         data = await read_json(request)
@@ -873,6 +954,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         role = data.get("role")
         if role not in ("user", "admin"):
             return jerr("Neplatná role.")
+        if role != "admin" and last_admin(row):
+            return jerr("Musí zůstat alespoň jeden administrátor.")
         db.execute("UPDATE users SET role=? WHERE username=?", (role, row["username"]))
         core.audit("USER_ROLE_CHANGED", f"{row['username']!r}: {row['role']} → {role}",
                    request["session"]["username"], request["ip"])
@@ -882,7 +965,10 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     async def api_users_delete(request):
         data = await read_json(request)
         row = _target_user(data, request["session"]["username"])
+        if last_admin(row):
+            return jerr("Musí zůstat alespoň jeden administrátor.")
         db.execute("DELETE FROM users WHERE username=?", (row["username"],))
+        core.sessions.delete_user_sessions(row["username"])
         core.audit("USER_DELETED", f"Smazán uživatel {row['username']!r}",
                    request["session"]["username"], request["ip"])
         return jresp({"ok": True})
@@ -983,13 +1069,16 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             info["db_mb"] = round(os.path.getsize(db.path) / 1048576, 1)
         except OSError:
             pass
+        info["disk_low"] = core.disk_low()
+        info["low_disk_mb"] = LOW_DISK_MB
         info["update"] = updates.read_status(core.data_dir)
         info["update_prefs"] = updates.read_prefs(core.data_dir)
         return jresp(info)
 
     @need("admin")
     async def api_backup_list(request):
-        return jresp({"backups": await asyncio.to_thread(core.backups)})
+        return jresp({"backups": await asyncio.to_thread(core.backups), "keep": BACKUP_KEEP,
+                      "dir": core.backup_dir()})
 
     @need("admin")
     async def api_backup_download(request):
@@ -1143,7 +1232,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need("admin")
     async def api_system_restart(request):
         core.audit("SERVICE_RESTART", "Restart aplikace z webu", *user_of(request))
-        asyncio.get_running_loop().call_later(1.0, restart_app)     # let the response go out first
+        asyncio.get_running_loop().call_later(1.0, request.app.get("restart", restart_app))     # let the response go out first
         return jresp({"ok": True, "message": "Aplikace se restartuje, za chvíli bude zpět."})
 
     @need("admin")
@@ -1163,6 +1252,30 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jerr("Žádost se nepodařilo uložit.", 500)
         core.audit("SERVICE_POWEROFF", "Vypnutí zařízení z webu", *user_of(request))
         return jresp({"ok": True, "message": "Zařízení se vypíná. Znovu ho zapnete odpojením a připojením napájení."})
+
+    @need("admin")
+    async def api_factory_reset(request):
+        """Wipe everything back to the first-install state (see reset.py); needs the
+        administrator's password and the typed word OBNOVIT."""
+        data = await read_json(request)
+        if data.get("confirm") != "OBNOVIT":
+            return jerr("Pro potvrzení napište OBNOVIT.")
+        me = request["session"]["username"]
+        row = db.one("SELECT pw_hash FROM users WHERE username=?", (me,))
+        ok = row is not None and await asyncio.get_running_loop().run_in_executor(
+            None, auth.verify_password, str(data.get("password", "")), row["pw_hash"])
+        if not ok:
+            core.audit("FACTORY_RESET", "Obnova továrního nastavení odmítnuta – nesprávné heslo", *user_of(request))
+            return jerr("Nesprávné heslo.", 403)
+        try:
+            reset.request(core.data_dir, me)
+        except OSError:
+            return jerr("Žádost se nepodařilo uložit.", 500)
+        core.audit("FACTORY_RESET", "Zahájena obnova továrního nastavení – data, nastavení, uživatelé "
+                                    "a klíče čidel budou smazány", *user_of(request))
+        asyncio.get_running_loop().call_later(1.5, request.app.get("restart", restart_app))
+        return jresp({"ok": True, "message": "Obnovuji tovární nastavení, zařízení bude za chvíli zpět. "
+                                             "Pak se přihlaste jménem admin a heslem ze štítku."})
 
     # ------------------------------------------------------- deleting data
     @need("admin")
@@ -1198,7 +1311,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         fmt = lambda t: datetime.fromtimestamp(t).strftime("%d.%m.%Y %H:%M")   # noqa: E731
         rng = ("vše" if t_from is None and t_to is None else
                f"{fmt(t_from) if t_from is not None else 'začátek'} – {fmt(t_to) if t_to is not None else 'teď'}")
-        who = f"nádrž {(core.nodes.get(nid) or {}).get('name', '')} ({nid:04X})" if nid is not None else "všechny nádrže"
+        who = f"nádrž {(core.nodes.get(nid) or {}).get('name', '')} ({nid:04X})" if nid is not None else "všechna čidla"
         core.audit("DATA_DELETED", f"Smazána naměřená data: {who}, {rng}; {counts['measurements']} měření, "
                                    f"{counts['hourly']} hodinových souhrnů, {counts['refills']} dopouštění",
                    *user_of(request))
@@ -1245,6 +1358,9 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_get("/login", page_login)
     r.add_get("/setup", page_setup)
     r.add_get("/favicon.ico", favicon)
+    r.add_get("/ca.crt", ca_cert)
+    r.add_get("/ca.pem", ca_cert)
+    r.add_get("/api/tls", api_tls)
     r.add_get("/static/{path:.+}", static_file)
     r.add_get("/api/auth/mode", api_auth_mode)
     r.add_post("/api/auth/login", api_login)
@@ -1291,6 +1407,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/system/restart", api_system_restart)
     r.add_post("/api/system/reboot", api_system_reboot)
     r.add_post("/api/system/poweroff", api_system_poweroff)
+    r.add_post("/api/system/factory-reset", api_factory_reset)
     r.add_post("/api/data/delete", api_data_delete)
     r.add_post("/api/update/check", api_update_check)
     r.add_post("/api/update/install", api_update_install)

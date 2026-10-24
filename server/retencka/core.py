@@ -21,7 +21,7 @@ from collections import OrderedDict
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from . import crypto, model
+from . import crypto, model, updates
 from .auth import IpLimiter, Sessions
 from .db import Database
 from .external import Geocoder, Http, Hydrawise, HydrawiseAccount, Weather
@@ -64,10 +64,12 @@ NETBIRD_URL_RE = re.compile(r"^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z
 # audit actions forwarded to Telegram: action -> admins only
 NOTIFY_ACTIONS = {"AUTO_REFILL": False, "MANUAL_REFILL": False, "REFILL_ERROR": False, "REFILL_FAULT": False,
                   "RAIN_WAIT": False, "NODE_BOOT": True, "NODE_PAIRED": True, "NODE_UNPAIRED": True,
-                  "DISK_LOW": True, "SERVICE_ACCESS": True}
+                  "DISK_LOW": True, "SERVICE_ACCESS": True, "UPDATE_AVAILABLE": True, "UPDATE_INSTALLED": True,
+                  "UPDATE_ROLLED_BACK": True, "UPDATE_ERROR": True, "FACTORY_RESET": True}
 NOTIFY_ICONS = {"AUTO_REFILL": "💧", "MANUAL_REFILL": "💧", "REFILL_ERROR": "⚠️", "REFILL_FAULT": "⚠️",
                 "RAIN_WAIT": "🌧", "NODE_BOOT": "🔄", "NODE_PAIRED": "📡", "NODE_UNPAIRED": "📡",
-                "DISK_LOW": "💾", "SERVICE_ACCESS": "🛠"}
+                "DISK_LOW": "💾", "SERVICE_ACCESS": "🛠", "UPDATE_AVAILABLE": "⬆️", "UPDATE_INSTALLED": "✅",
+                "UPDATE_ROLLED_BACK": "⚠️", "UPDATE_ERROR": "⚠️", "FACTORY_RESET": "🧹"}
 
 
 def time_synced() -> bool:
@@ -92,7 +94,9 @@ class Core:
         self.geocoder = Geocoder(self.http)
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.radio = None                     # set by __main__
+        self.https = None                     # tls.HttpsManager, set by __main__
         self.started = time.time()
+        self._disk: tuple[float, Optional[float]] = (0.0, None)
 
         self.last: dict[int, dict] = {}       # node_id -> last stored measurement
         self.filters: dict[int, model.LevelFilter] = {}
@@ -198,6 +202,10 @@ class Core:
             self.unpair_tick()
         except Exception:
             log.exception("unpair tick failed")
+        try:
+            self.update_tick()
+        except Exception:
+            log.exception("update audit tick failed")
         for n in self.nodes.all():
             nid, name = n["node_id"], n["name"]
             if n.get("_unpair") or nid not in self.last:
@@ -228,9 +236,73 @@ class Core:
     def control_request(self, kind: str) -> None:
         """Ask the root helper (retencka-control / retencka-update path units)."""
         name = {"update": "update-request", "reboot": "control-reboot", "poweroff": "control-poweroff",
-                "servis": "control-servis"}[kind]
+                "servis": "control-servis", "tls": "control-tls"}[kind]
         with open(os.path.join(self.data_dir, name), "w") as f:
             f.write(str(int(time.time())))
+
+    # ------------------------------------- events seen in files of the root helpers
+    def _seen_path(self) -> str:
+        return os.path.join(self.data_dir, "audit-seen.json")
+
+    def seen(self, kind: str) -> Optional[str]:
+        try:
+            with open(self._seen_path(), encoding="utf-8") as f:
+                v = json.load(f).get(kind)
+        except (OSError, ValueError, AttributeError):
+            return None
+        return v if isinstance(v, str) else None
+
+    def mark_seen(self, kind: str, key: str) -> None:
+        try:
+            with open(self._seen_path(), encoding="utf-8") as f:
+                d = json.load(f)
+            if not isinstance(d, dict):
+                d = {}
+        except (OSError, ValueError):
+            d = {}
+        d[kind] = key
+        tmp = self._seen_path() + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(d, f)
+            os.replace(tmp, self._seen_path())
+        except OSError:
+            log.exception("audit-seen.json not written")
+
+    def update_tick(self) -> None:
+        """Audit results of the root updater (available / installed / rolled back / error)."""
+        ev = updates.audit_event(updates.read_status(self.data_dir), self.seen("update"))
+        if ev is None:
+            return
+        key, action, detail = ev
+        self.mark_seen("update", key)
+        self.audit(action, detail)
+
+    def tls_issued(self, status: dict) -> None:
+        """Audit a newly issued HTTPS certificate (status.json from retencka_tls)."""
+        key = str(status.get("issued_at") or "")
+        if not key or key == self.seen("tls"):
+            return
+        self.mark_seen("tls", key)
+        until = status.get("cert_not_after")
+        until_txt = datetime.fromtimestamp(until).strftime("%d.%m.%Y") if isinstance(until, (int, float)) else "?"
+        covers = ", ".join(list(status.get("names") or []) + list(status.get("ips") or []))
+        self.audit("TLS_CERT_ISSUED", f"Certifikát HTTPS vydán ({status.get('reason') or 'obnova'}), "
+                                      f"platí do {until_txt}: {covers}")
+
+    def disk_free_mb(self) -> Optional[float]:
+        """Free space on the data card, cached for a minute (polled by /api/state)."""
+        now = time.monotonic()
+        if now - self._disk[0] > 60 or self._disk[1] is None:
+            try:
+                self._disk = (now, self._free_mb())
+            except OSError:
+                self._disk = (now, None)
+        return self._disk[1]
+
+    def disk_low(self) -> bool:
+        free = self.disk_free_mb()
+        return free is not None and free < LOW_DISK_MB
 
     def servis_state(self) -> dict:
         """Remote service access (NetBird): wanted mode + status reported by the helper."""

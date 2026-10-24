@@ -101,63 +101,160 @@
         select.value = String(value);
     }
 
-    // ------------------------------------------- potvrzovací dialog (obecný)
-    // confirmDialog({title, body: [text | Node], confirm, danger}) → Promise<boolean>
-    function confirmDialog(o) {
+    // ------------------------------- dialogy: potvrzení i formuláře (#cfmModal)
+    // openDialog({title, body: [text | Node], fields, validate, submit, confirm, cancel, danger})
+    //   fields:   [{name, label, type, value, hint, unit, placeholder, autocomplete, min, max, step, maxLength, trim}]
+    //             (type 'checkbox' = zaškrtávátko → true / false)
+    //   validate: (hodnoty) → text chyby | {field, message} | null     (při chybě dialog zůstane otevřený)
+    //   submit:   async (hodnoty) → text chyby (dialog zůstane otevřený) | nic (zavře se)
+    // → Promise<false | true | {hodnoty polí}>. Enter potvrdí, Esc / klik mimo dialog zruší.
+    function openDialog(o) {
         return new Promise((resolve) => {
             const m = $('cfmModal'), body = $('cfmBody'), foot = $('cfmFoot');
             const opener = document.activeElement;
+            const fields = o.fields || [];
+            const inputs = {};
+            let busy = false;
             $('cfmTitle').textContent = o.title;
             body.textContent = '';
             (Array.isArray(o.body) ? o.body : [o.body]).forEach((x) => {
                 if (x == null) return;
                 if (typeof x === 'string') { const p = document.createElement('p'); p.textContent = x; body.appendChild(p); } else body.appendChild(x);
             });
+            fields.forEach((f, i) => {
+                const id = 'cfmF' + i;
+                const g = document.createElement('div');
+                g.className = 'form-group dlg-field';
+                let input;
+                if (f.type === 'checkbox') {
+                    const lab = document.createElement('label');
+                    lab.className = 'check';
+                    input = document.createElement('input');
+                    input.type = 'checkbox'; input.id = id; input.checked = !!f.value;
+                    lab.append(input, document.createTextNode(' ' + f.label));
+                    g.appendChild(lab);
+                } else {
+                    const lab = document.createElement('label');
+                    lab.htmlFor = id; lab.textContent = f.label;
+                    input = document.createElement('input');
+                    input.type = f.type || 'text'; input.id = id;
+                    input.value = f.value == null ? '' : f.value;
+                    if (f.placeholder) input.placeholder = f.placeholder;
+                    input.autocomplete = f.autocomplete || 'off';
+                    ['min', 'max', 'step'].forEach((k) => { if (f[k] != null) input[k] = f[k]; });
+                    if (f.maxLength) input.maxLength = f.maxLength;
+                    if (f.type === 'number') input.inputMode = 'decimal';
+                    g.appendChild(lab);
+                    if (f.unit) {
+                        const w = document.createElement('div');
+                        w.className = 'input-unit';
+                        const u = document.createElement('span');
+                        u.className = 'unit'; u.textContent = f.unit;
+                        w.append(input, u);
+                        g.appendChild(w);
+                    } else {
+                        input.classList.add('unified-input');
+                        g.appendChild(input);
+                    }
+                }
+                if (f.hint) { const h = document.createElement('p'); h.className = 'field-hint'; h.textContent = f.hint; g.appendChild(h); }
+                inputs[f.name] = input;
+                body.appendChild(g);
+            });
+            const err = document.createElement('p');
+            err.className = 'dlg-error hidden';
+            err.id = 'cfmErr';
+            err.setAttribute('role', 'alert');
+            body.appendChild(err);
+            const hideErr = () => {
+                err.classList.add('hidden');
+                Object.values(inputs).forEach((i) => { i.removeAttribute('aria-invalid'); i.removeAttribute('aria-describedby'); });
+            };
+            const fail = (e) => {
+                const msg = typeof e === 'string' ? e : e.message;
+                const inp = (typeof e === 'object' && inputs[e.field]) || Object.values(inputs)[0];
+                err.textContent = msg;
+                err.classList.remove('hidden');
+                if (inp) { inp.setAttribute('aria-invalid', 'true'); inp.setAttribute('aria-describedby', 'cfmErr'); inp.focus(); }
+            };
+            body.addEventListener('input', hideErr);
+            body.addEventListener('change', hideErr);
+            const collect = () => {
+                const v = {};
+                fields.forEach((f) => { const i = inputs[f.name]; v[f.name] = f.type === 'checkbox' ? i.checked : (f.trim ? i.value.trim() : i.value); });
+                return v;
+            };
             foot.textContent = '';
             const done = (v) => {
                 m.classList.add('hidden');
                 document.body.classList.remove('modal-open');
                 m.removeEventListener('keydown', onKey, true);
+                body.removeEventListener('input', hideErr);
+                body.removeEventListener('change', hideErr);
                 if (opener && opener.focus && opener.offsetParent !== null) opener.focus();
                 resolve(v);
             };
             const cancel = document.createElement('button');
             cancel.type = 'button'; cancel.className = 'btn btn-outline'; cancel.textContent = o.cancel || 'Zrušit';
-            cancel.addEventListener('click', () => done(false));
+            cancel.addEventListener('click', () => { if (!busy) done(false); });
             const ok = document.createElement('button');
             ok.type = 'button'; ok.className = 'btn ' + (o.danger ? 'btn-danger-solid' : 'btn-primary'); ok.textContent = o.confirm || 'Potvrdit';
-            ok.addEventListener('click', () => done(true));
+            const submit = async () => {
+                if (busy) return;
+                hideErr();
+                const values = collect();
+                if (o.validate) { const e = o.validate(values); if (e) { fail(e); return; } }
+                if (o.submit) {
+                    busy = true; ok.disabled = true; cancel.disabled = true;
+                    let e = null;
+                    try { e = await o.submit(values); } catch (x) { e = x.message || 'Chyba spojení se serverem'; }
+                    busy = false; ok.disabled = false; cancel.disabled = false;
+                    if (e) { fail(e); return; }
+                }
+                done(fields.length ? values : true);
+            };
+            ok.addEventListener('click', submit);
             foot.append(cancel, ok);
             const onKey = (e) => {
-                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); return; }
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) done(false); return; }
+                if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') { e.preventDefault(); submit(); return; }
                 if (e.key !== 'Tab') return;
                 const f = Array.from(m.querySelectorAll('button, [href], input, select')).filter((x) => !x.disabled && x.offsetParent !== null);
+                if (!f.length) return;
                 const i = f.indexOf(document.activeElement);
                 if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
             };
             m.addEventListener('keydown', onKey, true);
-            $('cfmClose').onclick = () => done(false);
-            m.onmousedown = (e) => { if (e.target === m) done(false); };
+            $('cfmClose').onclick = () => { if (!busy) done(false); };
+            m.onmousedown = (e) => { if (e.target === m && !busy) done(false); };
             m.classList.remove('hidden');
             document.body.classList.add('modal-open');
-            cancel.focus();                              // the safe choice has focus
+            const first = fields.length ? inputs[fields[0].name] : cancel;     // formulář: první pole; potvrzení: bezpečná volba
+            first.focus();
+            if (first.select && first.type !== 'checkbox') first.select();
         });
     }
+    const confirmDialog = (o) => openDialog(o).then((r) => !!r);
+    const formDialog = (o) => openDialog(o).then((r) => (r && typeof r === 'object' ? r : null));
 
     // Po restartu: překryv „Čekám na zařízení…“ a samo se znovu připojí
     function waitForHub(kind) {
         const ov = $('waitOverlay'), text = $('waitText'), title = $('waitTitle');
         ov.classList.remove('hidden');
         document.body.classList.add('modal-open');
-        title.textContent = kind === 'poweroff' ? 'Zařízení se vypíná…' : 'Čekám na zařízení…';
+        title.textContent = kind === 'poweroff' ? 'Zařízení se vypíná…' : kind === 'factory' ? 'Obnovuji tovární nastavení…' : 'Čekám na zařízení…';
         text.textContent = kind === 'restart' ? 'Aplikace se restartuje, obvykle do 30 sekund.'
+            : kind === 'factory' ? 'Data se mažou a aplikace se restartuje, obvykle do 30 sekund. Pak se zobrazí první přihlášení.'
             : kind === 'reboot' ? 'Zařízení se restartuje, obvykle do 2 minut. Stránka se pak načte sama.'
                 : 'Až zhasne, můžete odpojit napájení. Znovu ho zapnete odpojením a připojením napájení.';
         const start = Date.now();
         let wentDown = false;
         const tick = async () => {
             let ok = false;
-            try { ok = (await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' })).ok; } catch (e) { ok = false; }
+            try {
+                const r = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
+                ok = r.ok || (kind === 'factory' && r.status === 401);      // po obnově už nikdo není přihlášený
+            } catch (e) { ok = false; }
             const t = Date.now() - start;
             if (!ok) wentDown = true;
             if (kind === 'poweroff') {
@@ -165,7 +262,10 @@
                 if (t < 120000) setTimeout(tick, 3000);
                 return;
             }
-            if (ok && (wentDown || t > (kind === 'restart' ? 25000 : 120000))) { window.location.reload(); return; }
+            if (ok && (wentDown || t > (kind === 'reboot' ? 120000 : 25000))) {
+                if (kind === 'factory') window.location.replace('/login'); else window.location.reload();
+                return;
+            }
             if (t > 300000) {
                 title.textContent = 'Zařízení se zatím neozvalo';
                 text.textContent = 'Zkontrolujte napájení a síť a zkuste stránku načíst znovu.';
@@ -203,6 +303,111 @@
                 'Znovu ho zapnete odpojením a připojením napájení.'],
             confirm: 'Vypnout zařízení', danger: true
         }));
+    }
+
+    // ------------------------------------------------------ nápověda (?)
+    // <button class="help-tip" data-help="klíč"> – text z HELP (nebo přímo text v atributu).
+    // Jeden popover pro všechny: hover / focus (klávesnice) ho ukáže, klepnutí / klik připne,
+    // druhé klepnutí, Esc nebo klik mimo ho zavře. Zůstává uvnitř okna (i na telefonu).
+    const HELP = {
+        notify: 'Když hladina klesne pod tuto hodnotu, pošle bot zprávu do propojených chatů v Telegramu. 0 = upozornění je vypnuté.',
+        battery_type: 'Podle typu baterií se z napětí počítá zbývající kapacita a výdrž. Lithiové drží napětí téměř až do vybití, alkalické klesá postupně.',
+        capacity: 'Skutečná kapacita sady baterií v mAh (z jejich datasheetu). Ovlivní jen odhad výdrže, ne měření hladiny.',
+        runoff: 'Jaká část dešťové vody ze střechy doteče do nádrže (0,05–1). Zbytek se ztratí odpařením, vsakem nebo přetečením okapu. Obvykle 0,7–0,9.',
+        accuracy: 'Chyba tlakové sondy v % jejího rozsahu (najdete v datasheetu). Z ní hub počítá, jak velké kolísání hladiny je jen šum, a ten vyhlazuje.',
+        range: 'Největší výška vodního sloupce, kterou sonda změří (např. 200 cm). Spolu s přesností určuje vyhlazení šumu.',
+        rainwait: 'Když hladina klesne pod spouštěcí hladinu, ale podle předpovědi brzy zaprší, hub s dopouštěním z řadu počká a nespotřebuje zbytečně vodu z vodovodu. Čekání omezují pole níže.',
+        threshold: 'Spouštěcí hladina: když hladina klesne pod ni, automatika začne dopouštět (pokud se zrovna nečeká na déšť).',
+        target: 'Cílová hladina automatického dopouštění; ventil se zavře, jakmile ji nádrž dosáhne. Nikdy ale nepřekročí „Nejvýš dopustit na“.',
+        rainbelow: 'Je-li hladina pod spouštěcí hladinou o víc než tolik procentních bodů, hub už na déšť nečeká a dopouští hned.',
+        raindrop: 'Při čekání na déšť hladina dál klesá. Jakmile klesne o tolik procentních bodů od začátku čekání, hub čekání ukončí a začne dopouštět.',
+        rainhours: 'Na kolik hodin dopředu hub hledá v předpovědi déšť. Zároveň je to nejdelší možné čekání na déšť.',
+        maxpct: 'Horní pojistka: automatické ani ruční dopouštění nezvedne hladinu nad tuto hodnotu. Zbytek nádrže zůstane volný pro déšť.',
+        flow: 'Kolik litrů za minutu protéká ventilem. Slouží k odhadu času a množství; hub si průtok upřesňuje z naměřených dopouštění (hodnota pod polem).',
+        maxminutes: 'Pojistka času: dopouštění se po této době vždy ukončí, i když hladina cíle nedosáhla (např. při poruše čidla nebo úniku vody).',
+        offset: 'Svislá vzdálenost od dna nádrže ke snímači sondy. Hladina ode dna = voda nad sondou + tato výška, proto ji zadejte podle skutečné montáže.',
+        deadband: 'Nejmenší změna hladiny, kterou hub bere jako skutečnou. Menší výkyvy (vlnění, šum sondy) ignoruje. Počítá se z přesnosti a rozsahu sondy.',
+        provider: 'Zařízení, kterým se nádrž dopouští z vodovodu. Bez ventilu hub jen měří a ovládání dopouštění je skryté.',
+        zone: 'Zóna ovladače Hydrawise, která otevírá ventil této nádrže. Názvy zón načtete tlačítkem vedle seznamu. Jednu zónu může ovládat jen jedna nádrž.',
+        relay: 'Interní číslo zóny v Hydrawise. Vyplňujte ručně jen tehdy, když se názvy zón nepodaří načíst.',
+        autorefill: 'Hub sám otevře ventil, když hladina klesne pod spouštěcí hladinu. Vypnuté = dopouští se jen ručně tlačítkem „Dopustit“.',
+        retention: 'Podrobná měření (každých pár minut) se po této době mažou, hodinové průměry zůstávají navždy. 0 = nemazat. Při nedostatku místa na kartě se mažou dříve.',
+        calpoints: 'Dvojice „napětí sondy – výška vody nad sondou“. Z nich hub počítá přímku, která mění napětí na hladinu. Body se doplňují tlačítkem Uložit výše; ručně je upravujte jen výjimečně.',
+        recompute: 'Přepočítá už uložená měření podle aktuální kalibrace a vyhlazení. Hodí se po opravě kalibrace nebo výšky sondy; nová měření se počítají vždy správně.',
+        battrim: 'Změřte napětí baterií voltmetrem a zadejte ho. Hub z toho spočítá korekci (násobek), aby údaj souhlasil. Korekce 1,0000 = bez úpravy.',
+        servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.'
+    };
+    let closeHelp = () => {};
+    function bindHelpTips() {
+        const pop = document.createElement('div');
+        pop.id = 'helpPop';
+        pop.className = 'help-pop hidden';
+        pop.setAttribute('role', 'tooltip');
+        document.body.appendChild(pop);
+        let cur = null, pinned = false;
+        const labelOf = (b) => {
+            const host = b.closest('label, h3, .toggle-text');
+            if (!host) return '';
+            const c = host.cloneNode(true);
+            c.querySelectorAll('.help-tip, .inh, .muted, svg').forEach((x) => x.remove());
+            return c.textContent.replace(/\s+/g, ' ').trim();
+        };
+        function place() {
+            if (!cur) return;
+            if (cur.offsetParent === null) { hide(false); return; }       // pole zmizelo (jiná záložka)
+            const r = cur.getBoundingClientRect();
+            const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+            const w = Math.min(300, vw - 24);
+            pop.style.width = w + 'px';
+            const h = pop.offsetHeight;
+            const left = Math.max(12, Math.min(r.left + r.width / 2 - w / 2, vw - w - 12));
+            let top = r.bottom + 8, above = false;
+            if (top + h > vh - 8 && r.top - 8 - h > 8) { top = r.top - 8 - h; above = true; }
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.style.setProperty('--arrow-x', Math.round(r.left + r.width / 2 - left) + 'px');
+            pop.classList.toggle('above', above);
+        }
+        function show(b, pin) {
+            if (cur && cur !== b) { cur.setAttribute('aria-expanded', 'false'); cur.removeAttribute('aria-describedby'); }
+            cur = b; pinned = pin;
+            pop.textContent = HELP[b.dataset.help] || b.dataset.help;
+            pop.classList.remove('hidden');
+            b.setAttribute('aria-expanded', 'true');
+            b.setAttribute('aria-describedby', 'helpPop');
+            place();
+        }
+        function hide(refocus) {
+            if (!cur) return;
+            const b = cur;
+            pop.classList.add('hidden');
+            b.setAttribute('aria-expanded', 'false');
+            b.removeAttribute('aria-describedby');
+            cur = null; pinned = false;
+            if (refocus) b.focus();
+        }
+        closeHelp = () => hide(false);
+        document.querySelectorAll('button.help-tip[data-help]').forEach((b) => {
+            if (b.dataset.bound) return;
+            b.dataset.bound = '1';
+            const name = labelOf(b);
+            b.textContent = '?';
+            b.setAttribute('aria-label', name ? 'Nápověda: ' + name : 'Nápověda');
+            b.setAttribute('aria-expanded', 'false');
+            b.setAttribute('aria-controls', 'helpPop');
+            b.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if (cur === b && pinned) hide(false); else show(b, true);
+            });
+            b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && !pinned) show(b, false); });
+            b.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && cur === b && !pinned) hide(false); });
+            b.addEventListener('focus', () => { if (!pinned && b.matches(':focus-visible')) show(b, false); });
+            b.addEventListener('blur', () => { if (cur === b && !pinned) hide(false); });
+        });
+        document.addEventListener('click', (e) => { if (cur && !pop.contains(e.target) && !cur.contains(e.target)) hide(false); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && cur) { e.preventDefault(); hide(true); } });
+        window.addEventListener('scroll', place, true);
+        window.addEventListener('resize', place);
     }
 
     // ------------------------------------------------------- účet (menu)
@@ -263,6 +468,7 @@
 
     // --------------------------------------------------------------- tabs
     function showTab(id, btn) {
+        closeHelp();
         document.querySelectorAll('.tab-content').forEach((el) => el.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach((el) => { el.classList.remove('active'); el.removeAttribute('aria-current'); });
         $(id).classList.add('active');
@@ -847,6 +1053,7 @@
 
         const pct = s.water_level_percent;
         $('waterLevel').style.height = (pct == null ? 0 : Math.max(0, Math.min(100, pct))) + '%';
+        $('gauge').classList.toggle('empty', pct == null || pct < 0.5);        // prázdná nádrž: bez vlnky
         $('txtPercent').textContent = num(pct, 1, ' %');
         $('txtLiters').textContent = num(s.volume_liters, 0, ' L');
         $('txtLevelCm').textContent = s.water_level_cm == null ? '–' : `${num(s.water_level_cm, 1, ' cm')} z ${num(s.max_depth_cm, 0, ' cm')}`;
@@ -924,6 +1131,26 @@
         $('txtRefillTime').textContent = left > 0 ? `Zbývá nejvýše ${fmtDuration(left)}` : 'Dokončuji…';
     }
 
+    // Málo místa na kartě (jen admin): odkaz vede na kartu Záloha a data v nastavení
+    function renderDiskBanner(s) {
+        const b = $('diskBanner');
+        const low = ME.role === 'admin' && !!s.disk_low;
+        b.classList.toggle('hidden', !low);
+        if (!low) { b.dataset.mb = ''; return; }
+        if (b.dataset.mb === String(s.disk_free_mb)) return;
+        b.dataset.mb = String(s.disk_free_mb);
+        b.innerHTML = ico('alert') + `<div><strong>Na kartě zbývá jen ${esc(num(s.disk_free_mb, 0, ' MB'))}.</strong>
+            Starší podrobná měření se proto postupně mažou, hodinové průměry zůstávají.
+            Stáhněte si zálohu nebo smažte stará data v <a href="#" class="disk-jump">Záloha a data</a>.</div>`;
+    }
+    function jumpToBackup() {
+        showTab('nastaveni', document.querySelector('.tab-btn[data-tab="nastaveni"]'));
+        setSettingsScope('general');
+        const go = () => { const c = $('genData'); if (c && c.offsetParent !== null) c.scrollIntoView({ block: 'start' }); };
+        setTimeout(go, 350);
+        setTimeout(go, 1000);
+    }
+
     function setViewAll(on) {
         VIEW_ALL = !!on;
         try { sessionStorage.setItem('viewAll', VIEW_ALL ? '1' : ''); } catch (e) { /* ignore */ }
@@ -976,7 +1203,7 @@
             all.setAttribute('role', 'tab');
             all.setAttribute('aria-selected', allActive ? 'true' : 'false');
             const online = nodes.filter((n) => n.status === 'online').length;
-            all.innerHTML = `Všechny nádrže <span class="pct">${online}/${nodes.length} online</span>`;
+            all.innerHTML = `Všechna čidla <span class="pct">${online}/${nodes.length} online</span>`;
             all.addEventListener('click', () => {
                 if (!$('dashboard').classList.contains('active')) showTab('dashboard', document.querySelector('.tab-btn[data-tab="dashboard"]'));
                 setViewAll(true); renderNodeBar(nodes); renderOverview(nodes); loadAllCharts();
@@ -1003,7 +1230,7 @@
         });
     }
 
-    // Nastavení: záložky „Obecné“ (celý systém) | „Všechny nádrže“ (čidla + výchozí hodnoty)
+    // Nastavení: záložky „Obecné“ (celý systém) | „Všechna čidla“ (čidla + výchozí hodnoty)
     // | jedna záložka na nádrž. Poslední volba se pamatuje v rámci relace.
     let SET_SCOPE = 'general';
     try { SET_SCOPE = sessionStorage.getItem('setScope') || 'general'; } catch (e) { /* ignore */ }
@@ -1041,7 +1268,7 @@
             bar.appendChild(b);
         };
         tab('Obecné', SET_SCOPE === 'general', () => setSettingsScope('general'), 'all');
-        tab('Všechny nádrže', SET_SCOPE === 'all', () => setSettingsScope('all'), 'all');
+        tab('Všechna čidla', SET_SCOPE === 'all', () => setSettingsScope('all'), 'all');
         nodes.forEach((n) => {
             tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, SET_SCOPE === 'tank' && n.id === CURRENT_NODE, () => {
                 if (n.id !== CURRENT_NODE) selectNode(n.id);
@@ -1059,6 +1286,7 @@
                 s = await api('GET', '/api/state?node=' + CURRENT_NODE);
             }
             lastState = s;
+            renderDiskBanner(s);
             renderNodeBar(s.nodes || []);
             if (VIEW_ALL) renderOverview(s.nodes || []);
             if (!s.node) {
@@ -1086,15 +1314,47 @@
 
     // --------------------------------------------------------------- refill
     function bindRefill() {
-        $('refillStartBtn').addEventListener('click', () => {
-            const v = parseFloat($('manualPctInput').value);
-            if (!v || v <= 0) { toast('Zadejte platné procento cílové hladiny.', true); return; }
-            action(() => api('POST', '/api/refill/start?node=' + CURRENT_NODE, { target_pct: v }), (r) => r.message).then(pollState);
+        $('refillStartBtn').addEventListener('click', async () => {
+            const rf = (lastState && lastState.refill) || {};
+            const maxPct = rf.max_pct || 100;
+            const cur = lastState ? lastState.water_level_percent : null;
+            const typed = parseFloat(String($('manualPctInput').value).replace(',', '.'));
+            let msg = null;
+            const r = await formDialog({
+                title: 'Dopustit z řadu',
+                body: [`Současná hladina: ${num(cur, 1, ' %')}${lastState && lastState.volume_liters != null ? ' (' + num(lastState.volume_liters, 0, ' L') + ')' : ''}.`,
+                    'Ventil se otevře a po dosažení cílové hladiny se zase zavře.'],
+                fields: [{ name: 'target', type: 'number', label: 'Cílová hladina', unit: '%', min: 1, max: maxPct, step: 1,
+                    value: typed > 0 ? typed : Math.round(maxPct), hint: `Nejvýš lze dopustit na ${num(maxPct, 0, ' %')}.` }],
+                validate: (v) => {
+                    const t = parseFloat(String(v.target).replace(',', '.'));
+                    if (!(t > 0)) return { field: 'target', message: 'Zadejte platné procento cílové hladiny.' };
+                    if (t > maxPct) return { field: 'target', message: `Nejvýš lze dopustit na ${num(maxPct, 0, ' %')}.` };
+                    if (cur != null && t <= cur) return { field: 'target', message: `Cílová hladina musí být vyšší než současná (${num(cur, 1, ' %')}).` };
+                    return null;
+                },
+                submit: async (v) => {
+                    try { msg = (await api('POST', '/api/refill/start?node=' + CURRENT_NODE, { target_pct: parseFloat(String(v.target).replace(',', '.')) })).message; } catch (e) { return e.message; }
+                    return null;
+                },
+                confirm: 'Dopustit'
+            });
+            if (!r) return;
+            $('manualPctInput').value = r.target;
+            toast(msg || 'Dopouštění spuštěno.');
+            pollState();
         });
         $('refillResumeBtn').addEventListener('click', () => {
             action(() => api('POST', '/api/refill/resume?node=' + CURRENT_NODE, {}), (r) => r.message).then(pollState);
         });
-        $('refillStopBtn').addEventListener('click', () => {
+        $('refillStopBtn').addEventListener('click', async () => {
+            const ok = await confirmDialog({
+                title: 'Zastavit dopouštění?',
+                body: ['Ventil se zavře a probíhající dopouštění (nebo čekání) skončí.',
+                    'Automatické dopouštění se může na čas pozastavit; vrátíte ho tlačítkem „Obnovit automatiku“.'],
+                confirm: 'Zastavit dopouštění', danger: true
+            });
+            if (!ok) return;
             action(() => api('POST', '/api/refill/stop?node=' + CURRENT_NODE, {}), (r) => r.message).then(pollState);
         });
     }
@@ -1243,7 +1503,7 @@
             for (let i = 0; i < n; i++) { const c = document.createElement('div'); c.className = 'set-col'; host.appendChild(c); cols.push(c); }
         }
         host.dataset.cols = String(n);
-        // Root cause of the "all cards in the left column" bug: after the Všechny nádrže tab
+        // Root cause of the "all cards in the left column" bug: after the Všechna čidla tab
         // (no column cards) the host stayed hidden, so the cards of the next tab were
         // measured inside a display:none box (all heights 0 → everything into column 0).
         host.classList.toggle('hidden', !mine.length);
@@ -1452,13 +1712,13 @@
         zoneHint(relay, false);
     }
 
-    // Smazat naměřená data: nádrž / všechny, rozsah od–do nebo vše; nejdřív počet (dry run)
+    // Smazat naměřená data: čidlo / všechna, rozsah od–do nebo vše; nejdřív počet (dry run)
     function fillDeleteNodes() {
         const sel = $('delNode');
         const cur = sel.value;
         sel.textContent = '';
         const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
-        add('', 'Všechny nádrže');
+        add('', 'Všechna čidla');
         ((nodesCache && nodesCache.nodes) || []).forEach((n) => add(n.id, `${n.name} (${n.id})`));
         sel.value = Array.from(sel.options).some((o) => o.value === cur) ? cur : '';
     }
@@ -1480,13 +1740,13 @@
             }
             let dry;
             try { dry = await api('POST', '/api/data/delete', body); } catch (e) { toast(e.message, true); return; }
-            const who = node ? $('delNode').selectedOptions[0].textContent : 'všechny nádrže';
+            const who = node ? $('delNode').selectedOptions[0].textContent : 'všechna čidla';
             if (!dry.total) { toast(`Ve zvoleném rozsahu (${who}, ${rangeTxt}) nejsou žádná data.`); return; }
             const link = document.createElement('p');
             link.innerHTML = 'Doporučujeme nejdřív <a href="/api/backup/download" download>stáhnout zálohu</a>.';
             const ok = await confirmDialog({
                 title: 'Smazat naměřená data?',
-                body: [`Nádrž: ${who} · rozsah: ${rangeTxt}`,
+                body: [`Čidlo: ${who} · rozsah: ${rangeTxt}`,
                     `Smaže se ${num(dry.counts.measurements, 0)} měření, ${num(dry.counts.hourly, 0)} hodinových souhrnů a ${num(dry.counts.refills, 0)} záznamů o dopouštění (historie dopouštění v rozsahu jde také pryč).`,
                     'Nádrže, nastavení a záznamy v Logování zůstanou. Smazání nejde vrátit.', link],
                 confirm: `Smazat ${num(dry.total, 0)} záznamů`, danger: true
@@ -1502,12 +1762,49 @@
         const body = $('backupBody');
         body.textContent = '';
         const list = (d && d.backups) || [];
+        if (d && d.keep) $('bkKeep').textContent = String(d.keep);
+        if (d && d.dir) $('bkDir').textContent = d.dir;
         if (!list.length) body.innerHTML = '<tr><td colspan="2" class="muted">Zatím žádná – první vznikne do 24 h od spuštění.</td></tr>';
         list.forEach((b) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `<td>${fmtDateTime(b.ts * 1000)}</td><td>${num(b.size_mb, 1, ' MB')}</td>`;
             body.appendChild(tr);
         });
+    }
+
+    // HTTPS: stav z /api/tls (když endpoint chybí, karta jen zůstane s odkazem ke stažení)
+    const TLS_LEAD = $('tlsLead').textContent;
+    function fmtDate(sec) {
+        if (!sec) return '–';
+        const d = new Date(sec * 1000);
+        return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`;
+    }
+    function renderTls(t) {
+        const pill = $('tlsStatus'), info = $('tlsInfo'), go = $('tlsGo');
+        info.textContent = '';
+        if (!t) {
+            pill.className = 'status-pill';
+            pill.textContent = 'Stav HTTPS se nepodařilo zjistit';
+            info.classList.add('hidden');
+            go.classList.add('hidden');
+            return;
+        }
+        pill.className = 'status-pill ' + (t.active ? 'online' : t.available ? 'stale' : '');
+        pill.textContent = t.secure ? 'Používáte zabezpečené připojení' : t.active ? 'HTTPS běží'
+            : t.available ? 'Certifikát je připravený, HTTPS se zatím nespustilo' : 'Certifikát hubu se zatím nevytvořil';
+        $('tlsActions').classList.toggle('hidden', !t.available);
+        $('tlsLead').textContent = t.available ? TLS_LEAD : 'Certifikační autorita hubu se vytvoří při spuštění HTTPS; pak zde bude certifikát ke stažení.';
+        const show = !!t.active && !!t.https_url && /^https:\/\//i.test(t.https_url) && location.protocol === 'http:';
+        go.classList.toggle('hidden', !show);
+        if (show) go.href = t.https_url;
+        const rows = [];
+        if (t.fingerprint) rows.push(['Otisk SHA-256 (pro ověření)', `<code class="fp">${esc(t.fingerprint)}</code>`]);
+        if (t.ca_not_after) rows.push(['Certifikát hubu platí do', esc(fmtDate(t.ca_not_after))]);
+        if (t.cert_not_after) rows.push(['Certifikát serveru platí do', esc(fmtDate(t.cert_not_after))]);
+        const names = [].concat(t.names || [], t.ips || []);
+        if (names.length) rows.push(['Pokrývá adresy', names.map(esc).join(', ')]);
+        info.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+        info.classList.toggle('hidden', !rows.length);
     }
 
     function tgStatusText(t) {
@@ -1533,8 +1830,8 @@
                 <td>${c.notify ? 'zapnuta' : 'vypnuta'}</td><td>${fmtDateTime(c.created * 1000)}</td><td class="td-actions"></td>`;
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'btn btn-danger btn-sm'; b.textContent = 'Odpojit';
-            b.addEventListener('click', () => {
-                if (!confirm('Odpojit tento Telegram chat?')) return;
+            b.addEventListener('click', async () => {
+                if (!await confirmDialog({ title: 'Odpojit Telegram chat?', body: [`Chat „${c.title || c.chat_id}“ přestane dostávat upozornění z hubu.`], confirm: 'Odpojit', danger: true })) return;
                 action(() => api('POST', '/api/telegram/unlink', { chat_id: c.chat_id }), 'Odpojeno.').then(loadSettingsTab);
             });
             tr.querySelector('.td-actions').appendChild(b);
@@ -1599,7 +1896,7 @@
     }
 
     async function loadSettingsTab() {
-        const [st, nodes, ha, sys, bk, tg, sv, defs] = await Promise.all([
+        const [st, nodes, ha, sys, bk, tg, sv, defs, tls] = await Promise.all([
             api('GET', '/api/settings').catch(() => null),
             api('GET', '/api/nodes').catch(() => null),
             api('GET', '/api/ha').catch(() => null),
@@ -1607,10 +1904,12 @@
             api('GET', '/api/backup').catch(() => null),
             api('GET', '/api/telegram').catch(() => null),
             api('GET', '/api/servis').catch(() => null),
-            api('GET', '/api/node-defaults').catch(() => null)
+            api('GET', '/api/node-defaults').catch(() => null),
+            api('GET', '/api/tls').catch(() => null)
         ]);
         if (defs) fillForm($('defForm'), defs.defaults);
         renderBackups(bk);
+        renderTls(tls);
         if (tg) renderTelegramAdmin(tg);
         renderServis(sv);
         if (nodes) { nodesCache = nodes; renderNodes(nodes); applyNode(currentNodeCfg()); fillDeleteNodes(); }
@@ -1638,7 +1937,12 @@
             e.target.value = '';
             if (!f) return;
             const full = $('importFull').checked;
-            if (!confirm(`Nahrát zálohu „${f.name}“?` + (full ? '\nPřepíše se i nastavení a doplní uživatelé.' : ''))) return;
+            if (!await confirmDialog({
+                title: 'Nahrát zálohu?',
+                body: [`Soubor: ${f.name}`, 'Naměřená data se přidají k současným, duplicity se přeskočí.',
+                    full ? 'Přepíše se i nastavení a doplní se uživatelé ze zálohy.' : null],
+                confirm: 'Nahrát zálohu', danger: full
+            })) return;
             toast('Nahrávám zálohu…');
             try {
                 const r = await fetch('/api/backup/import' + (full ? '?full=1' : ''), {
@@ -1735,17 +2039,17 @@
             if (t) renderTelegramAdmin(t);
             layoutSettingsColumns();
         });
-        $('nbInstallBtn').addEventListener('click', () => {
+        $('nbInstallBtn').addEventListener('click', async () => {
             const key = $('nbKey').value.trim(), url = $('nbUrl').value.trim();
             if (!/^[A-Za-z0-9-]{20,80}$/.test(key)) { toast('Setup key má 20–80 znaků (písmena, číslice, pomlčky).', true); return; }
             if (url && !/^https:\/\//i.test(url)) { toast('Adresa serveru musí začínat https://', true); return; }
-            if (!confirm('Nainstalovat vzdálený servis (NetBird)? Servisní přístup bude povolen na 24 hodin.')) return;
+            if (!await confirmDialog({ title: 'Nainstalovat vzdálený servis?', body: ['Nainstaluje se NetBird a servisní přístup se povolí na 24 hodin.', 'Zákazník ho může kdykoli vypnout.'], confirm: 'Nainstalovat' })) return;
             action(() => api('POST', '/api/servis/install', { setup_key: key, management_url: url }), 'Instalace spuštěna.')
                 .then((r) => { if (r) { $('nbKey').value = ''; api('GET', '/api/servis').then(renderServis).catch(() => {}); } });
         });
-        $('servisSave').addEventListener('click', () => {
+        $('servisSave').addEventListener('click', async () => {
             const mode = $('servisMode').value;
-            if (mode !== 'off' && !confirm('Povolit vzdálený servisní přístup k tomuto zařízení?')) return;
+            if (mode !== 'off' && !await confirmDialog({ title: 'Povolit vzdálený servis?', body: [mode === '24h' ? 'Servisní technik se bude moci 24 hodin připojit k tomuto zařízení.' : 'Servisní technik se bude moci trvale připojit k tomuto zařízení, dokud přístup nevypnete.'], confirm: 'Povolit' })) return;
             action(() => api('POST', '/api/servis', { mode }), 'Uloženo.').then((r) => { if (r) renderServis(r); });
         });
         $('calAddBtn').addEventListener('click', () => {
@@ -1755,8 +2059,8 @@
                 if (r) { $('calActualCm').value = ''; loadSettingsTab(); pollState(); }
             });
         });
-        $('recomputeBtn').addEventListener('click', () => {
-            if (!confirm('Přepočítat celou historii tohoto čidla podle aktuální kalibrace a vyhlazení?')) return;
+        $('recomputeBtn').addEventListener('click', async () => {
+            if (!await confirmDialog({ title: 'Přepočítat historii?', body: ['Celá historie tohoto čidla se přepočítá podle aktuální kalibrace a vyhlazení. Může to chvíli trvat.'], confirm: 'Přepočítat' })) return;
             action(() => api('POST', '/api/calibration/recompute?' + nq(), {}), (r) => `Přepočteno ${r.updated} záznamů.`)
                 .then(() => { histCache.clear(); flowsCache.clear(); pollState(); });
         });
@@ -1764,10 +2068,8 @@
             action(() => api('POST', '/api/calibration/battery?' + nq(), { actual_v: $('batActualV').value }), 'Baterie zkalibrována.')
                 .then((r) => { if (r) { $('batTrim').textContent = num(r.battery_trim, 4); $('batActualV').value = ''; pollState(); } });
         });
-        $('addNodeForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            startPairing($('newNodeId').value, $('newNodeName').value).then((ok) => { if (ok) e.target.reset(); });
-        });
+        $('addNodeBtn').addEventListener('click', () => pairDialog(null));
+        $('factoryBtn').addEventListener('click', factoryReset);
         $('haShow').addEventListener('click', () => {
             const t = $('haToken');
             t.type = t.type === 'password' ? 'text' : 'password';
@@ -1778,10 +2080,68 @@
             navigator.clipboard.writeText(txt).then(() => toast('YAML zkopírován (včetně tokenu).'),
                 () => toast('Kopírování selhalo – označte text ručně.', true));
         });
-        $('haRotate').addEventListener('click', () => {
-            if (!confirm('Vygenerovat nový token? Starý přestane v Home Assistantu fungovat.')) return;
+        $('haRotate').addEventListener('click', async () => {
+            if (!await confirmDialog({ title: 'Vygenerovat nový token?', body: ['Starý token přestane v Home Assistantu fungovat; v jeho konfiguraci ho bude nutné nahradit novým.'], confirm: 'Nový token', danger: true })) return;
             action(() => api('POST', '/api/ha/rotate', {}), 'Nový token vygenerován.').then(loadSettingsTab);
         });
+    }
+
+    // Přidání čidla / spárování nového čidla z nabídky: ID (ze štítku) + název → start párování
+    async function pairDialog(knownId) {
+        const fields = [];
+        if (!knownId) fields.push({ name: 'id', label: 'ID ze štítku', maxLength: 6, trim: true, placeholder: 'např. 3F2A', hint: 'Čtyři znaky 0–9 / A–F vytištěné na štítku čidla.' });
+        fields.push({ name: 'name', label: 'Název', maxLength: 40, trim: true, placeholder: 'např. Jímka' });
+        const r = await formDialog({
+            title: knownId ? `Spárovat čidlo ${knownId}` : 'Přidat čidlo',
+            body: [knownId ? `Ověřte, že ID ${knownId} souhlasí se štítkem čidla, a zadejte název.`
+                : 'Zadejte ID ze štítku čidla a jeho název. Hub pak čeká na první zprávu čidla – vložte do něj baterii.'],
+            fields,
+            validate: (v) => (!knownId && !/^(0x)?[0-9a-f]{1,4}$/i.test(v.id) ? { field: 'id', message: 'ID čidla jsou 4 znaky 0–9 / A–F (např. 3F2A).' } : null),
+            submit: async (v) => {
+                try { await api('POST', '/api/pairing/start', { node_id: knownId || v.id, name: v.name }); } catch (e) { return e.message; }
+                return null;
+            },
+            confirm: 'Čekat na čidlo'
+        });
+        if (r) { toast('Čekám na čidlo…'); await refreshNodes(); }
+    }
+
+    // Tovární nastavení: 1. co se smaže + záloha, 2. potvrzení slovem OBNOVIT a heslem
+    async function factoryReset() {
+        const para = (t, strong) => { const p = document.createElement('p'); if (strong) { const b = document.createElement('strong'); b.textContent = t; p.appendChild(b); } else p.textContent = t; return p; };
+        const list = (items) => { const u = document.createElement('ul'); u.className = 'dlg-list'; items.forEach((t) => { const li = document.createElement('li'); li.textContent = t; u.appendChild(li); }); return u; };
+        const dl = document.createElement('p');
+        const a = document.createElement('a');
+        a.className = 'btn btn-primary'; a.href = '/api/backup/download'; a.setAttribute('download', ''); a.textContent = 'Stáhnout zálohu';
+        dl.appendChild(a);
+        const s1 = await formDialog({
+            title: 'Obnovit tovární nastavení?',
+            body: [para('Hub se vrátí do stavu po první instalaci. Nejde to vzít zpět.'),
+                para('Smaže se:', true),
+                list(['všechna naměřená data a historie', 'nastavení (poloha, klíč Hydrawise, Home Assistant)', 'všichni uživatelé včetně vás',
+                    'klíče čidel – čidla bude nutné znovu spárovat', 'Telegram (token a propojené chaty)', 'zálohy uložené na kartě']),
+                para('Zůstane:', true),
+                list(['identita zařízení a heslo ze štítku', 'certifikát HTTPS']),
+                para('Zálohy na kartě se smažou také, proto si ji stáhněte teď:'), dl],
+            fields: [{ name: 'backup', type: 'checkbox', label: 'Zálohu mám / nepotřebuji' }],
+            validate: (v) => (v.backup ? null : { field: 'backup', message: 'Potvrďte, že zálohu máte nebo ji nepotřebujete.' }),
+            confirm: 'Pokračovat', danger: true
+        });
+        if (!s1) return;
+        const s2 = await formDialog({
+            title: 'Poslední krok',
+            body: ['Napište slovo OBNOVIT a zadejte své heslo. Hub se pak restartuje a všechno uvedené se smaže.'],
+            fields: [{ name: 'confirm', label: 'Potvrzení (napište OBNOVIT)', trim: true, placeholder: 'OBNOVIT' },
+                { name: 'password', type: 'password', label: 'Vaše heslo', autocomplete: 'current-password' }],
+            validate: (v) => (v.confirm !== 'OBNOVIT' ? { field: 'confirm', message: 'Napište přesně slovo OBNOVIT (velkými písmeny).' }
+                : !v.password ? { field: 'password', message: 'Zadejte své heslo.' } : null),
+            submit: async (v) => {
+                try { await api('POST', '/api/system/factory-reset', { password: v.password, confirm: v.confirm }); } catch (e) { return e.message; }
+                return null;
+            },
+            confirm: 'Obnovit tovární nastavení', danger: true
+        });
+        if (s2) waitForHub('factory');
     }
 
     async function startPairing(id, name, msg) {
@@ -1826,14 +2186,23 @@
             const done = () => { loadSettingsTab(); pollState(); };
             if (n.unpairing) {
                 btn('Zrušit', 'btn-outline', () => action(() => api('POST', '/api/nodes/unpair/cancel', { node_id: n.id }), 'Odpárování zrušeno.').then(done));
-                btn('Odebrat bez čidla', 'btn-danger', () => {
-                    if (!confirm(`Odebrat čidlo ${n.id} bez potvrzení?\nJen pro ztracené nebo zničené čidlo. Hub si jeho klíč uschová – když se čidlo najde, stačí u něj v „Čidla v dosahu“ kliknout „Spárovat znovu“ a vyjmout a vložit baterii.`)) return;
+                btn('Odebrat bez čidla', 'btn-danger', async () => {
+                    if (!await confirmDialog({
+                        title: `Odebrat čidlo ${n.id} bez potvrzení?`,
+                        body: ['Jen pro ztracené nebo zničené čidlo.',
+                            'Hub si jeho klíč uschová – když se čidlo najde, stačí u něj v „Čidla v dosahu“ kliknout „Spárovat znovu“ a vyjmout a vložit baterii.'],
+                        confirm: 'Odebrat čidlo', danger: true
+                    })) return;
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id, force: true }), 'Čidlo odebráno.').then(done);
                 });
             } else {
                 btn('Nastavit', 'btn-outline', () => { selectNode(n.id); setSettingsScope('tank'); applyNode(currentNodeCfg()); window.scrollTo({ top: 0, behavior: 'smooth' }); });
-                btn('Odpárovat', 'btn-danger', () => {
-                    if (!confirm(`Odpárovat čidlo ${n.name} (${n.id})?\nDokončí se po vyjmutí a vložení baterie do čidla. Naměřená data zůstanou.`)) return;
+                btn('Odpárovat', 'btn-danger', async () => {
+                    if (!await confirmDialog({
+                        title: `Odpárovat čidlo ${n.name} (${n.id})?`,
+                        body: ['Dokončí se po vyjmutí a vložení baterie do čidla. Naměřená data zůstanou.'],
+                        confirm: 'Odpárovat', danger: true
+                    })) return;
                     action(() => api('POST', '/api/nodes/remove', { node_id: n.id }), (r) => r.removed ? 'Čidlo odebráno.' : 'Vyjměte a vložte do čidla baterii.').then(done);
                 });
             }
@@ -1864,15 +2233,14 @@
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'btn btn-primary btn-sm';
                 b.textContent = q.known ? 'Znovu spárovat' : (q.node_paired ? 'Spárovat znovu' : 'Spárovat');
-                b.addEventListener('click', () => {
-                    let name = '';
+                b.addEventListener('click', async () => {
                     if (!q.known && q.node_paired) {
-                        if (!confirm(`Spárovat znovu čidlo ${q.id}? Hub ho uvolní uschovaným klíčem a dá mu nový.`)) return;
+                        if (!await confirmDialog({ title: `Spárovat znovu čidlo ${q.id}?`, body: ['Hub ho uvolní uschovaným klíčem a dá mu nový.'], confirm: 'Spárovat znovu' })) return;
                     } else if (!q.known) {
-                        name = prompt(`Název pro čidlo ${q.id} (např. Jímka). Ověřte, že ID souhlasí se štítkem čidla:`, '');
-                        if (name === null) return;
-                    } else if (!confirm(`Znovu spárovat čidlo ${q.id}? Starý klíč se zruší a vygeneruje se nový.`)) return;
-                    startPairing(q.id, name);
+                        pairDialog(q.id);                    // název + ověření ID podle štítku
+                        return;
+                    } else if (!await confirmDialog({ title: `Znovu spárovat čidlo ${q.id}?`, body: ['Starý klíč se zruší a vygeneruje se nový.'], confirm: 'Znovu spárovat' })) return;
+                    startPairing(q.id, '');
                 });
                 tr.lastElementChild.appendChild(b);
             }
@@ -1919,8 +2287,12 @@
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'btn btn-primary btn-sm'; b.textContent = 'Spárovat znovu';
                 b.title = h.key_match ? 'Čidlo vysílá s klíčem uschovaným v hubu' : 'Hub má uschovaný starší klíč tohoto ID';
-                b.addEventListener('click', () => {
-                    if (!confirm(`Spárovat znovu čidlo ${h.id}${h.archived_name ? ' (' + h.archived_name + ')' : ''}?\nPak do čidla vyjměte a vložte baterii – hub ho uvolní uschovaným klíčem a spáruje s novým.`)) return;
+                b.addEventListener('click', async () => {
+                    if (!await confirmDialog({
+                        title: `Spárovat znovu čidlo ${h.id}${h.archived_name ? ' (' + h.archived_name + ')' : ''}?`,
+                        body: ['Pak do čidla vyjměte a vložte baterii – hub ho uvolní uschovaným klíčem a spáruje s novým.'],
+                        confirm: 'Spárovat znovu'
+                    })) return;
                     startPairing(h.id, '', 'Vyjměte a vložte do čidla baterii.');
                 });
                 cell.appendChild(b);
@@ -1999,6 +2371,12 @@
             <dt>Běží</dt><dd>${fmtDuration(d.uptime_s)}</dd>
             <dt>Paměť procesu</dt><dd>${d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–'}</dd>
             <dt>Databáze / volné místo</dt><dd>${num(d.db_mb, 1, ' MB')} / ${num(d.disk_free_mb, 0, ' MB')}</dd>`;
+        const dw = $('sysDiskWarn');
+        dw.classList.toggle('hidden', !d.disk_low);
+        if (d.disk_low) {
+            dw.textContent = `Málo místa na kartě: volných ${num(d.disk_free_mb, 0, ' MB')} (hranice ${num(d.low_disk_mb || 300, 0, ' MB')}). `
+                + 'Starší podrobná měření se postupně mažou, hodinové průměry zůstávají. Stáhněte si zálohu nebo smažte stará data.';
+        }
         setUpdateBadge({ status: d.update, running: d.version, prefs: d.update_prefs });
     }
 
@@ -2366,7 +2744,11 @@
         SERVICE_POWEROFF: ['power', 'Vypnutí zařízení', 'warn'], DATA_DELETED: ['archive', 'Smazání naměřených dat', 'warn'],
         TELEGRAM_LINKED: ['antenna', 'Telegram propojen', 'ok'], TELEGRAM_UNLINKED: ['antenna', 'Telegram odpojen', ''],
         SERVICE_ACCESS: ['lock', 'Vzdálený servis', 'warn'], SERVICE_RESTART: ['restart', 'Restart aplikace', ''],
-        SERVICE_REBOOT: ['restart', 'Restart zařízení', 'warn']
+        SERVICE_REBOOT: ['restart', 'Restart zařízení', 'warn'],
+        UPDATE_AVAILABLE: ['arrow-up', 'Dostupná aktualizace', 'info'], UPDATE_INSTALLED: ['check', 'Aktualizace nainstalována', 'ok'],
+        UPDATE_ROLLED_BACK: ['restart', 'Aktualizace vrácena', 'bad'], UPDATE_ERROR: ['alert', 'Chyba aktualizace', 'bad'],
+        UPDATE_UP_TO_DATE: ['check', 'Bez aktualizace', ''], FACTORY_RESET: ['restart', 'Tovární nastavení', 'warn'],
+        TLS_CERT_ISSUED: ['lock', 'Certifikát HTTPS', ''], NODE_PAIRING_CANCELLED: ['antenna', 'Párování zrušeno', '']
     };
     const LOG = { page: 1, cat: '', items: 0 };
     const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
@@ -2423,12 +2805,11 @@
                 const row = document.createElement('div');
                 row.className = 'log-row ' + (sev ? 'sev-' + sev : '');
                 const t = new Date(ms);
-                row.innerHTML = `<div class="log-icon">${ico(icon)}</div>
-                    <div class="log-main"><div class="log-title">${esc(text)}</div>
-                    <div class="log-detail">${esc(l.detail || '')}</div></div>
-                    <div class="log-meta"><span class="log-time">${pad(t.getHours())}:${pad(t.getMinutes())}</span>
-                    <span class="log-user ${sys ? 'sys' : ''}">${sys ? 'automatika' : esc(l.username)}</span>
-                    ${l.ip && !sys ? `<span class="log-ip">${esc(l.ip)}</span>` : ''}</div>`;
+                row.innerHTML = `<span class="log-time">${pad(t.getHours())}:${pad(t.getMinutes())}</span>
+                    <span class="log-what"><span class="log-icon">${ico(icon)}</span><span class="log-title">${esc(text)}</span></span>
+                    <span class="log-detail">${esc(l.detail || '')}</span>
+                    <span class="log-who"><span class="log-user ${sys ? 'sys' : ''}">${sys ? 'automatika' : esc(l.username)}</span>
+                    ${l.ip && !sys ? `<span class="log-ip">${esc(l.ip)}</span>` : ''}</span>`;
                 list.appendChild(row);
             });
             $('logSummary').textContent = `${d.total} záznamů`;
@@ -2460,21 +2841,49 @@
                 <td>${u.last_login ? fmtDateTime(u.last_login * 1000) : '–'}</td><td class="td-actions"></td>`;
             const sel = tr.querySelector('select');
             sel.value = u.role;
-            sel.addEventListener('change', () => {
-                action(() => api('POST', '/api/users/role', { username: u.username, role: sel.value }), 'Role změněna.').then((r) => { if (!r) loadUsers(); });
+            let curRole = u.role;
+            sel.addEventListener('change', async () => {
+                const to = sel.value;
+                const ok = await confirmDialog({
+                    title: 'Změnit roli uživatele?',
+                    body: [`Uživatel ${u.username} bude mít roli „${to === 'admin' ? 'Administrátor' : 'Uživatel (jen čtení)'}“.`,
+                        to === 'admin' ? 'Administrátor může měnit nastavení, ovládat dopouštění a spravovat uživatele.'
+                            : 'Uživatel uvidí data, ale nastavení ani dopouštění měnit nemůže.'],
+                    confirm: 'Změnit roli'
+                });
+                if (!ok) { sel.value = curRole; return; }
+                const r = await action(() => api('POST', '/api/users/role', { username: u.username, role: to }), 'Role změněna.');
+                if (r) curRole = to; else { sel.value = curRole; loadUsers(); }
             });
             if (!self) {
                 const cell = tr.querySelector('.td-actions');
                 const pw = document.createElement('button');
                 pw.type = 'button'; pw.className = 'btn btn-outline btn-sm'; pw.textContent = 'Nové heslo';
-                pw.addEventListener('click', () => {
-                    const p = prompt(`Nové heslo pro ${u.username} (min. 10 znaků):`);
-                    if (p) action(() => api('POST', '/api/users/password', { username: u.username, password: p }), 'Heslo nastaveno, uživatel byl odhlášen.');
+                pw.addEventListener('click', async () => {
+                    const r = await formDialog({
+                        title: `Nové heslo pro ${u.username}`,
+                        body: ['Uživatel bude po změně hesla odhlášen ze všech zařízení.'],
+                        fields: [{ name: 'password', type: 'password', label: 'Nové heslo (min. 10 znaků)', autocomplete: 'new-password' },
+                            { name: 'password2', type: 'password', label: 'Potvrzení hesla', autocomplete: 'new-password' }],
+                        validate: (v) => (v.password.length < 10 ? { field: 'password', message: 'Heslo musí mít alespoň 10 znaků.' }
+                            : v.password !== v.password2 ? { field: 'password2', message: 'Hesla se neshodují.' } : null),
+                        submit: async (v) => {
+                            try { await api('POST', '/api/users/password', { username: u.username, password: v.password }); } catch (e) { toast(e.message, true); return e.message; }
+                            return null;
+                        },
+                        confirm: 'Nastavit heslo'
+                    });
+                    if (r) toast('Heslo nastaveno, uživatel byl odhlášen.');
                 });
                 const del = document.createElement('button');
                 del.type = 'button'; del.className = 'btn btn-danger btn-sm'; del.textContent = 'Smazat';
-                del.addEventListener('click', () => {
-                    if (!confirm('Opravdu smazat uživatele ' + u.username + '?')) return;
+                del.addEventListener('click', async () => {
+                    const ok = await confirmDialog({
+                        title: 'Smazat uživatele?',
+                        body: [`Uživatel ${u.username} bude smazán a odhlášen ze všech zařízení. Nejde to vzít zpět.`],
+                        confirm: 'Smazat uživatele', danger: true
+                    });
+                    if (!ok) return;
                     action(() => api('POST', '/api/users/delete', { username: u.username }), 'Uživatel smazán.').then(loadUsers);
                 });
                 cell.appendChild(pw); cell.appendChild(del);
@@ -2546,6 +2955,8 @@
         document.querySelectorAll('input[type="date"]').forEach(czDateInput);
         bindAccountMenu();
         bindThemeSwitch();
+        bindHelpTips();
+        $('diskBanner').addEventListener('click', (e) => { if (e.target.closest('.disk-jump')) { e.preventDefault(); jumpToBackup(); } });
         if (ME.role === 'admin') bindPowerMenu();
         // přepnutí světlý/tmavý motiv → grafy znovu s novými barvami
         if (window.matchMedia) {

@@ -258,7 +258,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   (žádné emoji, gradienty ani záře); rozložení využívá celou šířku (až 1920 px, na mobilu 1 sloupec).
   Nahoře jen Dashboard a přepínání nádrží; *Můj účet / Nastavení / Správa uživatelů / Logování / Odhlásit*
   v menu pod ikonou účtu vpravo nahoře.
-- Lišta čidel: **Všechny nádrže** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
+- Lišta čidel: **Všechna čidla** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
   čidlo + společný graf hladin) nebo konkrétní nádrž. Tečka = stav (zelená online, žlutá zpožděná, červená offline).
 - Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):
   **dopouštění** zeleně (jako ve staré verzi) (přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo

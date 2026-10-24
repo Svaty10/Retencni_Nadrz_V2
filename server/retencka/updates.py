@@ -122,3 +122,44 @@ def summary(data_dir: str, running: str) -> dict:
     st = read_status(data_dir)
     return {"status": st, "running": running, "prefs": read_prefs(data_dir),
             "pending": pending(data_dir), "busy": busy(st)}
+
+
+# ------------------------------------------------------------- audit of results
+# The updater (root) cannot write the audit log; the app records what it sees in
+# update-status.json. A key per result keeps one entry per event: an "available"
+# version or an identical error repeats on every daily check and is logged once.
+AUDIT_ACTIONS = {"available": "UPDATE_AVAILABLE", "done": "UPDATE_INSTALLED",
+                 "rolled_back": "UPDATE_ROLLED_BACK", "error": "UPDATE_ERROR",
+                 "up_to_date": "UPDATE_UP_TO_DATE"}
+FIRST_RUN_MAX_AGE_S = 3600     # without a remembered key only fresh results are logged
+
+
+def audit_key(st: Optional[dict]) -> Optional[str]:
+    """Identity of a finished result, None while the updater works (or no status)."""
+    if not st:
+        return None
+    state = st.get("state")
+    if state == "available":
+        return f"available|{st.get('latest')}"
+    if state == "error":
+        return f"error|{st.get('message')}"
+    if state in ("done", "rolled_back", "up_to_date"):
+        return f"{state}|{st.get('target') or st.get('latest')}|{st.get('updated_at')}"
+    return None
+
+
+def audit_event(st: Optional[dict], seen: Optional[str], now: Optional[float] = None
+                ) -> Optional[tuple[str, str, str]]:
+    """(key, action, detail) of a result not logged yet, else None.
+    up_to_date only after a check from the web / Telegram (the timer checks daily)."""
+    key = audit_key(st)
+    if key is None or key == seen:
+        return None
+    assert st is not None
+    if st.get("state") == "up_to_date" and st.get("trigger") == "timer":
+        return None
+    if seen is None:
+        ts = st.get("updated_at")
+        if not isinstance(ts, (int, float)) or (now or time.time()) - ts > FIRST_RUN_MAX_AGE_S:
+            return None
+    return key, AUDIT_ACTIONS[st["state"]], str(st.get("message") or "")[:400]

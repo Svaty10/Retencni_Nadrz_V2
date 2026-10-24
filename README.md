@@ -42,7 +42,10 @@ flowchart LR
 - **Čidlo patří svému hubu** – cizí hub ho nepřevezme; odpárovat jde jen z hubu + vložením baterie.
 
 **Hub a web**
-- Více nádrží na jeden hub (až 16), přehled **Všechny nádrže** i detail každé nádrže.
+- Více nádrží na jeden hub (až 16), přehled **Všechna čidla** i detail každé nádrže.
+- **HTTPS bez domény a internetu:** hub má vlastní certifikační autoritu (jen pro `.local` a místní IP),
+  certifikát se do telefonu / PC nainstaluje jednou z webu a obnovuje se sám; port 80 přesměruje na HTTPS,
+  hotspot a první nastavení fungují po http.
 - Grafy kreslí prohlížeč: hladina s vyznačeným **dopouštěním** a **přítokem z deště** (jemně podbarvené
   úseky, v tooltipu litry), spotřeba, dopouštění, klima, počasí, baterie a signál (s vyznačenou výměnou
   baterie); rozsah 24 h / 7 dní / 30 dní / rok nebo vlastní od–do.
@@ -54,7 +57,10 @@ flowchart LR
   neukazuje – ovládání, stav ani graf dopouštění se objeví až po nastavení ventilu.
 - Dopouštění jde kdykoli zrušit – před startem i za chodu, ruční i automatické; bez čerstvých dat ventil nepustí.
 - Přihlášení s rolemi (admin / uživatel); menu účtu vpravo nahoře (Můj účet, Nastavení, Správa uživatelů,
-  Logování). Přehledný log s filtry, nastavení **základní / pokročilé**, jen pro admina.
+  Logování). Admin mění role a nastavuje nová hesla ostatním (vždy zůstane aspoň jeden admin).
+  Kompaktní log s filtry (i výsledky aktualizací), nastavení **základní / pokročilé** s nápovědou „?“ u polí, jen pro admina.
+- Akce (ruční dopouštění, přidání čidla, hesla, mazání) přes dialogy s potvrzením; **obnova továrního
+  nastavení** s nabídkou zálohy a dvojím potvrzením; denní zálohy na kartu a varování při málo místě.
 - Nastavení podle nádrží: společné **výchozí hodnoty** pro všechny nádrže a u každé nádrže vlastní
   hodnoty, které změna výchozích nepřepíše. Telegram bot i vzdálený servis (NetBird) se nastaví z webu.
 - Střídmý vzhled, světlý i tmavý režim podle systému; využívá celou šířku monitoru a je plně funkční na mobilu.

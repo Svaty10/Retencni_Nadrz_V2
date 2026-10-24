@@ -309,12 +309,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card > h2 { margin: 0 0 16px; font-size: 17px; font-weight: 600; }
 .card h3 { margin: 22px 0 10px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .card-label { margin: 0 0 6px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.card-label + .card-desc { margin: -3px 0 8px; }
+.fact-desc { margin: 0 0 4px; font-size: 12px; line-height: 1.35; }
+.ov-desc { margin: 0 0 12px; }
+.disk-banner { margin: 0 0 16px; }
+.disk-banner a { color: inherit; font-weight: 500; }
 
 .card-head {
     display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
     gap: 10px; margin-bottom: 14px;
 }
 .card-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.card-head-text { flex: 1 1 240px; min-width: 0; }
+.card-head-text .card-desc { margin-top: 1px; }
 .card-head .hint { font-size: 13px; color: var(--muted); }
 
 /* --- Dashboard: nádrž --------------------------------------- */
@@ -346,6 +353,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
     position: absolute; left: 0; right: 0; bottom: 0; height: 0;
     background: var(--water); border-top: 2px solid var(--accent);
     transition: height 150ms ease-out;
+}
+.gauge .water-level { border-top: 0; }
+
+/* Stupnice vedle měrky + jemná vlnka na hladině (SVG, CSS animace) */
+.gauge-wrap { display: flex; align-items: stretch; gap: 6px; flex-shrink: 0; padding: 8px 0; }
+.gauge-scale { position: relative; width: 34px; }
+.gs {
+    position: absolute; left: 0; transform: translateY(50%);
+    font-size: 11px; line-height: 1; color: var(--muted); white-space: nowrap;
+}
+.gs.g0 { bottom: 0; } .gs.g25 { bottom: 25%; } .gs.g50 { bottom: 50%; }
+.gs.g75 { bottom: 75%; } .gs.g100 { bottom: 100%; }
+.wave { position: absolute; left: 0; right: 0; bottom: 100%; height: 7px; overflow: hidden; pointer-events: none; }
+.wave svg { position: absolute; left: 0; bottom: -1px; width: 200%; height: 100%; animation: wave-slide 6s linear infinite; }
+.wave .wave-b { animation-duration: 9s; animation-direction: reverse; }
+.wave-fill { fill: var(--water); }
+.wave-b .wave-fill { fill: var(--accent); opacity: 0.2; }
+.wave-line { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+@keyframes wave-slide { to { transform: translateX(-50%); } }
+.gauge.empty .wave { display: none; }
+@media (prefers-reduced-motion: reduce) {
+    .wave svg { animation: none; }
 }
 .gauge-tick { position: absolute; right: 0; width: 10px; height: 1px; background: var(--line-strong); }
 .gauge-tick.t25 { bottom: 25%; }
@@ -678,24 +707,26 @@ pre.yaml {
 .log-day { padding: 18px 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .log-day::first-letter { text-transform: uppercase; }
 .log-row {
-    display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: start;
-    padding: 10px 0; border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: 46px minmax(170px, 250px) minmax(0, 1fr) auto;
+    gap: 2px 12px; align-items: center;
+    padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px;
 }
+.log-what { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .log-icon {
-    width: 30px; height: 30px; border-radius: var(--radius-sm);
+    flex: none; width: 22px; height: 22px; border-radius: var(--radius-sm);
     display: flex; align-items: center; justify-content: center;
     background: var(--surface-2); color: var(--muted);
 }
-.log-icon .ico { width: 16px; height: 16px; }
+.log-icon .ico { width: 14px; height: 14px; }
 .log-row.sev-ok .log-icon { background: var(--green-soft); color: var(--green); }
 .log-row.sev-warn .log-icon { background: var(--amber-soft); color: var(--amber); }
 .log-row.sev-bad .log-icon { background: var(--red-soft); color: var(--red); }
 .log-row.sev-info .log-icon { background: var(--accent-soft); color: var(--accent); }
 .log-row.sev-bad .log-title { color: var(--red); }
-.log-title { font-size: 14px; font-weight: 500; }
-.log-detail { font-size: 13px; color: var(--muted); word-break: break-word; }
-.log-meta { display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; color: var(--muted); text-align: right; }
-.log-time { font-size: 13px; color: var(--ink); }
+.log-title { font-size: 13px; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.log-detail { font-size: 13px; color: var(--muted); word-break: break-word; min-width: 0; }
+.log-who { display: flex; gap: 8px; align-items: baseline; justify-content: flex-end; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.log-time { font-size: 13px; color: var(--ink-2); }
 .log-user.sys { font-style: italic; }
 .log-ip { font-family: var(--mono); font-size: 11px; }
 .log-empty { padding: 24px 0; text-align: center; }
@@ -835,8 +866,16 @@ body.no-refill .refill-only { display: none !important; }
     .log-filters > .unified-select { width: auto; }
     .log-filters .date-cz { flex: 1 1 140px; }
     .log-filters .date-cz input[type="text"] { width: 100%; }
-    .log-row { grid-template-columns: 30px minmax(0, 1fr); }
-    .log-meta { grid-column: 2; flex-direction: row; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; text-align: left; }
+    .log-row {
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        grid-template-areas: "time what who" ". detail detail";
+        gap: 1px 10px; padding: 7px 0;
+    }
+    .log-time { grid-area: time; }
+    .log-what { grid-area: what; }
+    .log-detail { grid-area: detail; }
+    .log-detail:empty { display: none; }
+    .log-who { grid-area: who; flex-direction: column; align-items: flex-end; gap: 0; }
 
     /* Nabídka účtu jako panel přes celou šířku pod hlavičkou */
     .menu {
@@ -1091,3 +1130,62 @@ body.set-tank #nastaveni .scope-general, body.set-tank #nastaveni .scope-all { d
 .wait-box .spinner { width: 28px; height: 28px; margin: 0 auto 12px; display: block; }
 .wait-box h2 { margin: 0 0 6px; font-size: 18px; }
 .wait-box p { margin: 0 0 12px; font-size: 14px; }
+
+/* --- Nápověda (?) u polí ------------------------------------------------- */
+.help-tip {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; margin: 0 0 0 4px; padding: 0; vertical-align: middle;
+    border: 1px solid var(--line-strong); border-radius: 50%;
+    background: var(--surface); color: var(--muted);
+    font: 600 11px/1 var(--font); cursor: help;
+    transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+.help-tip::after { content: ""; position: absolute; inset: -7px; }        /* hit area 32 px */
+@media (pointer: coarse) { .help-tip::after { inset: -13px; } }          /* 44 px on touch */
+.help-tip:hover, .help-tip[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.help-pop {
+    position: fixed; z-index: 150; left: 0; top: 0;
+    padding: 10px 12px; max-width: calc(100vw - 24px);
+    background: var(--ink); color: var(--bg);
+    border-radius: var(--radius-sm); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    font-size: 13px; font-weight: 400; line-height: 1.45; text-align: left;
+}
+.help-pop::before {
+    content: ""; position: absolute; top: -5px; left: calc(var(--arrow-x, 20px) - 5px);
+    border: 5px solid transparent; border-top-width: 0; border-bottom-color: var(--ink);
+}
+.help-pop.above::before {
+    top: auto; bottom: -5px;
+    border-bottom-width: 0; border-top-width: 5px; border-bottom-color: transparent; border-top-color: var(--ink);
+}
+h3 .help-tip { margin-left: 6px; }
+.toggle-text .help-tip { margin-left: 6px; }
+
+/* --- Dialogy s poli ------------------------------------------------------ */
+.dlg-field { margin: 12px 0 0; }
+.dlg-field > label:not(.check) { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.modal-sm .modal-body .dlg-error {
+    margin: 12px 0 0; padding: 8px 10px; font-size: 13px;
+    border: 1px solid var(--red); background: var(--red-soft); border-radius: var(--radius-sm);
+}
+.modal-sm .modal-body .dlg-error.hidden { display: none; }
+.modal-sm .modal-body .field-hint { margin: 5px 0 0; font-size: 12px; }
+.dlg-list { margin: 0 0 10px; padding-left: 20px; font-size: 14px; }
+.dlg-list li { margin: 2px 0; }
+.dlg-field .unified-input[aria-invalid="true"], .dlg-field .input-unit:has(input[aria-invalid="true"]) { border-color: var(--red); }
+.dlg-field .check { min-height: 36px; font-weight: 500; }
+
+/* --- Záloha, HTTPS, tovární nastavení ----------------------------------- */
+.backup-note { font-size: 13px; margin-bottom: 14px; }
+.backup-note p { margin: 0 0 6px; }
+.backup-note p:last-child { margin: 0; }
+.howto > summary { font-weight: 500; }
+.howto-os { margin: 8px 0 0; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.howto-os > summary { display: flex; align-items: center; min-height: 40px; cursor: pointer; font-size: 14px; font-weight: 500; }
+.howto-os[open] { padding-bottom: 6px; }
+.howto .setup-steps { margin-bottom: 6px; }
+.fp { word-break: break-all; font-size: 12px; line-height: 1.5; }
+.danger-zone h3 { color: var(--red); }
+.danger-zone .alert-row p { flex: 1 1 240px; }
+.login-cert { margin: 18px 0 0; text-align: center; line-height: 1.5; }
+.login-cert a { font-weight: 500; }

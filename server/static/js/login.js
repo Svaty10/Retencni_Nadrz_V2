@@ -38,6 +38,9 @@
     const login = document.getElementById('loginForm');
     if (login) {
         fetch('/api/auth/mode', { credentials: 'same-origin' }).then((r) => r.json()).then((m) => {
+            // odkaz na certifikát hubu, jen když už existuje
+            const certHint = document.getElementById('certHint');
+            if (certHint && m.ca) certHint.classList.remove('hidden');
             if (m.first_login) {
                 document.getElementById('firstInfo').classList.remove('hidden');
                 const u = document.getElementById('username');

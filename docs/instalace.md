@@ -51,23 +51,25 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    nebo `http://192.168.4.1`).
 3. Vybrat domácí síť, zadat heslo → zařízení se připojí, hotspot zmizí.
 4. Telefon zpět na domácí Wi-Fi → `http://retencka.local` (nebo `http://retencka-xxxx.local`).
+   Po vytvoření účtu web přejde na **HTTPS** (`https://retencka.local`); aby prohlížeč nevaroval, nainstalujte
+   do zařízení jednou certifikát hubu – viz [HTTPS – certifikát hubu](#https--certifikát-hubu).
 5. První přihlášení: jméno **admin** + **heslo ze štítku** → vytvořit vlastní účet (jiné jméno i heslo);
    výchozí přístup se tím zruší. *Nastavení*, *Správa uživatelů*, *Logování* i *Můj účet* jsou v menu
    pod ikonou účtu vpravo nahoře.
    V témže menu je **Motiv** (Auto / Světlý / Tmavý) – pamatuje si ho každý účet zvlášť, na všech zařízeních.
 
    *Nastavení* má záložky **Obecné** (celý systém: poloha, Hunter Hydrawise, Telegram a vzdálený servis,
-   Home Assistant, záloha a data, systém), **Všechny nádrže** (čidla, párování, výchozí nastavení nádrží)
+   Home Assistant, záloha a data, systém), **Všechna čidla** (čidla, párování, výchozí nastavení nádrží)
    a **jednu záložku na každou nádrž** (všechny její parametry). Řádek s kartami pod záložkami vede rovnou
    na danou kartu.
 6. *Nastavení → Obecné → Poloha*: do pole *Obec / adresa* napsat obec a vybrat ji ze seznamu (souřadnice
    pro předpověď počasí se doplní samy; přes HTTPS jde i *Použít polohu tohoto zařízení*, ruční
    souřadnice jsou v pokročilém režimu).
-7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Všechny nádrže → Čidla → Spárovat* u jeho ID
+7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Všechna čidla → Čidla → Spárovat* u jeho ID
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
 8. *Nastavení → ‹nádrž›*: *Nádrž* (název, rozměry), *Kalibrace* (2 body „skutečná hladina je teď X cm“ –
    ideálně jednou při nízké a jednou při vysoké hladině), *Sonda* (výška nade dnem, přesnost, rozsah –
-   pokročilé), *Baterie*, *Upozornění*. Hodnoty označené **výchozí** se berou z *Všechny nádrže →
+   pokročilé), *Baterie*, *Upozornění*. Hodnoty označené **výchozí** se berou z *Všechna čidla →
    Výchozí nastavení nádrží*; po změně u nádrže jsou **vlastní** (zpět tlačítkem *↺ výchozí*).
 9. Dopouštění (volitelné): API klíč účtu do *Nastavení → Obecné → Hunter Hydrawise* (*Otestovat připojení*
    ukáže název ovladače), pak *Nastavení → ‹nádrž› → Dopouštění → Ventil: Hunter Hydrawise* →
@@ -79,7 +81,7 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
 Do čidla patří 3× AA. Doporučené jsou **lithiové Li-FeS2** (Energizer Ultimate Lithium): 10+ let,
 nevytékají, snesou mráz. Jdou i **alkalické** (vydrží několik let) – pak u čidla nastavte
 *Nastavení → ‹nádrž› → Baterie → Baterie v čidle → Alkalické* (pro všechny nádrže najednou ve
-*Všechny nádrže → Výchozí nastavení nádrží*; tam i kapacita baterií), jinak hub ukazuje špatná procenta a hlásí slabou
+*Všechna čidla → Výchozí nastavení nádrží*; tam i kapacita baterií), jinak hub ukazuje špatná procenta a hlásí slabou
 baterii už v polovině životnosti. Alkalické vyměňte včas, vybité mohou vytéct.
 
 Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem; **nic potvrzovat nemusíte**.
@@ -87,7 +89,7 @@ Totéž platí po nahrání nového firmwaru: klíč je v EEPROM, kterou nahráv
 takže čidlo zůstane spárované se svým hubem.
 
 ### Odpárování / přesun čidla k jinému hubu
-1. Ve starém hubu *Nastavení → Všechny nádrže → Čidla → Odpárovat* (hub hned přestane brát data).
+1. Ve starém hubu *Nastavení → Všechna čidla → Čidla → Odpárovat* (hub hned přestane brát data).
 2. Vyndat a vložit do čidla baterii (může být i v opačném pořadí, do 10 minut). Čidlo smaže klíč a hub ho odebere.
 3. Čidlo teď nabízí párování – spárovat v novém hubu.
 
@@ -109,18 +111,64 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 **Znovu spárovat** – název, nastavení i historie zůstanou.
 
 ### Záloha a obnova
-- Hub dělá každou noc zálohu na kartu (7 dní zpět). Proti odumření karty: *Nastavení → Obecné → Záloha a data →
-  Stáhnout zálohu* a soubor uložit do PC / cloudu (občas, např. po přidání čidla).
+- Hub dělá sám jednou denně zálohu databáze na kartu (`/var/lib/retencka/data/backup/`, posledních 7, seznam
+  v *Záloha a data*). Pomůže při poškozené databázi nebo nepovedené aktualizaci, **ne** při odumření karty
+  nebo ztrátě zařízení: *Nastavení → Obecné → Záloha a data → Stáhnout zálohu* a soubor uložit do PC / cloudu
+  (občas, např. po přidání čidla).
+- **Málo místa na kartě** (pod 300 MB): hub maže nejstarší podrobná měření (hodinové průměry zůstávají),
+  zapíše to do Logování, pošle zprávu do Telegramu a administrátorovi ukáže varování na přehledu.
 - **Obnova (např. nová karta):** nainstalovat podle bodu 2, přihlásit se, *Nastavení → Obecné → Záloha a data → Nahrát zálohu*
   (zaškrtnout „včetně nastavení a uživatelů“). Data se přidají k současným, duplicity se přeskočí – import
   lze bezpečně opakovat. Vrátí se měření, čidla i s klíči (hned pokračují), nastavení, token HA a uživatelé.
 - Data se nemažou (8GB karta vystačí na desítky let); retenci lze nastavit v *Záloha a data →
   Uchovávání dat*.
 - **Smazat naměřená data** (např. po zkušební montáži): *Nastavení → Obecné → Záloha a data → Smazat
-  naměřená data* – vybrat nádrž nebo všechny nádrže a rozsah *od – do* (nebo *vše*). Hub nejdřív ukáže,
+  naměřená data* – vybrat nádrž nebo všechna čidla a rozsah *od – do* (nebo *vše*). Hub nejdřív ukáže,
   kolik měření, hodinových souhrnů a záznamů o dopouštění smaže (historie dopouštění v rozsahu jde také
   pryč) a nabídne stažení zálohy. Nádrže, nastavení a záznamy v *Logování* zůstanou; smazání se zapíše
   do Logování. Nejde vrátit – jen nahráním zálohy.
+
+### Obnova továrního nastavení
+*Nastavení → Obecné → Systém → Obnovit tovární nastavení…* (jen administrátor). Dialog nejdřív nabídne
+stažení zálohy, pak chce napsat **OBNOVIT** a vaše heslo. Smaže se vše: měření, nastavení nádrží, uživatelé,
+klíče čidel (čidla je potřeba znovu spárovat – u každého *Znovu spárovat* a vložit baterii), Telegram, token HA,
+zálohy na kartě; vzdálený servis se vypne. Zůstane identita zařízení (název `retencka-xxxx`, **heslo ze
+štítku** pro hotspot i první přihlášení) a certifikát HTTPS (zařízení, která mu důvěřují, nic znovu
+neinstalují). Aplikace se restartuje a čeká na první přihlášení `admin` + heslo ze štítku jako po instalaci.
+Ze zálohy jde vše vrátit (*Nahrát zálohu* s „včetně nastavení a uživatelů“).
+
+### HTTPS – certifikát hubu
+Hub nepotřebuje doménu ani internet: při prvním spuštění si vytvoří **vlastní certifikační autoritu**
+(platí 10 let, soukromý klíč jen pro root v `/var/lib/retencka/tls-ca/`) a podepíše jí certifikát webu pro
+`retencka.local`, `retencka-xxxx.local` a aktuální IP adresy v síti. Ten má 397 dní a obnovuje se sám
+(30 dní před koncem, a hned když se změní IP adresa nebo název) – stará se o to `retencka-control`
+(každých 5 minut). Web běží na `https://…` (port 443), `http://…` na portu 80 na HTTPS přesměruje – kromě
+prvního nastavení (dokud neexistuje účet), stažení certifikátu a hotspotu s portálem pro Wi-Fi, ty fungují
+po http dál. API pro Home Assistant zůstává `http://…:8081` v LAN.
+
+Certifikát se do každého zařízení (telefon, PC) instaluje **jednou**. Stáhnete ho v *Nastavení → Obecné →
+Zabezpečené připojení (HTTPS) → Stáhnout certifikát hubu*, na přihlašovací stránce, nebo přímo z
+`http://retencka.local/ca.crt`. Před instalací porovnejte otisk SHA-256 se stránkou nastavení. Certifikační
+autorita smí podepsat jen názvy `.local` a soukromé IP adresy, nic jiného ve vašem zařízení nemůže ovlivnit.
+
+- **Android:** stáhnout `…-ca.crt` → *Nastavení → Zabezpečení (a soukromí) → Další nastavení zabezpečení →
+  Šifrování a pověření → Instalovat certifikát → Certifikát CA* → *Přesto nainstalovat* → vybrat soubor
+  (název položek se liší podle výrobce; hledejte v nastavení „certifikát CA“).
+- **iPhone / iPad:** otevřít odkaz v **Safari** → *Povolit* stažení profilu → *Nastavení → Profil stažen →
+  Instalovat* → pak **Nastavení → Obecné → Informace → Nastavení důvěryhodnosti certifikátů** a zapnout
+  „Retencka CA“ (bez tohoto kroku se certifikátu nedůvěřuje).
+- **Windows:** dvakrát kliknout na `…-ca.crt` → *Nainstalovat certifikát* → *Místní počítač* (nebo Aktuální
+  uživatel) → *Všechny certifikáty umístit do následujícího úložiště* → **Důvěryhodné kořenové certifikační
+  autority** → Dokončit; prohlížeč restartovat. Firefox má vlastní úložiště: *Nastavení → Soukromí a
+  zabezpečení → Certifikáty → Zobrazit certifikáty → Autority → Importovat* (zaškrtnout důvěru pro weby).
+- **macOS:** dvakrát kliknout na soubor → Klíčenka *Systém* → certifikát „Retencka CA“ otevřít → *Důvěra →
+  Při použití tohoto certifikátu: Vždy důvěřovat*.
+
+Pak `https://retencka.local` běží bez varování a prohlížeč dovolí i **zjištění polohy** (vyžaduje zabezpečené
+připojení). Bez instalace lze varování prohlížeče jednorázově odkliknout; hub záměrně neposílá HSTS, takže
+web zůstane dostupný i ze zařízení bez certifikátu. Vypnout HTTPS: `RETENCKA_HTTPS_PORT=0` v
+`/etc/default/retencka`. Obnovit certifikát hned: `sudo systemctl start retencka-control`
+(průběh `journalctl -u retencka-control`).
 
 ### Restart a vypnutí
 V menu účtu (vpravo nahoře, jen administrátor): **Restartovat aplikaci** (asi 10–30 s, měření se neztratí),
@@ -254,7 +302,7 @@ v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administ
 | `odhlasit` | všichni | odpojí chat |
 
 Upozornění: hladina pod nastavenou hranicí (*Upozornit v Telegramu pod* – výchozí pro všechny nádrže
-v *Nastavení → Všechny nádrže → Výchozí nastavení nádrží*, vlastní hodnota v záložce nádrže), dopouštění spuštěno /
+v *Nastavení → Všechna čidla → Výchozí nastavení nádrží*, vlastní hodnota v záložce nádrže), dopouštění spuštěno /
 dokončeno / porucha, čekání na déšť, slabá nebo vybitá baterie, čidlo neposílá data a znovu posílá.
 Administrátoři navíc dostávají restarty čidel, párování, málo místa na kartě a změny servisního přístupu.
 
@@ -291,7 +339,7 @@ Pro vlastní nasazení s doménou (adresa typu `https://nadrz.mojedomena.cz`).
 
 1. Cloudflare Zero Trust → *Networks → Tunnels* → vytvořit tunel, zkopírovat token.
 2. `cd /opt/retencka-src && sudo ./system/install.sh --cloudflare-token <TOKEN>`
-3. *Public hostname* → `http://localhost:80`. **Port 8081 (Home Assistant) do tunelu nedávejte.**
+3. *Public hostname* → `http://localhost:80` (z localhostu web na HTTPS nepřesměrovává). **Port 8081 (Home Assistant) do tunelu nedávejte.**
 4. **Doporučeno:** *Access → Applications* → aplikace pro stejný hostname s politikou
    „e-mail je jeden z …“ (jednorázový kód e-mailem). Útočník se pak k přihlašovací stránce vůbec nedostane.
 

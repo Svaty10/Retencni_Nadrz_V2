@@ -114,12 +114,14 @@
 
     <!-- ======================================================= DASHBOARD -->
     <div id="dashboard" class="tab-content active">
-        <!-- Přehled všech nádrží (volba „Všechny“ v liště čidel) -->
+        <div id="diskBanner" class="banner disk-banner hidden" role="alert"></div>
+        <!-- Přehled všech čidel (volba „Všechna čidla“ v liště čidel) -->
         <div id="overview" class="hidden">
+            <p class="card-desc ov-desc">Všechna čidla najednou: hladina, objem, stav a baterie. Klepnutím na nádrž otevřete její detail.</p>
             <div class="overview-grid" id="overviewGrid"></div>
             <section class="card chart-card span-all mt-20">
                 <div class="card-head">
-                    <h2>Hladina všech nádrží</h2>
+                    <div class="card-head-text"><h2>Hladina všech nádrží</h2><p class="card-desc">Hladiny všech nádrží v jednom grafu, aby šly porovnat.</p></div>
                     <div class="range-picker" data-chart="all" data-default="7d" data-kind="time"></div>
                 </div>
                 <div class="chart-container chart-tall"><canvas id="allChart"></canvas></div>
@@ -133,6 +135,7 @@
                     <div class="tank-main">
                         <div class="tank-figures">
                             <h2 class="card-label" id="tankTitle">Stav nádrže</h2>
+                            <p class="card-desc">Aktuální hladina a objem vody v nádrži.</p>
                             <div class="level-big" id="txtPercent">– %</div>
                             <div class="level-litres" id="txtLiters">– L</div>
                             <dl class="tank-meta">
@@ -140,9 +143,19 @@
                                 <div><dt>Poslední aktualizace</dt><dd id="txtUpdated">–</dd></div>
                             </dl>
                         </div>
-                        <div class="gauge" aria-hidden="true">
-                            <div class="water-level" id="waterLevel"></div>
-                            <span class="gauge-tick t25"></span><span class="gauge-tick t50"></span><span class="gauge-tick t75"></span>
+                        <div class="gauge-wrap" aria-hidden="true">
+                            <div class="gauge" id="gauge">
+                                <div class="water-level" id="waterLevel">
+                                    <div class="wave">
+                                        <svg class="wave-a" viewBox="0 0 200 10" preserveAspectRatio="none" focusable="false"><path class="wave-fill" d="M0 5Q25 0 50 5T100 5T150 5T200 5V10H0Z"/><path class="wave-line" d="M0 5Q25 0 50 5T100 5T150 5T200 5"/></svg>
+                                        <svg class="wave-b" viewBox="0 0 200 10" preserveAspectRatio="none" focusable="false"><path class="wave-fill" d="M0 5Q25 10 50 5T100 5T150 5T200 5V10H0Z"/></svg>
+                                    </div>
+                                </div>
+                                <span class="gauge-tick t25"></span><span class="gauge-tick t50"></span><span class="gauge-tick t75"></span>
+                            </div>
+                            <div class="gauge-scale">
+                                <span class="gs g100">100 %</span><span class="gs g75">75</span><span class="gs g50">50</span><span class="gs g25">25</span><span class="gs g0">0</span>
+                            </div>
                         </div>
                     </div>
 
@@ -171,6 +184,7 @@
                 <section class="card facts-card" aria-label="Přehled">
                     <div class="fact-group">
                         <h3><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg>Klima v šachtě</h3>
+                        <p class="card-desc fact-desc">Teplota a vlhkost u čidla.</p>
                         <dl class="facts">
                             <div class="fact"><dt>Teplota</dt><dd id="txtTemp">–</dd></div>
                             <div class="fact"><dt>Vlhkost</dt><dd id="txtHum">–</dd></div>
@@ -178,6 +192,7 @@
                     </div>
                     <div class="fact-group" id="batBox">
                         <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie</h3>
+                        <p class="card-desc fact-desc">Stav baterií v čidle a odhad výdrže.</p>
                         <dl class="facts">
                             <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
                             <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
@@ -185,6 +200,7 @@
                     </div>
                     <div class="fact-group">
                         <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Spotřeba</h3>
+                        <p class="card-desc fact-desc">Kolik vody z nádrže odešlo.</p>
                         <dl class="facts">
                             <div class="fact"><dt>Dnes</dt><dd id="txtConsToday">–</dd></div>
                             <div class="fact"><dt>Za 7 dní</dt><dd id="txtCons7d">–</dd></div>
@@ -192,6 +208,7 @@
                     </div>
                     <div class="fact-group" id="outlookBox">
                         <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled</h3>
+                        <p class="card-desc fact-desc">Na jak dlouho zásoba vystačí a co přinese déšť.</p>
                         <dl class="facts">
                             <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
                             <div class="fact"><dt>Srážky (2 dny)</dt><dd id="txtRain">–</dd></div>
@@ -199,6 +216,7 @@
                     </div>
                     <div class="fact-group" id="linkBox">
                         <h3><svg class="ico" aria-hidden="true"><use href="#i-signal"/></svg>Signál čidla</h3>
+                        <p class="card-desc fact-desc">Kvalita rádiového spojení čidla s hubem.</p>
                         <dl class="facts">
                             <div class="fact"><dt>Síla</dt><dd><span id="txtRssi">–</span><small id="txtLoss">–</small></dd></div>
                         </dl>
@@ -209,7 +227,7 @@
             <div class="chart-grid">
                 <section class="card chart-card span-all">
                     <div class="card-head">
-                        <h2>Hladina vody</h2>
+                        <div class="card-head-text"><h2>Hladina vody</h2><p class="card-desc">Vývoj hladiny v čase; podbarvení značí dopouštění a přítok z deště.</p></div>
                         <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
                     </div>
                     <div class="chart-container chart-tall"><canvas id="historyChart"></canvas></div>
@@ -221,7 +239,7 @@
 
                 <section class="card chart-card">
                     <div class="card-head">
-                        <h2>Spotřeba vody</h2>
+                        <div class="card-head-text"><h2>Spotřeba vody</h2><p class="card-desc">Kolik vody za den z nádrže odešlo a kolik přiteklo ze srážek.</p></div>
                         <div class="range-picker" data-chart="consumption" data-default="7d" data-kind="days"></div>
                     </div>
                     <div class="chart-container"><canvas id="consumptionChart"></canvas></div>
@@ -229,7 +247,7 @@
 
                 <section class="card chart-card refill-only">
                     <div class="card-head">
-                        <h2>Dopouštění z řadu</h2>
+                        <div class="card-head-text"><h2>Dopouštění z řadu</h2><p class="card-desc">Kolik litrů se za den dopustilo z vodovodu.</p></div>
                         <div class="range-picker" data-chart="refill" data-default="7d" data-kind="days"></div>
                     </div>
                     <div class="chart-container"><canvas id="refillChart"></canvas></div>
@@ -237,7 +255,7 @@
 
                 <section class="card chart-card">
                     <div class="card-head">
-                        <h2>Klima v šachtě</h2>
+                        <div class="card-head-text"><h2>Klima v šachtě</h2><p class="card-desc">Teplota a vlhkost u čidla v čase.</p></div>
                         <div class="range-picker" data-chart="klima" data-default="7d" data-kind="time"></div>
                     </div>
                     <div class="chart-container"><canvas id="klimaChart"></canvas></div>
@@ -245,15 +263,14 @@
 
                 <section class="card chart-card wx-card">
                     <div class="card-head">
-                        <h2>Předpověď počasí</h2>
-                        <span class="hint">Výhled na 7 dní</span>
+                        <div class="card-head-text"><h2>Předpověď počasí</h2><p class="card-desc">Očekávané srážky a nejvyšší denní teploty na 7 dní dopředu.</p></div>
                     </div>
                     <div class="chart-container"><canvas id="weatherChart"></canvas></div>
                 </section>
 
                 <section class="card chart-card span-2 bat-card">
                     <div class="card-head">
-                        <h2>Baterie a signál</h2>
+                        <div class="card-head-text"><h2>Baterie a signál</h2><p class="card-desc">Napětí baterie a síla signálu; značky ukazují vložení baterie nebo restart čidla.</p></div>
                         <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
                     </div>
                     <div class="chart-container"><canvas id="batteryChart"></canvas></div>
@@ -302,11 +319,10 @@
                             <tbody id="pairBody"></tbody>
                         </table>
                     </div>
-                    <form id="addNodeForm" class="inline-actions">
-                        <input type="text" id="newNodeId" class="unified-input" placeholder="ID ze štítku" maxlength="6" required autocomplete="off" aria-label="ID ze štítku">
-                        <input type="text" id="newNodeName" class="unified-input" placeholder="Název" maxlength="40" aria-label="Název">
-                        <button class="btn btn-primary" type="submit">Čekat na čidlo</button>
-                    </form>
+                    <div class="inline-actions">
+                        <button class="btn btn-primary" type="button" id="addNodeBtn">Přidat čidlo…</button>
+                        <span class="muted small">Zadáte ID ze štítku a název, pak do čidla vložte baterii.</span>
+                    </div>
                 </div>
                 <div class="adv">
                     <h3>Čidla v dosahu</h3>
@@ -329,11 +345,11 @@
                     <h3>Upozornění a baterie</h3>
                     <div class="form-row">
                     <div class="form-group">
-                        <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span></label>
+                        <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span> <button type="button" class="help-tip" data-help="notify"></button></label>
                         <div class="input-unit"><input type="number" step="1" min="0" max="100" name="notify_low_pct" ><span class="unit">%</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Baterie v čidle (3× AA)</label>
+                        <label>Baterie v čidle (3× AA) <button type="button" class="help-tip" data-help="battery_type"></button></label>
                         <select name="battery_type" class="unified-select" >
                             <option value="lifes2">Lithiové Li-FeS2 (Energizer Ultimate Lithium)</option>
                             <option value="alkaline">Alkalické</option>
@@ -342,72 +358,72 @@
                 </div>
                 <div class="form-row adv">
                     <div class="form-group">
-                        <label>Kapacita lithiové baterie</label>
+                        <label>Kapacita lithiové baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="battery_capacity_mah" ><span class="unit">mAh</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Kapacita alkalické baterie</label>
+                        <label>Kapacita alkalické baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="battery_capacity_alk_mah" ><span class="unit">mAh</span></div>
                     </div>
                 </div>
                 <div class="form-row adv">
                     <div class="form-group">
-                        <label>Odtokový součinitel střechy</label>
+                        <label>Odtokový součinitel střechy <button type="button" class="help-tip" data-help="runoff"></button></label>
                         <input type="number" step="0.05" min="0.05" max="1" name="runoff_coef" class="unified-input">
                     </div>
                     <div class="form-group">
-                        <label>Přesnost sondy</label>
+                        <label>Přesnost sondy <button type="button" class="help-tip" data-help="accuracy"></button></label>
                         <div class="input-unit"><input type="number" step="0.01" name="probe_accuracy_pct" ><span class="unit">% rozsahu</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Rozsah sondy</label>
+                        <label>Rozsah sondy <button type="button" class="help-tip" data-help="range"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="probe_range_cm" ><span class="unit">cm</span></div>
                     </div>
                 </div>
                     <h3>Dopouštění</h3>
                     <div class="form-row toggles">
                         <label class="toggle">
-                            <span class="toggle-text">Čekat na předpovězený déšť</span>
+                            <span class="toggle-text">Čekat na předpovězený déšť <button type="button" class="help-tip" data-help="rainwait"></button></span>
                             <span class="switch"><input type="checkbox" name="rain_wait_enabled"><span class="slider"></span></span>
                         </label>
                     </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Dopouštět pod</label>
+                        <label>Dopouštět pod <button type="button" class="help-tip" data-help="threshold"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="refill_threshold_pct" ><span class="unit">%</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Dopustit na</label>
+                        <label>Dopustit na <button type="button" class="help-tip" data-help="target"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="auto_refill_target_pct" ><span class="unit">%</span></div>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Nečekat na déšť pod prahem o víc než</label>
+                        <label>Nečekat na déšť pod prahem o víc než <button type="button" class="help-tip" data-help="rainbelow"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_below_pct" ><span class="unit">%</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Přestat čekat po poklesu o</label>
+                        <label>Přestat čekat po poklesu o <button type="button" class="help-tip" data-help="raindrop"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_drop_pct" ><span class="unit">%</span></div>
                     </div>
                 </div>
                 <div class="form-row adv">
                     <div class="form-group">
-                        <label>Výhled deště</label>
+                        <label>Výhled deště <button type="button" class="help-tip" data-help="rainhours"></button></label>
                         <div class="input-unit"><input type="number" step="1" min="1" max="72" name="rain_wait_hours" ><span class="unit">h</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Nejvýš dopustit na</label>
+                        <label>Nejvýš dopustit na <button type="button" class="help-tip" data-help="maxpct"></button></label>
                         <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct" ><span class="unit">%</span></div>
                     </div>
                 </div>
                 <div class="form-row adv">
                     <div class="form-group">
-                        <label>Průtok</label>
+                        <label>Průtok <button type="button" class="help-tip" data-help="flow"></button></label>
                         <div class="input-unit"><input type="number" step="0.1" name="flow_rate_lpm" ><span class="unit">L/min</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Nejdelší dopouštění</label>
+                        <label>Nejdelší dopouštění <button type="button" class="help-tip" data-help="maxminutes"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="max_refill_minutes" ><span class="unit">min</span></div>
                     </div>
                 </div>
@@ -456,7 +472,7 @@
                         <div class="input-unit"><input type="number" step="1" name="catchment_area_m2" form="calForm"><span class="unit">m²</span></div>
                     </div>
                     <div class="form-group adv">
-                        <label>Odtokový součinitel střechy</label>
+                        <label>Odtokový součinitel střechy <button type="button" class="help-tip" data-help="runoff"></button></label>
                         <input type="number" step="0.05" min="0.05" max="1" name="runoff_coef" class="unified-input" form="calForm">
                     </div>
                 </div>
@@ -478,7 +494,7 @@
                     <button class="btn btn-primary" id="calAddBtn" type="button">Uložit</button>
                 </div>
                 <div class="sub adv">
-                    <h3>Kalibrační body</h3>
+                    <h3>Kalibrační body <button type="button" class="help-tip" data-help="calpoints"></button></h3>
                     <div class="table-responsive">
                         <table class="cal-table">
                             <thead><tr><th>Bod</th><th>Napětí (mV)</th><th>Voda nad sondou (cm)</th></tr></thead>
@@ -488,7 +504,7 @@
                     <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit body</button></div>
                 </div>
                 <div class="sub adv">
-                    <h3>Přepočet historie</h3>
+                    <h3>Přepočet historie <button type="button" class="help-tip" data-help="recompute"></button></h3>
                     <div class="alert-row">
                         <p class="muted small">Přepočítá uložená data podle aktuální kalibrace.</p>
                         <button class="btn btn-outline" id="recomputeBtn" type="button">Přepočítat</button>
@@ -503,21 +519,21 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Výška sondy nade dnem</label>
+                        <label>Výška sondy nade dnem <button type="button" class="help-tip" data-help="offset"></button></label>
                         <div class="input-unit"><input type="number" step="0.1" required name="sensor_offset_cm" form="calForm"><span class="unit">cm</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Přesnost sondy</label>
+                        <label>Přesnost sondy <button type="button" class="help-tip" data-help="accuracy"></button></label>
                         <div class="input-unit"><input type="number" step="0.01" required name="probe_accuracy_pct" form="calForm"><span class="unit">% rozsahu</span></div>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Rozsah sondy</label>
+                        <label>Rozsah sondy <button type="button" class="help-tip" data-help="range"></button></label>
                         <div class="input-unit"><input type="number" step="1" required name="probe_range_cm" form="calForm"><span class="unit">cm</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Vyhlazení šumu</label>
+                        <label>Vyhlazení šumu <button type="button" class="help-tip" data-help="deadband"></button></label>
                         <div class="readonly-val" id="deadbandInfo">–</div>
                     </div>
                 </div>
@@ -531,7 +547,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Baterie v čidle (3× AA)</label>
+                        <label>Baterie v čidle (3× AA) <button type="button" class="help-tip" data-help="battery_type"></button></label>
                         <select name="battery_type" class="unified-select" form="calForm">
                             <option value="lifes2">Lithiové Li-FeS2 (Energizer Ultimate Lithium)</option>
                             <option value="alkaline">Alkalické</option>
@@ -540,17 +556,17 @@
                 </div>
                 <div class="form-row adv">
                     <div class="form-group">
-                        <label>Kapacita lithiové baterie</label>
+                        <label>Kapacita lithiové baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="battery_capacity_mah" form="calForm"><span class="unit">mAh</span></div>
                     </div>
                     <div class="form-group">
-                        <label>Kapacita alkalické baterie</label>
+                        <label>Kapacita alkalické baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="battery_capacity_alk_mah" form="calForm"><span class="unit">mAh</span></div>
                     </div>
                 </div>
                 <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit</button></div>
                 <div class="sub adv">
-                    <h3>Kalibrace měření baterie</h3>
+                    <h3>Kalibrace měření baterie <button type="button" class="help-tip" data-help="battrim"></button></h3>
                     <div class="inline-actions">
                         <div class="input-unit">
                             <input type="number" step="0.001" id="batActualV" placeholder="Změřené napětí" aria-label="Změřené napětí (V)">
@@ -569,7 +585,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span></label>
+                        <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span> <button type="button" class="help-tip" data-help="notify"></button></label>
                         <div class="input-unit"><input type="number" step="1" min="0" max="100" name="notify_low_pct" form="calForm"><span class="unit">%</span></div>
                     </div>
                 </div>
@@ -584,14 +600,14 @@
                 <div class="alert-warning hidden" id="zoneNote"></div>
                 <div class="field-grid g2">
                     <div class="form-group">
-                        <label>Ventil</label>
+                        <label>Ventil <button type="button" class="help-tip" data-help="provider"></button></label>
                         <select name="refill_provider" class="unified-select" form="calForm">
                             <option value="none">Žádný</option>
                             <option value="hydrawise">Hunter Hydrawise</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="zoneSelect">Zóna</label>
+                        <label for="zoneSelect">Zóna <button type="button" class="help-tip" data-help="zone"></button></label>
                         <div class="select-action">
                             <select id="zoneSelect" class="unified-select"><option value="">– bez zóny –</option></select>
                             <button type="button" class="btn btn-outline btn-icon" id="zoneLoad" title="Načíst zóny z Hydrawise" aria-label="Načíst zóny z Hydrawise">
@@ -604,7 +620,7 @@
                     <h3>Ruční nastavení</h3>
                     <div class="field-grid g2">
                         <div class="form-group">
-                            <label>Zóna – Relay ID</label>
+                            <label>Zóna – Relay ID <button type="button" class="help-tip" data-help="relay"></button></label>
                             <input type="text" name="hydrawise_relay_id" class="unified-input" autocomplete="off" inputmode="numeric" form="calForm">
                             <p class="field-hint">číslo zóny, když názvy nejde načíst</p>
                         </div>
@@ -619,54 +635,54 @@
                     <h3>Pravidla</h3>
                     <div class="field-grid g2 toggles">
                         <label class="toggle">
-                            <span class="toggle-text">Automatické dopouštění</span>
+                            <span class="toggle-text">Automatické dopouštění <button type="button" class="help-tip" data-help="autorefill"></button></span>
                             <span class="switch"><input type="checkbox" name="auto_refill_enabled" form="calForm"><span class="slider"></span></span>
                         </label>
                         <label class="toggle">
-                            <span class="toggle-text">Čekat na předpovězený déšť</span>
+                            <span class="toggle-text">Čekat na předpovězený déšť <button type="button" class="help-tip" data-help="rainwait"></button></span>
                             <span class="switch"><input type="checkbox" name="rain_wait_enabled" form="calForm"><span class="slider"></span></span>
                         </label>
                     </div>
                     <div class="field-grid rule-grid">
                     <div class="form-group">
-                        <label>Dopouštět pod</label>
+                        <label>Dopouštět pod <button type="button" class="help-tip" data-help="threshold"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="refill_threshold_pct" form="calForm"><span class="unit">%</span></div>
                         <p class="field-hint">spouštěcí hladina</p>
                     </div>
                     <div class="form-group">
-                        <label>Dopustit na</label>
+                        <label>Dopustit na <button type="button" class="help-tip" data-help="target"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="auto_refill_target_pct" form="calForm"><span class="unit">%</span></div>
                         <p class="field-hint">cílová hladina</p>
                     </div>
                     <div class="form-group">
-                        <label>Max. pod prahem</label>
+                        <label>Max. pod prahem <button type="button" class="help-tip" data-help="rainbelow"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_below_pct" form="calForm"><span class="unit">%</span></div>
                         <p class="field-hint">víc pod prahem se na déšť nečeká</p>
                     </div>
                     <div class="form-group">
-                        <label>Max. pokles</label>
+                        <label>Max. pokles <button type="button" class="help-tip" data-help="raindrop"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_drop_pct" form="calForm"><span class="unit">%</span></div>
                         <p class="field-hint">pak se přestane čekat na déšť</p>
                     </div>
                     </div>
                     <div class="field-grid rule-grid adv">
                     <div class="form-group">
-                        <label>Výhled deště</label>
+                        <label>Výhled deště <button type="button" class="help-tip" data-help="rainhours"></button></label>
                         <div class="input-unit"><input type="number" step="1" min="1" max="72" name="rain_wait_hours" form="calForm"><span class="unit">h</span></div>
                         <p class="field-hint">jak daleko dopředu</p>
                     </div>
                     <div class="form-group">
-                        <label>Nejvýš dopustit na</label>
+                        <label>Nejvýš dopustit na <button type="button" class="help-tip" data-help="maxpct"></button></label>
                         <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct" form="calForm"><span class="unit">%</span></div>
                         <p class="field-hint">horní limit</p>
                     </div>
                     <div class="form-group">
-                        <label>Průtok</label>
+                        <label>Průtok <button type="button" class="help-tip" data-help="flow"></button></label>
                         <div class="input-unit"><input type="number" step="0.1" name="flow_rate_lpm" form="calForm"><span class="unit">L/min</span></div>
                         <p class="field-hint"><span id="realFlowHint">z řadu</span></p>
                     </div>
                     <div class="form-group">
-                        <label>Nejdelší dopouštění</label>
+                        <label>Nejdelší dopouštění <button type="button" class="help-tip" data-help="maxminutes"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="max_refill_minutes" form="calForm"><span class="unit">min</span></div>
                         <p class="field-hint">pojistka času</p>
                     </div>
@@ -784,7 +800,7 @@
                             <div class="readonly-box" id="servisStatus">–</div>
                         </div>
                         <div class="form-group">
-                            <label for="servisMode">Povolit</label>
+                            <label for="servisMode">Povolit <button type="button" class="help-tip" data-help="servis"></button></label>
                             <select id="servisMode" class="unified-select">
                                 <option value="off">Vypnuto</option>
                                 <option value="24h">Na 24 hodin</option>
@@ -814,12 +830,66 @@
                 </details>
             </section>
 
+            <section class="card col-card scope-general" id="genTls" data-nav="HTTPS">
+                <div class="card-title">
+                    <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-lock"/></svg></span>
+                    <div><h2>Zabezpečené připojení (HTTPS)</h2><p class="card-desc">Hub má vlastní certifikační autoritu, nepotřebuje internet ani doménu; certifikát stačí jednou nainstalovat do každého zařízení.</p></div>
+                </div>
+                <div class="tg-state"><span class="status-pill" id="tlsStatus">–</span></div>
+                <p class="muted small" id="tlsLead">Po instalaci certifikátu se hub otevře na <b>https://retencka.local</b> bez varování prohlížeče a půjde v něm zjistit poloha zařízení.</p>
+                <div class="backup-actions" id="tlsActions">
+                    <a class="btn btn-primary" id="tlsDownload" href="/ca.crt" download>Stáhnout certifikát hubu</a>
+                    <a class="small" id="tlsPem" href="/ca.pem" download>.pem</a>
+                    <a class="btn btn-outline hidden" id="tlsGo" href="#">Přejít na zabezpečené připojení</a>
+                </div>
+                <dl class="kv mt-20 hidden" id="tlsInfo"></dl>
+                <details class="yaml-box howto" id="tlsHowto">
+                    <summary>Jak certifikát nainstalovat</summary>
+                    <p class="muted small">Instalace je potřeba jednou na každém zařízení (telefon, tablet, počítač). Pak už varování nevyskakuje.</p>
+                    <details class="howto-os"><summary>Android</summary>
+                        <ol class="setup-steps">
+                            <li>Stáhněte soubor <code>ca.crt</code> tlačítkem výše.</li>
+                            <li>Otevřete Nastavení a vyhledejte „Instalovat certifikát“ (obvykle Zabezpečení → Šifrování a přihlašovací údaje).</li>
+                            <li>Zvolte <b>Certifikát CA</b>, potvrďte varování a vyberte stažený soubor.</li>
+                            <li>Restartujte prohlížeč a otevřete <b>https://retencka.local</b>.</li>
+                        </ol>
+                    </details>
+                    <details class="howto-os"><summary>iPhone a iPad (iOS / iPadOS)</summary>
+                        <ol class="setup-steps">
+                            <li>Soubor stáhněte v Safari a povolte stažení konfiguračního profilu.</li>
+                            <li>V Nastavení klepněte na <b>Profil stažen</b> a profil nainstalujte.</li>
+                            <li>Pak otevřete Nastavení → Obecné → Informace → <b>Nastavení důvěry certifikátů</b> a zapněte důvěru pro certifikát hubu.</li>
+                        </ol>
+                    </details>
+                    <details class="howto-os"><summary>Windows</summary>
+                        <ol class="setup-steps">
+                            <li>Dvakrát klikněte na stažený <code>ca.crt</code> a zvolte <b>Nainstalovat certifikát</b>.</li>
+                            <li>Vyberte „Všechny certifikáty umístit do následujícího úložiště“ a <b>Důvěryhodné kořenové certifikační autority</b>.</li>
+                            <li>Dokončete průvodce a restartujte prohlížeč. Firefox má vlastní úložiště: Nastavení → Soukromí a zabezpečení → Certifikáty → Autority → Importovat.</li>
+                        </ol>
+                    </details>
+                    <details class="howto-os"><summary>macOS</summary>
+                        <ol class="setup-steps">
+                            <li>Dvakrát klikněte na stažený <code>ca.crt</code>, otevře se Přístup ke klíčence.</li>
+                            <li>Certifikát přidejte do klíčenky „Systém“ (nebo „Přihlášení“).</li>
+                            <li>Dvakrát na něj klikněte, rozbalte <b>Důvěřovat</b> a u „Při používání tohoto certifikátu“ zvolte <b>Vždy důvěřovat</b>.</li>
+                        </ol>
+                    </details>
+                </details>
+            </section>
+
             <section class="card col-card scope-general" id="genData" data-nav="Záloha a data">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-archive"/></svg></span>
                     <div><h2>Záloha a data</h2><p class="card-desc">Stažení a nahrání zálohy, automatické zálohy, jak dlouho držet podrobná data.</p></div>
                 </div>
 
+                <div class="alert-info backup-note">
+                    <p><strong>Automatické zálohy.</strong> Jednou denně hub sám uloží kopii databáze na kartu zařízení
+                        (<code id="bkDir">/var/lib/retencka/data/backup</code>) a ponechá posledních <b id="bkKeep">7</b>.</p>
+                    <p>Chrání před poškozenou databází nebo nepovedenou aktualizací, <b>ne</b> před zničenou kartou či ztrátou zařízení.
+                        Proto si zálohu pravidelně stáhněte do jiného zařízení.</p>
+                </div>
                 <div class="backup-actions">
                     <a class="btn btn-primary" id="backupBtn" href="/api/backup/download" download>Stáhnout zálohu</a>
                     <label class="btn btn-outline file-btn">Nahrát zálohu…
@@ -828,19 +898,17 @@
                     <label class="check"><input type="checkbox" id="importFull"> včetně nastavení a uživatelů</label>
                 </div>
                 <p class="muted small mt-15">Nahraná data se přidají k současným, duplicity se přeskočí.</p>
-                <div class="adv">
-                    <div class="table-responsive mt-20">
-                        <table class="user-table">
-                            <thead><tr><th>Automatické zálohy</th><th>Velikost</th></tr></thead>
-                            <tbody id="backupBody"></tbody>
-                        </table>
-                    </div>
+                <div class="table-responsive mt-20">
+                    <table class="user-table">
+                        <thead><tr><th>Automatické zálohy na kartě</th><th>Velikost</th></tr></thead>
+                        <tbody id="backupBody"></tbody>
+                    </table>
                 </div>
                 <form id="dataForm" class="config-form settings-form sub">
                     <h3>Uchovávání dat</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Mazat podrobná data starší než <span class="muted">(0 = nikdy)</span></label>
+                            <label>Mazat podrobná data starší než <span class="muted">(0 = nikdy)</span> <button type="button" class="help-tip" data-help="retention"></button></label>
                             <div class="input-unit"><input type="number" step="1" min="0" name="retention_days"><span class="unit">dní</span></div>
                         </div>
                     </div>
@@ -852,8 +920,8 @@
                         Nádrže, nastavení a záznamy (Logování) zůstanou.</p>
                     <div class="field-grid g2">
                         <div class="form-group">
-                            <label for="delNode">Nádrž</label>
-                            <select id="delNode" class="unified-select"><option value="">Všechny nádrže</option></select>
+                            <label for="delNode">Čidlo</label>
+                            <select id="delNode" class="unified-select"><option value="">Všechna čidla</option></select>
                         </div>
                         <div class="form-group">
                             <label for="delRange">Rozsah</label>
@@ -877,6 +945,7 @@
                     <div><h2>Systém</h2><p class="card-desc">Verze, adresa v síti, stav zařízení a aktualizace.</p></div>
                 </div>
 
+                <div class="alert-warning hidden" id="sysDiskWarn"></div>
                 <dl class="kv" id="sysInfo"></dl>
                 <h3>Aktualizace</h3>
                 <div class="upd-line" id="sysUpdate"></div>
@@ -894,6 +963,13 @@
                     </label>
                 </div>
                 <div class="form-actions"><button class="btn btn-outline" id="updateBtn" type="button">Zkontrolovat aktualizace</button></div>
+                <div class="danger-zone sub" id="resetZone">
+                    <h3>Nebezpečná zóna</h3>
+                    <div class="alert-row">
+                        <p class="muted small">Vrátí hub do stavu po první instalaci: smaže data, nastavení, uživatele i klíče čidel.</p>
+                        <button class="btn btn-danger" id="factoryBtn" type="button">Obnovit tovární nastavení…</button>
+                    </div>
+                </div>
             </section>
 
             </div>

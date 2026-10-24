@@ -1,5 +1,5 @@
 [Unit]
-Description=Retenční nádrž – akce s právy roota na žádost aplikace (restart, servisní přístup)
+Description=Retenční nádrž – akce s právy roota na žádost aplikace (restart, servisní přístup, certifikát HTTPS)
 
 [Service]
 Type=oneshot

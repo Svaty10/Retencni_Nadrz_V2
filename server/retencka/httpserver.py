@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import re
+import ssl
 from email.utils import formatdate
 from http import HTTPStatus
 from typing import Any, Awaitable, Callable, Optional
@@ -78,6 +79,7 @@ class Request:
         self.headers = headers
         self.remote = remote
         self.secure = False
+        self.target = target
         self._body = body
         path, _, qs = target.partition("?")
         self.path = unquote(path)
@@ -304,6 +306,9 @@ class Application:
     def __setitem__(self, k: str, v: Any) -> None:
         self._store[k] = v
 
+    def get(self, k: str, default: Any = None) -> Any:
+        return self._store.get(k, default)
+
     async def _dispatch(self, request: Request) -> Response:
         async def endpoint(req: Request) -> Response:
             handler, info = self.router.resolve(req.method, req.path)
@@ -318,14 +323,23 @@ class Application:
 
 # =================================================================== server
 class Server:
-    def __init__(self, app: Application):
+    """ssl_context given -> HTTPS (request.secure is True)."""
+
+    def __init__(self, app: Application, ssl_context: Optional[ssl.SSLContext] = None):
         self.app = app
+        self.ssl = ssl_context
         self.connections = 0
         self._server: Optional[asyncio.base_events.Server] = None
 
     async def start(self, host: str, port: int, backlog: int = 32) -> None:
+        extra = {"ssl": self.ssl, "ssl_handshake_timeout": HEADER_TIMEOUT} if self.ssl else {}
         self._server = await asyncio.start_server(self._client, host, port, backlog=backlog,
-                                                  reuse_address=True, limit=MAX_HEADER_BYTES)
+                                                  reuse_address=True, limit=MAX_HEADER_BYTES, **extra)
+
+    def close(self) -> None:
+        """Stop listening; open connections finish on their own (keep-alive timeout)."""
+        if self._server:
+            self._server.close()
 
     async def stop(self) -> None:
         if self._server:
@@ -424,6 +438,7 @@ class Server:
             request = Request(self.app, method, target, version, headers, body, remote)
         except ValueError:                      # e.g. too many query parameters
             return await self._send_error(writer, 400)
+        request.secure = self.ssl is not None
         request["_writer"] = writer
         if stream_max:
             request._stream, request.stream_left = reader, length

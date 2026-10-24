@@ -14,6 +14,11 @@ helper, which carries the request out:
                    NetBird (retencka-netbird-install.sh, same as install.sh) and allow
                    access for 24 h; progress in netbird-install.json. The key is read,
                    the file deleted at once, and the key is never logged or written back.
+  control-tls      check the HTTPS certificate now (the app asks when it has none yet)
+
+Every run also checks the hub's own HTTPS certificate (retencka_tls.py): the local CA
+is created once, the server certificate renewed before it expires or when the device's
+name / IP address changed.
 
 retencka-control.timer runs it every 5 minutes as well (expiry of the 24 h access,
 status for the web UI in servis-status.json).
@@ -27,10 +32,14 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Optional
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import retencka_tls  # noqa: E402
 
 DATA = Path("/var/lib/retencka/data")
 WANT = DATA / "servis.json"
@@ -219,6 +228,10 @@ def main() -> None:
     for f in DATA.glob("control-*"):
         f.unlink(missing_ok=True)
     apply_servis()
+    try:
+        retencka_tls.ensure()
+    except Exception as e:                      # never block the other duties
+        log(f"tls: certificate check failed: {e}")
 
 
 if __name__ == "__main__":
