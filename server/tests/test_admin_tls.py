@@ -359,6 +359,11 @@ class AdminServerTest(unittest.TestCase):
 
         async def handler(_):
             return "handled"
+        # off by default: http keeps working
+        self.assertEqual(asyncio.run_coroutine_threadsafe(mw_redirect(FakeReq(), handler), self.loop).result(5), "handled")
+        st, js, _, _ = self.req("POST", "/api/tls", {"redirect": True}, h)
+        self.assertEqual(st, 400)                   # only from an https:// page
+        self.core.settings.update({"https_redirect": True}, allow_internal=True)
         resp = asyncio.run_coroutine_threadsafe(mw_redirect(FakeReq(), handler), self.loop).result(5)
         self.assertEqual(resp.status, 302)
         self.assertEqual(resp.headers["Location"], f"https://retencka.local:{self.https_port}/?node=1")
@@ -380,6 +385,23 @@ class AdminServerTest(unittest.TestCase):
         self.assertIn("Secure", r.getheader("Set-Cookie"))
         self.assertIsNone(r.getheader("Strict-Transport-Security"))
         self.assertIn("geolocation=(self)", r.getheader("Permissions-Policy"))
+        cookie = r.getheader("Set-Cookie").split(";")[0]
+        conn.close()
+        conn = http.client.HTTPSConnection("127.0.0.1", self.https_port, context=ctx, timeout=15)
+        conn.sock = ctx.wrap_socket(socket.create_connection(("127.0.0.1", self.https_port), timeout=10),
+                                    server_hostname="retencka.local")
+        conn.request("GET", "/api/me", headers={"Cookie": cookie, "Host": "retencka.local"})
+        csrf = json.loads(conn.getresponse().read())["csrf"]
+        conn.request("POST", "/api/tls", body=json.dumps({"redirect": False}),
+                     headers={"Cookie": cookie, "X-CSRF-Token": csrf, "Content-Type": "application/json",
+                              "Host": "retencka.local"})
+        r = conn.getresponse()
+        self.assertEqual((r.status, json.loads(r.read())["redirect"]), (200, False))
+        conn.request("POST", "/api/tls", body=json.dumps({"redirect": True}),
+                     headers={"Cookie": cookie, "X-CSRF-Token": csrf, "Content-Type": "application/json",
+                              "Host": "retencka.local"})
+        r = conn.getresponse()
+        self.assertEqual((r.status, json.loads(r.read())["redirect"]), (200, True))
         conn.close()
         st, js, _, _ = self.req("GET", "/api/tls", headers=h)
         self.assertTrue(js["available"] and js["active"])

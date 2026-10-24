@@ -842,6 +842,11 @@
                     <a class="small" id="tlsPem" href="/ca.pem" download>.pem</a>
                     <a class="btn btn-outline hidden" id="tlsGo" href="#">Přejít na zabezpečené připojení</a>
                 </div>
+                <label class="toggle mt-20 hidden" id="tlsRedirectRow">
+                    <span class="toggle-text">Vždy používat HTTPS
+                        <span class="muted small" id="tlsRedirectHint">http:// adresa přesměruje na https://. Zapněte, až mají certifikát nainstalovaný všechna zařízení, ze kterých na hub chodíte – jinak prohlížeč ukáže varování.</span></span>
+                    <span class="switch"><input type="checkbox" id="tlsRedirect"><span class="slider"></span></span>
+                </label>
                 <dl class="kv mt-20 hidden" id="tlsInfo"></dl>
                 <details class="yaml-box howto" id="tlsHowto">
                     <summary>Jak certifikát nainstalovat</summary>

@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.8.0] - 2026-10-24
+
+### Změněno
+- **HTTPS se už nevynucuje:** `http://retencka.local` funguje dál jako dřív, `https://` je k dispozici vedle. Přesměrování z http na https zapne administrátor přepínačem **Vždy používat HTTPS** v kartě *Zabezpečené připojení (HTTPS)* – až mají certifikát hubu nainstalovaný jeho zařízení (zapnout jde jen ze stránky otevřené přes https://). Huby s 1.7.x tak po aktualizaci nikoho nepřekvapí varováním prohlížeče.
+
 ## [1.7.1] - 2026-10-24
 
 ### Opraveno (bezpečnost)

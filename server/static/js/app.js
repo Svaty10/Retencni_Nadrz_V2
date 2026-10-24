@@ -1794,6 +1794,13 @@
             : t.available ? 'Certifikát je připravený, HTTPS se zatím nespustilo' : 'Certifikát hubu se zatím nevytvořil';
         $('tlsActions').classList.toggle('hidden', !t.available);
         $('tlsLead').textContent = t.available ? TLS_LEAD : 'Certifikační autorita hubu se vytvoří při spuštění HTTPS; pak zde bude certifikát ke stažení.';
+        const sw = $('tlsRedirect');
+        $('tlsRedirectRow').classList.toggle('hidden', !t.active || ME.role !== 'admin');
+        sw.checked = !!t.redirect;
+        sw.disabled = !t.redirect && !t.secure;      // turning on only from an https:// page
+        $('tlsRedirectHint').textContent = !t.redirect && !t.secure
+            ? 'Zapnout jde jen z adresy https://… – tak ověříte, že certifikát v tomto zařízení funguje.'
+            : 'http:// adresa přesměruje na https://. Zapněte, až mají certifikát nainstalovaný všechna zařízení, ze kterých na hub chodíte – jinak prohlížeč ukáže varování.';
         const show = !!t.active && !!t.https_url && /^https:\/\//i.test(t.https_url) && location.protocol === 'http:';
         go.classList.toggle('hidden', !show);
         if (show) go.href = t.https_url;
@@ -1805,6 +1812,24 @@
         if (names.length) rows.push(['Pokrývá adresy', names.map(esc).join(', ')]);
         info.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
         info.classList.toggle('hidden', !rows.length);
+    }
+
+    function bindTls() {
+        const sw = $('tlsRedirect');
+        sw.addEventListener('change', async () => {
+            const on = sw.checked;
+            if (on) {
+                const ok = await confirmDialog({
+                    title: 'Vždy používat HTTPS?',
+                    body: ['Adresa http:// se bude přesměrovávat na https://.',
+                        'Zařízení bez nainstalovaného certifikátu hubu pak uvidí varování prohlížeče. Vypnout to jde kdykoli zde.'],
+                    confirm: 'Zapnout'
+                });
+                if (!ok) { sw.checked = false; return; }
+            }
+            const r = await action(() => api('POST', '/api/tls', { redirect: on }), on ? 'HTTPS se bude používat vždy.' : 'Hub je dostupný přes http i https.');
+            if (!r) sw.checked = !on;
+        });
     }
 
     function tgStatusText(t) {
@@ -2971,7 +2996,7 @@
             api('POST', '/api/auth/logout', {}).finally(() => window.location.replace('/login'));
         });
         bindRefill();
-        if (ME.role === 'admin') { bindSettings(); bindUpdates(); }
+        if (ME.role === 'admin') { bindSettings(); bindUpdates(); bindTls(); }
         bindUsers();
         bindTelegram();
 

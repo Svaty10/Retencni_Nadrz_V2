@@ -18,8 +18,8 @@ Hlavička `Authorization: Bearer <token>` (token: *Nastavení → Obecné → Ho
 `GET /health` (bez tokenu) → `{"status":"ok","version":"1.0.0","radio":"gdo0"}`; 503 = rádio nepracuje.
 
 ## Webová aplikace – port 443 (HTTPS) a 80
-Po vytvoření prvního účtu web běží na HTTPS s certifikátem vlastní certifikační autority hubu a `http://` (port 80)
-přesměruje na `https://` (302, u POST 307). Bez přesměrování zůstává: první nastavení (dokud neexistuje
+Web běží na HTTPS s certifikátem vlastní certifikační autority hubu i na `http://` (port 80). Se zapnutým
+„Vždy používat HTTPS“ (`POST /api/tls`) `http://` přesměruje na `https://` (302, u POST 307). Bez přesměrování zůstává vždy: první nastavení (dokud neexistuje
 uživatel), `GET /ca.crt` a `GET /ca.pem` (certifikát CA hubu, bez přihlášení, 404 dokud nevznikl) a požadavky
 z localhostu (proxy, cloudflared). HSTS se s vlastní CA neposílá.
 
@@ -33,7 +33,8 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | POST | `/api/auth/setup` | (setup) | vlastní admin účet (`username`, `password`), jen s lístkem z prvního přihlášení |
 | POST | `/api/auth/logout` | user | |
 | GET | `/api/me` | user | jméno, role, CSRF token, verze; po HTTPS přesune session z cookie `rt_sid` do `__Host-rt_sid` (Secure) |
-| GET | `/api/tls` | user | HTTPS: `available` (CA existuje), `active` (HTTPS běží), `secure` (tento požadavek je po HTTPS), `https_url`, `fingerprint` (SHA-256 certifikátu CA), `ca_not_after`, `cert_not_after`, `issued_at` (epoch s), `names`, `ips` |
+| GET | `/api/tls` | user | HTTPS: `available` (CA existuje), `active` (HTTPS běží), `secure` (tento požadavek je po HTTPS), `https_url`, `fingerprint` (SHA-256 certifikátu CA), `ca_not_after`, `cert_not_after`, `issued_at` (epoch s), `names`, `ips`, `redirect` |
+| POST | `/api/tls` | admin | `{"redirect": true\|false}` – vždy používat HTTPS (přesměrování z http); zapnout jen z požadavku přes HTTPS, jinak 400 |
 | POST | `/api/me/password` | user | `old_password`, `new_password` |
 | POST | `/api/me/theme` | user | `theme`: `auto` / `light` / `dark` – motiv uložený u účtu (`GET /api/me` ho vrací v `theme`) |
 | GET | `/api/state` | user | kompletní živý stav pro dashboard; `disk_low` (na kartě méně než 300 MB), `disk_free_mb` |

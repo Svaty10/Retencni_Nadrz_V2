@@ -227,13 +227,14 @@ def https_location(request: web.Request, port: int, path: Optional[str] = None) 
     return f"https://{name}{'' if port == 443 else f':{port}'}{request.target if path is None else path}"
 
 
-def make_https_redirect(no_users: Callable[[], bool]):
-    """Port 80 -> HTTPS once the HTTPS listener runs. Not redirected: the first setup
-    (no account yet – the label password flow works over plain http), the CA download
-    and local proxies (cloudflared on loopback)."""
+def make_https_redirect(no_users: Callable[[], bool], enabled: Callable[[], bool]):
+    """Port 80 -> HTTPS when the admin switched it on and the HTTPS listener runs. Off by
+    default: a device without the hub's CA would get a browser warning. Never redirected:
+    the first setup (no account yet – the label password flow works over plain http), the
+    CA download and local proxies (cloudflared on loopback)."""
     async def redirect(request: web.Request, handler):
         port = request.app.get("https_port")
-        if (port and not request.secure and not _is_loopback(request.remote)
+        if (port and not request.secure and enabled() and not _is_loopback(request.remote)
                 and request.path not in PLAIN_HTTP_PATHS and not no_users()):
             loc = https_location(request, port)
             if loc:
@@ -291,7 +292,9 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         return db.scalar("SELECT COUNT(*) FROM users", default=0) == 0
 
     app = web.Application(client_max_size=MAX_BODY,
-                          middlewares=[security_headers, make_https_redirect(no_users), make_auth_middleware(core)])
+                          middlewares=[security_headers,
+                                       make_https_redirect(no_users, lambda: bool(settings.get("https_redirect"))),
+                                       make_auth_middleware(core)])
     app.prepare_hooks.append(lambda req, resp: _apply_security_headers(req, resp.headers))
     st = Static(static_dir)
     login_locks = app["login_locks"] = auth.LoginLocks()
@@ -373,7 +376,23 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                                            "cert_not_after": None, "names": [], "ips": [], "issued_at": None}
         port = request.app.get("https_port")
         return jresp({**info, "active": bool(port), "secure": bool(request.secure),
+                      "redirect": bool(settings.get("https_redirect")),
                       "https_url": https_location(request, port, "/") if port else None})
+
+    @need("admin")
+    async def api_tls_set(request):
+        """{"redirect": bool} – always use HTTPS. Turning it on only works over HTTPS, so
+        the admin has seen that the certificate is trusted on at least this device."""
+        data = await read_json(request)
+        on = data.get("redirect")
+        if not isinstance(on, bool):
+            return jerr("Neplatná hodnota.")
+        if on and not (request.app.get("https_port") and request.secure):
+            return jerr("Zapněte to z adresy https://… – tak ověříte, že certifikát hubu v tomto zařízení funguje.")
+        settings.update({"https_redirect": on}, allow_internal=True)
+        core.audit("SETTINGS_CHANGED", "HTTPS: " + ("vždy (http přesměruje)" if on else "http i https"),
+                   *user_of(request))
+        return jresp({"ok": True, "redirect": on})
 
     # ------------------------------------------------------------------ auth
     async def api_auth_mode(request):
@@ -1361,6 +1380,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_get("/ca.crt", ca_cert)
     r.add_get("/ca.pem", ca_cert)
     r.add_get("/api/tls", api_tls)
+    r.add_post("/api/tls", api_tls_set)
     r.add_get("/static/{path:.+}", static_file)
     r.add_get("/api/auth/mode", api_auth_mode)
     r.add_post("/api/auth/login", api_login)

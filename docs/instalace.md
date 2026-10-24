@@ -51,8 +51,8 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    nebo `http://192.168.4.1`).
 3. Vybrat domácí síť, zadat heslo → zařízení se připojí, hotspot zmizí.
 4. Telefon zpět na domácí Wi-Fi → `http://retencka.local` (nebo `http://retencka-xxxx.local`).
-   Po vytvoření účtu web přejde na **HTTPS** (`https://retencka.local`); aby prohlížeč nevaroval, nainstalujte
-   do zařízení jednou certifikát hubu – viz [HTTPS – certifikát hubu](#https--certifikát-hubu).
+   Web jde otevřít i šifrovaně – `https://retencka.local`; aby prohlížeč nevaroval, nainstalujte do zařízení
+   jednou certifikát hubu – viz [HTTPS – certifikát hubu](#https--certifikát-hubu).
 5. První přihlášení: jméno **admin** + **heslo ze štítku** → vytvořit vlastní účet (jiné jméno i heslo);
    výchozí přístup se tím zruší. *Nastavení*, *Správa uživatelů*, *Logování* i *Můj účet* jsou v menu
    pod ikonou účtu vpravo nahoře.
@@ -142,9 +142,11 @@ Hub nepotřebuje doménu ani internet: při prvním spuštění si vytvoří **v
 (platí 10 let, soukromý klíč jen pro root v `/var/lib/retencka/tls-ca/`) a podepíše jí certifikát webu pro
 `retencka.local`, `retencka-xxxx.local` a aktuální IP adresy v síti. Ten má 397 dní a obnovuje se sám
 (30 dní před koncem, a hned když se změní IP adresa nebo název) – stará se o to `retencka-control`
-(každých 5 minut). Web běží na `https://…` (port 443), `http://…` na portu 80 na HTTPS přesměruje – kromě
-prvního nastavení (dokud neexistuje účet), stažení certifikátu a hotspotu s portálem pro Wi-Fi, ty fungují
-po http dál. API pro Home Assistant zůstává `http://…:8081` v LAN.
+(každých 5 minut). Web běží na `https://…` (port 443) i dál na `http://…` (port 80). Až mají certifikát
+nainstalovaný všechna vaše zařízení, zapněte v kartě HTTPS **Vždy používat HTTPS** (jde jen ze stránky
+otevřené přes `https://`): `http://` pak přesměruje na HTTPS – kromě prvního nastavení (dokud neexistuje účet),
+stažení certifikátu a hotspotu s portálem pro Wi-Fi, ty fungují po http vždy. API pro Home Assistant zůstává
+`http://…:8081` v LAN.
 
 Certifikát se do každého zařízení (telefon, PC) instaluje **jednou**. Stáhnete ho v *Nastavení → Obecné →
 Zabezpečené připojení (HTTPS) → Stáhnout certifikát hubu*, na přihlašovací stránce, nebo přímo z

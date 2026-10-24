@@ -35,6 +35,8 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     # raw 5-min measurements older than this are deleted (0 = keep forever);
     # hourly aggregates are always kept. ~10 MB per sensor and year.
     "retention_days":            (0, "int", 0, 36500),
+    # http:// -> https:// redirect (off: both work; the admin turns it on once devices trust the CA)
+    "https_redirect":            (False, "bool", None, None),
 }
 
 # Per-node configuration (tank + probe of that node)
@@ -83,7 +85,7 @@ INHERITABLE = ("probe_accuracy_pct", "probe_range_cm", "notify_low_pct", "runoff
 DEFAULTS_KEY = "node_defaults"           # settings row with the shared defaults (JSON)
 
 SECRET_KEYS = {"hydrawise_api_key", "telegram_token"}
-INTERNAL_KEYS = {"ha_token"}
+INTERNAL_KEYS = {"ha_token", "https_redirect"}
 MAX_NODES = 16
 
 
