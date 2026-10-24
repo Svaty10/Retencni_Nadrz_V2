@@ -419,8 +419,19 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need()
     async def api_me(request):
         s = request["session"]
+        theme = db.scalar("SELECT theme FROM users WHERE username=?", (s["username"],), "auto") or "auto"
         return jresp({"username": s["username"], "role": s["role"], "csrf": s["csrf"],
-                      "version": __version__, "hostnames": core.hostnames()})
+                      "version": __version__, "hostnames": core.hostnames(), "theme": theme})
+
+    @need()
+    async def api_me_theme(request):
+        """Colour theme of the signed-in user (stored with the account, any device)."""
+        data = await read_json(request)
+        theme = data.get("theme")
+        if theme not in ("auto", "light", "dark"):
+            return jerr("Motiv musí být auto, light nebo dark.")
+        db.execute("UPDATE users SET theme=? WHERE username=?", (theme, request["session"]["username"]))
+        return jresp({"ok": True, "theme": theme})
 
     @need()
     async def api_me_password(request):
@@ -1240,6 +1251,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/auth/logout", api_logout)
     r.add_post("/api/auth/setup", api_setup)
     r.add_get("/api/me", api_me)
+    r.add_post("/api/me/theme", api_me_theme)
     r.add_post("/api/me/password", api_me_password)
     r.add_get("/api/state", api_state)
     r.add_get("/api/history", api_history)

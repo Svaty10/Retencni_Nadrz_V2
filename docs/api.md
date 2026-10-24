@@ -29,6 +29,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | POST | `/api/auth/logout` | user | |
 | GET | `/api/me` | user | jméno, role, CSRF token, verze |
 | POST | `/api/me/password` | user | `old_password`, `new_password` |
+| POST | `/api/me/theme` | user | `theme`: `auto` / `light` / `dark` – motiv uložený u účtu (`GET /api/me` ho vrací v `theme`) |
 | GET | `/api/state` | user | kompletní živý stav pro dashboard |
 | GET | `/api/history?range=24h\|7d\|30d\|365d` nebo `?from=&to=` (epoch s) | user | zprůměrovaná řada (max ~600 bodů): hladina, objem, klima, baterie, `rssi`, `refill`, `bands` (úseky dopouštění a přítoku z deště: `kind`, `start`, `end`, `litres`), `boots` (vložení baterie / restart čidla) |
 | GET | `/api/flows?…` | user | denní spotřeba / přítok ze srážek / dopouštění |

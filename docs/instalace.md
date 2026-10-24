@@ -54,6 +54,7 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
 5. První přihlášení: jméno **admin** + **heslo ze štítku** → vytvořit vlastní účet (jiné jméno i heslo);
    výchozí přístup se tím zruší. *Nastavení*, *Správa uživatelů*, *Logování* i *Můj účet* jsou v menu
    pod ikonou účtu vpravo nahoře.
+   V témže menu je **Motiv** (Auto / Světlý / Tmavý) – pamatuje si ho každý účet zvlášť, na všech zařízeních.
 
    *Nastavení* má záložky **Obecné** (celý systém: poloha, Hunter Hydrawise, Telegram a vzdálený servis,
    Home Assistant, záloha a data, systém), **Všechny nádrže** (čidla, párování, výchozí nastavení nádrží)

@@ -13,6 +13,7 @@
     <title>Retenční Nádrž</title>
     <link rel="icon" href="/favicon.ico" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/theme.js"></script>
 </head>
 <body class="no-refill">
 <!-- Ikony: jednou definované čárové symboly (stroke = currentColor), používá se <use href="#i-…"> -->
@@ -87,6 +88,15 @@
                     <svg class="ico" aria-hidden="true"><use href="#i-restart"/></svg>Restartovat zařízení</button>
                 <button class="menu-item admin-only hidden" id="menuPoweroff" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-power"/></svg>Vypnout zařízení</button>
+                <div class="menu-sep" role="separator"></div>
+                <div class="menu-theme" role="group" aria-label="Motiv">
+                    <span class="menu-theme-label">Motiv</span>
+                    <div class="seg seg-sm" id="themeSeg">
+                        <button type="button" data-theme-pick="auto" title="Podle zařízení">Auto</button>
+                        <button type="button" data-theme-pick="light">Světlý</button>
+                        <button type="button" data-theme-pick="dark">Tmavý</button>
+                    </div>
+                </div>
                 <div class="menu-sep" role="separator"></div>
                 <button class="menu-item" id="logoutBtn" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg>Odhlásit</button>

@@ -206,6 +206,27 @@
     }
 
     // ------------------------------------------------------- účet (menu)
+    // Motiv: 'auto' (podle zařízení) / 'light' / 'dark'; uložený u účtu na hubu,
+    // kopie v localStorage jen kvůli prvnímu vykreslení (theme.js).
+    function applyTheme(theme, redraw) {
+        const t = theme === 'light' || theme === 'dark' ? theme : 'auto';
+        if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', t);
+        try { if (t === 'auto') localStorage.removeItem('theme'); else localStorage.setItem('theme', t); } catch (e) { /* ignore */ }
+        document.querySelectorAll('#themeSeg [data-theme-pick]').forEach((b) =>
+            b.setAttribute('aria-pressed', b.dataset.themePick === t ? 'true' : 'false'));
+        ME.theme = t;
+        if (redraw) { readTheme(); if ($('dashboard').classList.contains('active')) loadAllCharts(); }
+    }
+    function bindThemeSwitch() {
+        document.querySelectorAll('#themeSeg [data-theme-pick]').forEach((b) => b.addEventListener('click', (ev) => {
+            ev.stopPropagation();                     // menu zůstane otevřené
+            const t = b.dataset.themePick, prev = ME.theme;
+            applyTheme(t, true);
+            api('POST', '/api/me/theme', { theme: t }).catch(() => { applyTheme(prev, true); toast('Motiv se nepodařilo uložit.'); });
+        }));
+    }
+
     function bindAccountMenu() {
         const btn = $('accountBtn'), menu = $('accountMenu');
         const items = () => Array.from(menu.querySelectorAll('.menu-item')).filter((el) => !el.classList.contains('hidden'));
@@ -2510,6 +2531,7 @@
             Object.assign(ME, await api('GET', '/api/me'));
             try { CURRENT_NODE = sessionStorage.getItem('node'); VIEW_ALL = sessionStorage.getItem('viewAll') === '1'; } catch (e) { /* ignore */ }
         } catch (e) { return; }
+        applyTheme(ME.theme, false);
         $('userBadge').textContent = ME.username;
         $('userRole').textContent = ME.role === 'admin' ? 'Administrátor' : 'Uživatel';
         const initial = (ME.username || '?').trim().charAt(0) || '?';
@@ -2523,11 +2545,13 @@
         document.querySelectorAll('.range-picker').forEach(buildRangePicker);
         document.querySelectorAll('input[type="date"]').forEach(czDateInput);
         bindAccountMenu();
+        bindThemeSwitch();
         if (ME.role === 'admin') bindPowerMenu();
         // přepnutí světlý/tmavý motiv → grafy znovu s novými barvami
         if (window.matchMedia) {
             const mq = window.matchMedia('(prefers-color-scheme: dark)');
-            const onScheme = () => { readTheme(); if ($('dashboard').classList.contains('active')) loadAllCharts(); };
+            const onScheme = () => { if (ME.theme && ME.theme !== 'auto') return;   // vynucený motiv
+                readTheme(); if ($('dashboard').classList.contains('active')) loadAllCharts(); };
             if (mq.addEventListener) mq.addEventListener('change', onScheme); else if (mq.addListener) mq.addListener(onScheme);
         }
 

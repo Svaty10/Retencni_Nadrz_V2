@@ -223,6 +223,10 @@ MIGRATIONS: list[str] = [
         WHERE key = 'node_defaults' AND EXISTS (SELECT 1 FROM settings s
             WHERE s.key = 'battery_capacity_alk_mah' AND CAST(s.value AS REAL) != 2500.0)
     """,
+    # --- v12: colour theme per user ('auto' = follow the device, 'light', 'dark')
+    """
+    ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'auto'
+    """,
 ]
 
 
@@ -281,7 +285,13 @@ class Database:
             c.execute("BEGIN IMMEDIATE")
             try:
                 for stmt in _split_sql(MIGRATIONS[i]):
-                    c.execute(stmt)
+                    try:
+                        c.execute(stmt)
+                    except sqlite3.OperationalError as e:
+                        # ADD COLUMN that is already there (a DB whose version was
+                        # rewound, e.g. restored by hand): the column is what we want
+                        if "duplicate column name" not in str(e) or "ADD COLUMN" not in stmt.upper():
+                            raise
                 c.execute(f"PRAGMA user_version={i + 1}")
                 c.execute("COMMIT")
             except Exception:

@@ -626,6 +626,21 @@ class ServerTest(unittest.TestCase):
         st, _, _ = self.req("POST", "/api/auth/login", {"username": "admin2", "password": "Velmi-Tajne-Heslo1"})
         self.assertEqual(st, 200)
 
+    def test_3b_theme_per_user(self):
+        h = self.login()
+        st, me, _ = self.req("GET", "/api/me", headers=h)
+        self.assertEqual(me["theme"], "auto")
+        st, js, _ = self.req("POST", "/api/me/theme", {"theme": "dark"}, headers=h)
+        self.assertEqual(st, 200, js)
+        st, me, _ = self.req("GET", "/api/me", headers=self.login())     # new session, same user
+        self.assertEqual(me["theme"], "dark")
+        st, js, _ = self.req("POST", "/api/me/theme", {"theme": "neon"}, headers=h)
+        self.assertEqual(st, 400)
+        st, js, _ = self.req("POST", "/api/me/theme", {"theme": "dark"},
+                             headers={"Cookie": h["Cookie"]})           # without CSRF token
+        self.assertEqual(st, 403)
+        self.req("POST", "/api/me/theme", {"theme": "auto"}, headers=h)
+
     def test_4_http_hardening(self):
         for cl in ("+5", "1_0", "5 5", "-1", "0x5", "٥"):
             data = ("POST /api/auth/login HTTP/1.1\r\nHost: x\r\nContent-Length: %s\r\n\r\n" % cl).encode("utf-8")

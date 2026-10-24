@@ -48,7 +48,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         color-scheme: dark;
         --bg: #18191b;
         --surface: #212225;
@@ -83,6 +83,40 @@
         --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9993' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 9.5 12 15l5.5-5.5'/%3E%3C/svg%3E");
     }
 }
+:root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #18191b;
+        --surface: #212225;
+        --surface-2: #2a2b2f;
+        --line: #333438;
+        --line-strong: #46474c;
+        --ink: #ecebe7;
+        --ink-2: #c6c5c0;
+        --muted: #9a9993;
+        --accent: #6aa5df;
+        --accent-hover: #86b7e8;
+        --accent-ink: #0e1620;
+        --accent-soft: #233142;
+        --water: #2a4560;
+        --green: #6cbf8a;
+        --green-soft: #1f2f25;
+        --amber: #e0a94f;
+        --amber-soft: #352b1b;
+        --red: #ec7d70;
+        --red-soft: #3a2320;
+        --chart-2: #aeada7;
+        --series-1: #6eaae6;
+        --series-2: #eba25a;
+        --series-3: #6fc490;
+        --series-4: #b79be8;
+        --series-5: #5cc2bb;
+        --series-6: #e889ae;
+        --grid: #292a2e;
+        --band-refill: rgba(108, 191, 138, 0.12);
+        --band-rain: rgba(106, 165, 223, 0.11);
+        --focus: rgba(106, 165, 223, 0.45);
+        --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9993' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 9.5 12 15l5.5-5.5'/%3E%3C/svg%3E");
+    }
 
 @media (pointer: coarse) {
     :root { --ctl-h: 44px; }
@@ -388,6 +422,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .seg button:hover { color: var(--ink); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 0 0 1px var(--line-strong); }
 .seg button:focus-visible { outline-offset: -1px; }
+/* Motiv v menu účtu */
+.menu-theme { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 14px; }
+.menu-theme-label { font-size: 13px; color: var(--muted); }
 .range-custom { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
 .range-custom > span { font-size: 13px; color: var(--muted); }
 
@@ -913,8 +950,9 @@ body.modal-open { overflow: hidden; }
     .modal-foot .btn { flex: 1; }
 }
 @media (prefers-color-scheme: dark) {
-    .modal-backdrop { background: rgba(0, 0, 0, 0.6); }
+    :root:not([data-theme="light"]) .modal-backdrop { background: rgba(0, 0, 0, 0.6); }
 }
+:root[data-theme="dark"] .modal-backdrop { background: rgba(0, 0, 0, 0.6); }
 .modal-backdrop.busy .modal-prefs { display: none; }
 
 /* --- Nastavení: přepínač Všechny nádrže / nádrž, sloupce se zarovnanými spodky ---- */
@@ -1042,7 +1080,10 @@ body.set-tank #nastaveni .scope-general, body.set-tank #nastaveni .scope-all { d
     display: flex; align-items: center; justify-content: center; padding: 16px;
     background: rgba(20, 20, 18, 0.55);
 }
-@media (prefers-color-scheme: dark) { .wait-overlay { background: rgba(0, 0, 0, 0.65); } }
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .wait-overlay { background: rgba(0, 0, 0, 0.65); }
+}
+:root[data-theme="dark"] .wait-overlay { background: rgba(0, 0, 0, 0.65); }
 .wait-box {
     width: 100%; max-width: 380px; padding: 28px 24px; text-align: center;
     background: var(--surface); border: 1px solid var(--line); border-radius: 8px;

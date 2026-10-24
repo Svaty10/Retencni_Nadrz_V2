@@ -3,6 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.6.0] - 2026-10-24
+
+### Přidáno
+- **Volba motivu** v menu účtu: *Auto* (podle zařízení) / *Světlý* / *Tmavý*. Uloží se u účtu, takže platí na všech zařízeních po přihlášení; grafy se přebarví hned.
+
+### Opraveno
+- Migrace databáze přeskočí přidání sloupce, který už existuje (ručně obnovená databáze).
+
 ## [1.5.0] - 2026-10-24
 
 ### Přidáno
