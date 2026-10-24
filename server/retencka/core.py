@@ -56,6 +56,7 @@ UNPAIR_SETTLE_S = 20              # no paired request for this long after it -> 
 STOP_RETRY_MARGIN_S = 60          # refill row closed this long after the planned end at latest
 LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
 BACKUP_KEEP = 7                   # nightly local backups kept
+IMPORT_MAX_BYTES = 4 << 30        # an imported backup, uncompressed (years of data are < 1 GiB)
 SERVIS_24H_S = 24 * 3600
 # same rules as system/bin/retencka-control.py (the root helper validates again)
 NETBIRD_KEY_RE = re.compile(r"^[A-Za-z0-9-]{20,80}$")
@@ -1769,26 +1770,39 @@ class Core:
         import gzip
         import shutil
         import sqlite3
+        import zlib
         work = os.path.join(self.backup_dir(), "import.tmp")
         with open(path, "rb") as f:
             gz = f.read(2) == b"\x1f\x8b"
-        if gz:
-            try:
-                with gzip.open(path, "rb") as fi, open(work, "wb") as fo:
-                    shutil.copyfileobj(fi, fo, 65536)
-            except (OSError, EOFError):
-                raise ValueError("Soubor není platná záloha (poškozený gzip).")
-        else:
-            shutil.copyfile(path, work)
         try:
+            if gz:
+                # bounded: a tiny "gzip bomb" must not fill the SD card
+                limit = IMPORT_MAX_BYTES
+                try:
+                    limit = min(limit, shutil.disk_usage(self.backup_dir()).free - LOW_DISK_MB * 1048576)
+                except OSError:
+                    pass
+                try:
+                    with gzip.open(path, "rb") as fi, open(work, "wb") as fo:
+                        size = 0
+                        while chunk := fi.read(65536):
+                            size += len(chunk)
+                            if size > limit:
+                                raise ValueError("Záloha je po rozbalení příliš velká (nebo na kartě není místo).")
+                            fo.write(chunk)
+                except (OSError, EOFError, zlib.error):
+                    raise ValueError("Soubor není platná záloha (poškozený gzip).")
+            else:
+                shutil.copyfile(path, work)
+            chk = sqlite3.connect(f"file:{work}?mode=ro", uri=True)
             try:
-                chk = sqlite3.connect(f"file:{work}?mode=ro", uri=True)
                 ok = chk.execute("PRAGMA quick_check").fetchone()[0] == "ok"
                 tables = {r[0] for r in chk.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 ver = chk.execute("PRAGMA user_version").fetchone()[0]
-                chk.close()
             except sqlite3.DatabaseError:
                 raise ValueError("Soubor není záloha Retenční nádrže.")
+            finally:
+                chk.close()
             if not ok or not {"measurements", "settings", "users"} <= tables:
                 raise ValueError("Soubor není záloha Retenční nádrže (nebo je poškozený).")
             if ver > self.db.scalar("PRAGMA user_version", (), 0):

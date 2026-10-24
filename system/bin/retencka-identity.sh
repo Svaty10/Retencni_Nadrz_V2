@@ -10,9 +10,34 @@
 # =============================================================================
 set -eu
 IFACE="${RETENCKA_WIFI_IFACE:-wlan0}"
-DATA=/var/lib/retencka/data
+BASE=/var/lib/retencka
+DATA=$BASE/data
 BOOT=/boot/firmware; [ -d "$BOOT" ] || BOOT=/boot
 INFO="$BOOT/retencka.txt"
+
+# publish_setup_code DATA BASE PASSWORD – DATA belongs to the (unprivileged) app,
+# which may have planted a symlink, FIFO or directory as setup_code. Root therefore
+# never opens, chowns or chmods that path: the file is prepared in BASE (root only,
+# same filesystem) and renamed over it – rename() replaces a symlink, never follows it.
+publish_setup_code() {
+    local data="$1" base="$2" pw="$3" f="$1/setup_code" tmp
+    if [ -f "$f" ] && [ ! -L "$f" ] && [ "$(timeout 5 head -c 256 -- "$f" 2>/dev/null)" = "$pw" ]; then
+        return 0
+    fi
+    tmp=$(mktemp "$base/.setup_code.XXXXXX")
+    printf '%s\n' "$pw" > "$tmp"
+    chmod 600 -- "$tmp"
+    chown retencka:retencka -- "$tmp" 2>/dev/null || true
+    if [ -d "$f" ] && [ ! -L "$f" ]; then
+        rm -rf -- "$f"
+    fi
+    mv -fT -- "$tmp" "$f" || { rm -f -- "$tmp"; return 1; }
+}
+
+# sourced (tests): only the functions
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+    return 0
+fi
 
 gen() {  # unambiguous characters only (no 0/O, 1/I/l)
     LC_ALL=C tr -dc 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789' < /dev/urandom | head -c "$1"
@@ -67,8 +92,9 @@ INFOEOF
 fi
 # the web bootstrap password always equals the label password
 pw=$(sed -n 's/^hotspot_password=//p' "$INFO" | head -n1)
-if [ -n "$pw" ] && [ "$(cat "$DATA/setup_code" 2>/dev/null)" != "$pw" ]; then
-    printf '%s\n' "$pw" > "$DATA/setup_code"
+chown retencka:retencka "$DATA" 2>/dev/null || true
+if [ -n "$pw" ]; then
+    # an app racing us (re-planting a directory) must not fail the boot unit
+    publish_setup_code "$DATA" "$BASE" "$pw" || publish_setup_code "$DATA" "$BASE" "$pw" \
+        || echo "identity: setup_code could not be published" >&2
 fi
-chown retencka:retencka "$DATA" "$DATA/setup_code" 2>/dev/null || true
-chmod 600 "$DATA/setup_code" 2>/dev/null || true

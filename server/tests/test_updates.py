@@ -4,6 +4,9 @@ import importlib.util
 import io
 import json
 import os
+import shutil
+import subprocess
+import tarfile
 import sys
 import tempfile
 import time
@@ -208,6 +211,122 @@ class AppSide(unittest.TestCase):
         self.assertFalse(updates.busy({"state": "available", "updated_at": now}))
         self.assertTrue(updates.busy({"state": "installing", "updated_at": now}))
         self.assertFalse(updates.busy({"state": "installing", "updated_at": now - 3600}))   # stale
+
+
+
+OPENSSL = shutil.which("openssl")
+
+
+@unittest.skipIf(OPENSSL is None, "openssl not available")
+class InstallAndRollback(unittest.TestCase):
+    """install(): a really signed package, a really verified signature; only systemd,
+    the symlink switch and the health check are replaced."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        d = self.d = Path(self.tmp.name)
+        self.saved = {k: getattr(upd, k) for k in ("APP", "RELEASES", "CURRENT", "PUBKEY", "BAD", "http_get",
+                                                   "switch", "sync_units", "restore_units", "healthy", "subprocess")}
+        upd.APP = d / "app"
+        upd.RELEASES = upd.APP / "releases"
+        prev = upd.RELEASES / "1.1.0"
+        (prev / "server" / "retencka").mkdir(parents=True)
+        upd.CURRENT = prev                                    # stands for the "current" symlink
+        upd.BAD = d / "bad.json"
+        key, upd.PUBKEY = d / "release.key", d / "release.pub"
+        self.ossl("genpkey", "-algorithm", "ed25519", "-out", str(key))
+        self.ossl("pkey", "-in", str(key), "-pubout", "-out", str(upd.PUBKEY))
+        self.key = key
+        self.files: dict = {}
+        upd.http_get = lambda url, limit, accept="": self.files[url]
+        self.switched, self.units_restored, self.restarts = [], [], []
+        upd.switch = lambda target: self.switched.append(Path(target).name)
+        upd.sync_units = lambda release, backup: backup.update({"unit": b"old"})
+        upd.restore_units = lambda backup: self.units_restored.append(dict(backup))
+        self.health = True
+        upd.healthy = lambda expected, timeout=120: self.health
+        real = self.saved["subprocess"]
+
+        class Sub:                                            # systemctl / sync are not run
+            CompletedProcess = real.CompletedProcess
+
+            @staticmethod
+            def run(cmd, *a, **kw):
+                if cmd[0] in ("systemctl", "sync"):
+                    self.restarts.append(cmd)
+                    return real.CompletedProcess(cmd, 0, "", "")
+                return real.run(cmd, *a, **kw)
+        upd.subprocess = Sub
+        self._quiet = contextlib.redirect_stdout(io.StringIO())
+        self._quiet.__enter__()
+        self.st = upd.Status("1.1.0", "web", path=d / "status.json")
+
+    def tearDown(self):
+        self._quiet.__exit__(None, None, None)
+        for k, v in self.saved.items():
+            setattr(upd, k, v)
+        self.tmp.cleanup()
+
+    def ossl(self, *args):
+        subprocess.run([OPENSSL, *args], check=True, capture_output=True)
+
+    def release(self, ver: str = "1.2.0", inner: str = None, extra: tuple = (), tamper: bool = False) -> dict:
+        tar = self.d / f"r-{ver}.tar.gz"
+        with tarfile.open(tar, "w:gz") as tf:
+            def add(name, data):
+                ti = tarfile.TarInfo(name)
+                ti.size = len(data)
+                tf.addfile(ti, io.BytesIO(data))
+            add("server/retencka/__init__.py", f'__version__ = "{inner or ver}"\n'.encode())
+            add("server/retencka/__main__.py", b"")
+            add("system/bin/retencka-update.py", b"")
+            for name in extra:
+                add(name, b"x")
+        sig = tar.with_suffix(".sig")
+        self.ossl("pkeyutl", "-sign", "-inkey", str(self.key), "-rawin", "-in", str(tar), "-out", str(sig))
+        data = tar.read_bytes()
+        if tamper:
+            data = data[:-8] + bytes(8)
+        self.files["t"], self.files["s"] = data, sig.read_bytes()
+        return {"version": ver, "tar": "t", "sig": "s"}
+
+    def state(self):
+        return json.loads((self.d / "status.json").read_text(encoding="utf-8"))["state"]
+
+    def test_healthy_update_switches_and_keeps_the_old_release(self):
+        self.assertEqual(upd.install(self.release(), "1.1.0", set(), self.st), 0)
+        self.assertEqual(self.switched, ["1.2.0"])
+        self.assertTrue((upd.RELEASES / "1.2.0" / "server" / "retencka" / "__main__.py").is_file())
+        self.assertTrue((upd.RELEASES / "1.1.0").is_dir())                 # kept for a rollback
+        self.assertEqual(self.state(), "done")
+        self.assertIn(["systemctl", "restart", "retencka.service"], self.restarts)
+        self.assertEqual(self.units_restored, [])
+
+    def test_unhealthy_update_rolls_back(self):
+        self.health = False
+        self.assertEqual(upd.install(self.release(), "1.1.0", set(), self.st), 3)
+        self.assertEqual(self.switched, ["1.2.0", "1.1.0"])                 # back to the previous one
+        self.assertEqual(self.units_restored, [{"unit": b"old"}])           # systemd units undone too
+        self.assertEqual(json.loads(upd.BAD.read_text()), ["1.2.0"])        # timer will not retry it
+        self.assertEqual(self.state(), "rolled_back")
+        self.assertEqual(upd.decide(None, True, "1.1.0", "1.2.0", upd.load_bad()), "failed_before")
+
+    def test_bad_signature_refused(self):
+        self.assertEqual(upd.install(self.release(tamper=True), "1.1.0", set(), self.st), 2)
+        self.assertEqual(self.switched, [])
+        self.assertFalse((upd.RELEASES / "1.2.0").exists())
+        self.assertEqual(self.state(), "error")
+
+    def test_signed_but_unsafe_or_wrong_package_refused(self):
+        for rel, why in ((self.release(extra=("../evil.py",)), "path traversal"),
+                         (self.release(inner="1.3.0"), "version in the package differs"),
+                         (self.release("1.0.9"), "downgrade")):
+            self.assertEqual(upd.install(rel, "1.1.0", set(), self.st), 1, why)
+            self.assertEqual(self.switched, [], why)
+            self.assertEqual(self.state(), "error", why)
+        self.assertFalse((self.d / "app" / "evil.py").exists())
+        self.assertFalse((self.d / "evil.py").exists())
+        self.assertEqual(sorted(p.name for p in upd.RELEASES.iterdir()), ["1.1.0"])
 
 
 if __name__ == "__main__":

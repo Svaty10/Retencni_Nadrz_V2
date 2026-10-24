@@ -3,6 +3,17 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.7.1] - 2026-10-24
+
+### Opraveno (bezpečnost)
+- **Služba identity zařízení** (běží jako root) už nezapisuje heslo ze štítku do datového adresáře aplikace přes případný podstrčený symlink: soubor se připraví mimo něj a přejmenuje na místo. Dříve mohla kompromitovaná aplikace touto cestou získat práva roota. Stejně opraven zápis `servis.json` v `install.sh`.
+- Root pomocník `retencka-control` čte požadovaný servisní režim bez symlinků a s omezenou velikostí; podstrčený adresář `control-*` ho už nezastaví.
+- Import zálohy: rozbalení gzipu je omezené (4 GiB a volné místo na kartě), poškozený soubor vrátí srozumitelnou chybu místo chyby serveru a nezůstanou po něm dočasné soubory.
+
+### Přidáno
+- Bezpečnostní revize a přehled zbylých rizik: [docs/bezpecnost.md](docs/bezpecnost.md).
+- Testy kritických cest: migrace databáze z každé verze, záloha a obnova, instalace aktualizace se skutečným podpisem a rollback, bezpečnostní limity dopouštění, tovární reset, přehrání zaznamenaného rádiového rámce po restartu.
+
 ## [1.7.0] - 2026-10-24
 
 ### Přidáno

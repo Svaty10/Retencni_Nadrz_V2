@@ -289,8 +289,13 @@ if [ -n "$NB_KEY" ]; then
     # stejná instalace jako z webu (retencka-control.py → retencka-netbird-install.sh)
     if NB_SETUP_KEY="$NB_KEY" NB_MANAGEMENT_URL="$NB_URL" bash "$SRC/system/bin/retencka-netbird-install.sh"; then
         # access during the installation; afterwards only if the customer allows it
-        printf '{"mode": "24h", "until": %d, "by": "instalace"}\n' $(( $(date +%s) + 86400 )) > "$DATA/servis.json"
-        chown retencka:retencka "$DATA/servis.json"
+        # prepared in $BASE (root only) and renamed into the app's directory: a symlink
+        # planted there by the (running) app is replaced, never written through
+        TMPF=$(mktemp "$BASE/.servis.json.XXXXXX")
+        printf '{"mode": "24h", "until": %d, "by": "instalace"}\n' $(( $(date +%s) + 86400 )) > "$TMPF"
+        chmod 644 "$TMPF"
+        chown retencka:retencka "$TMPF"
+        mv -fT "$TMPF" "$DATA/servis.json"
         systemctl start retencka-control.service || true
         echo "NetBird připojen. Servisní přístup je povolen na 24 h (pak jen se souhlasem zákazníka)."
     else

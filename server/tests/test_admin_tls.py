@@ -193,6 +193,48 @@ class FactoryResetFiles(unittest.TestCase):
             self.assertEqual(sorted(os.listdir(d)), ["setup_code", "tls"])
             self.assertTrue(Path(d, "tls", "ca.crt").exists())
 
+    def test_full_cycle_back_to_first_login(self):
+        """Users, sensor keys and data are gone after the next start; the label password
+        (setup_code) still opens the first login."""
+        from retencka.db import Database
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            Path(d, "setup_code").write_text("Abcdefgh23\n")
+            db = Database(os.path.join(d, "retencka.db"))
+            db.execute("INSERT INTO users(username, pw_hash, role, created, pw_changed) VALUES('petr','h','admin',1,1)")
+            db.execute("INSERT INTO nodes(node_id, name, config, created, secret) VALUES(1, 'T', '{}', 1, 'ab')")
+            db.execute("INSERT INTO measurements(ts, node_id, seq, flags) VALUES(1, 1, 1, 0)")
+            reset.request(d, "petr")
+            db.close_thread()
+            self.assertEqual(reset.apply(d)["user"], "petr")
+            self.assertFalse(reset.pending(d))
+            db = Database(os.path.join(d, "retencka.db"))
+            try:
+                for table in ("users", "nodes", "measurements", "sessions", "settings"):
+                    self.assertEqual(db.scalar(f"SELECT COUNT(*) FROM {table}"), 0, table)
+            finally:
+                db.close_thread()
+            self.assertEqual(Path(d, "setup_code").read_text(), "Abcdefgh23\n")
+            self.assertIsNone(reset.apply(d))                      # runs only once
+
+    def test_damaged_marker_still_wipes(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "retencka.db").write_text("x")
+            Path(d, reset.MARKER).write_text("{not json")
+            self.assertEqual(reset.apply(d)["user"], "?")
+            self.assertEqual(os.listdir(d), [])
+
+    def test_symlinked_entry_is_removed_not_followed(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as outside:
+            Path(outside, "keep.txt").write_text("x")
+            try:
+                os.symlink(outside, os.path.join(d, "link"), target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks not available")
+            reset.request(d, "petr")
+            reset.apply(d)
+            self.assertEqual(os.listdir(d), [])
+            self.assertTrue(Path(outside, "keep.txt").exists())
+
 
 # ============================================================ end-to-end over HTTP(S)
 class AdminServerTest(unittest.TestCase):

@@ -373,6 +373,23 @@ class S9WatermarkTest(Base):
         self.assertEqual(self.core._last_ctr[0x9901], 101)
         self.assertEqual(self.new_core()._last_ctr[0x9901], 101)
 
+    def test_s9_recorded_frame_replayed_is_refused_also_after_restart(self):
+        self.core.radio = radio()
+        n = self.paired(0x9902)
+        tel = crypto.build_telemetry(0, 4900, 1500, 8000, 7000)
+        recorded = crypto.build_data(n.keys[0], n.keys[1], 0x9902, 5, tel)    # sniffed off the air
+        self.core._on_frame(recorded, -80.0, 20)
+        n.send(ctr=6)
+        c0 = self.count(0x9902)
+        self.core._on_frame(recorded, -80.0, 20)
+        self.assertEqual(self.count(0x9902), c0)
+        self.assertEqual(self.core.radio.replays, 1)
+        restarted = self.new_core()
+        restarted.radio = radio()
+        restarted._on_frame(recorded, -80.0, 20)
+        self.assertEqual(self.count(0x9902, restarted), c0)
+        self.assertEqual(restarted.radio.replays, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

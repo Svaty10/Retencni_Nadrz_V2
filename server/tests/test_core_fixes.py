@@ -371,6 +371,53 @@ class RefillCancelTest(RefillBase):
         self.assertEqual(self.calls, [])
 
 
+class RefillSafetyTest(RefillBase):
+    """The limits that keep a valve from overfilling a tank or running for hours."""
+
+    def test_target_capped_at_max_refill_pct(self):
+        ok, _ = self.run_(self.core.refill_start(0x5555, 100, "manual", "a"))
+        self.assertTrue(ok)
+        self.assertEqual(self.core.refills[0x5555]["target_pct"], 90.0)        # schema default max
+
+    def test_run_time_capped_at_max_refill_minutes(self):
+        self.core.nodes.update(0x5555, {"max_refill_minutes": 10})
+        seen = []
+        orig = self.core.hydrawise.call
+
+        async def spy(key, relay, action, seconds=0):
+            seen.append((action, seconds))
+            return await orig(key, relay, action, seconds)
+        self.core.hydrawise.call = spy
+        self.start()                                 # 3000 L at 41.6 L/min would need ~79 min
+        self.assertEqual(self.core.refills[0x5555]["planned_s"], 600)
+        self.assertEqual(seen, [("run", 600)])
+
+    def test_target_reached_closes_the_valve(self):
+        rid = self.start()
+        self.core.last[0x5555].update(ts=int(time.time()), level_mm=520)        # 52 % >= 50 %
+        self.run_(self.core._refill_on_measurement(0x5555))
+        self.assertEqual(self.calls, ["run", "stop"])
+        self.assertNotIn(0x5555, self.core.refills)
+        self.assertIsNotNone(self.row(rid)["end_ts"])
+        self.assertIn("Dosaženo cíle", self.row(rid)["result"])
+
+    def test_already_at_target_refused(self):
+        self.core.last[0x5555]["level_mm"] = 500
+        ok, msg = self.run_(self.core.refill_start(0x5555, 50, "manual", "a"))
+        self.assertFalse(ok)
+        self.assertEqual(self.calls, [])
+
+    def test_one_valve_never_serves_two_tanks_at_once(self):
+        self.core.nodes.add(0x6666, "T2", {"tank_area_m2": 10.0, "max_depth_cm": 100.0,
+                                           "refill_provider": "hydrawise", "hydrawise_relay_id": "7"})
+        self.core.last[0x6666] = {"ts": int(time.time()), "level_mm": 200, "flags": 0}
+        self.start()
+        ok, msg = self.run_(self.core.refill_start(0x6666, 50, "manual", "a"))
+        self.assertFalse(ok)
+        self.assertIn("ventil", msg)
+        self.assertEqual(self.calls, ["run"])
+
+
 class NotifyThreadTest(Base):
     def test_audit_from_worker_thread_reaches_loop(self):
         loop = asyncio.new_event_loop()

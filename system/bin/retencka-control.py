@@ -166,8 +166,10 @@ def install_netbird() -> None:
 
 def wanted() -> dict:
     try:
-        w = json.loads(WANT.read_text())
-    except (OSError, ValueError):
+        w = json.loads((read_small(WANT) or b"").decode("utf-8"))
+        if not isinstance(w, dict):
+            w = {}
+    except (UnicodeDecodeError, ValueError):
         w = {}
     mode = w.get("mode", "off")
     if mode == "24h" and (w.get("until") or 0) < time.time():
@@ -226,7 +228,13 @@ def main() -> None:
     # drop every other request file too, otherwise the .path unit (glob control-*)
     # would restart this helper in a loop
     for f in DATA.glob("control-*"):
-        f.unlink(missing_ok=True)
+        try:
+            if f.is_dir() and not f.is_symlink():
+                shutil.rmtree(f)                   # planted directory (rmtree never follows links)
+            else:
+                f.unlink(missing_ok=True)
+        except OSError as e:
+            log(f"cannot remove {f.name}: {e}")
     apply_servis()
     try:
         retencka_tls.ensure()
