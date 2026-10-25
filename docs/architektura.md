@@ -91,7 +91,7 @@ Odhad výdrže na hubu (`node_check_mAs`) počítá 1440 − počet vysílání 
 | `auth.py` | uživatelé (scrypt), session v DB, rate limiting |
 | `telegram.py` | Telegram bot: propojení chatů s účty, příkazy, upozornění (long polling ve vlastním vlákně) |
 | `pngchart.py` | graf hladiny do PNG jen se standardní knihovnou (pro Telegram) |
-| `static/` | web bez frameworku: `index.html` (SVG ikony jako sprite), `css/style.css` (barvy jako proměnné, světlý/tmavý režim podle systému), `js/app.js` (vykreslení, grafy Chart.js podle barev motivu); vše lokálně, bez CDN a webových fontů |
+| `static/` | web bez frameworku: `index.html` (SVG ikony jako sprite), `css/style.css` (barvy jako proměnné, světlý/tmavý režim podle systému), `js/app.js` (vykreslení, grafy Chart.js podle barev motivu), `js/i18n.js` (překlad rozhraní čeština ↔ angličtina za běhu, volba uložená u účtu a v `localStorage`), `js/theme.js` (motiv před vykreslením stránky); vše lokálně, bez CDN a webových fontů |
 
 ### 3.2 Vlákna
 
@@ -187,7 +187,7 @@ stateDiagram-v2
   měření. *Obnovit automatiku* / Telegram `obnovit` pozastavení zruší.
 - `refill_tick` (každých 30 s): pojistky časovače a výpadku dat, propadnutí čekajících požadavků.
 
-### 3.6 Databáze (`db.py`, migrace v1–v10)
+### 3.6 Databáze (`db.py`, migrace v1–v13)
 
 | Tabulka | Obsah |
 |---|---|
@@ -197,7 +197,7 @@ stateDiagram-v2
 | `node_key_archive` | čekající klíče z párování a klíče odebraných čidel (jen pro podpis UNPAIR, viz 3.9) |
 | `settings` | globální nastavení (klíč → JSON) |
 | `refills` | každé dopouštění: start/konec, cíl, litry, plánovaný čas, výsledek |
-| `users`, `sessions` | účty (scrypt), session (hash tokenu, CSRF token) |
+| `users`, `sessions` | účty (scrypt, motiv `theme` a jazyk rozhraní `lang` u účtu), session (hash tokenu, CSRF token) |
 | `audit` | záznamy (log) |
 
 Grafy: SQL bucketing `(ts / bucket) * bucket`, bucket zvolený tak, aby vyšlo ≤ ~600 bodů;

@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.11.0-2b6cb0)
+![verze](https://img.shields.io/badge/verze-1.12.1-2b6cb0)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
