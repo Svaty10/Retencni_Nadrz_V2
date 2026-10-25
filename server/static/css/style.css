@@ -368,11 +368,11 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
     display: grid;
     grid-template-columns: minmax(400px, 5fr) minmax(0, 7fr);
     gap: 16px;
-    align-items: start;
+    align-items: stretch;
 }
 
 .tank-card { display: flex; flex-direction: column; padding: 22px 24px; }
-.tank-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; }
+.tank-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; margin-bottom: 8px; }
 .tank-name { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .tank-status { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; color: var(--muted); }
 .tank-status .dot { width: 9px; height: 9px; }
@@ -396,12 +396,12 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .tank-card.is-stale .wave svg {
     animation: none !important;
 }
-.tank-meta { margin: auto 0 0; padding-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tank-meta { margin: 0; padding-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .tank-meta dt { font-size: 12px; color: var(--muted); }
 .tank-meta dd { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-num); }
 
 /* --- Schéma toků: kulatá nádrž uprostřed, uzly v rozích ------------------- */
-.flow { position: relative; height: 350px; margin: 8px 0 0; }
+.flow { position: relative; height: 350px; margin: auto 0; }
 .flow-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .fl {
     fill: none; stroke-width: 3; stroke-linecap: round; vector-effect: non-scaling-stroke;
@@ -517,6 +517,10 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .span-2 { grid-column: span 2; }
 .chart-container { position: relative; height: 260px; width: 100%; }
 .chart-container.chart-tall { height: clamp(300px, 45vh, 560px); }
+/* Graf hladiny v pravém sloupci vedle nádrže: dorovná výšku karty nádrže */
+.dash-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.level-card { flex: 1; display: flex; flex-direction: column; }
+.chart-container.chart-fill { flex: 1; height: auto; min-height: 200px; }
 .chart-legend-extra { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .chart-legend-extra span { display: inline-flex; align-items: center; gap: 6px; }
 .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
@@ -921,6 +925,7 @@ body.no-refill .refill-only { display: none !important; }
 }
 @media (max-width: 960px) {
     .dash-top { grid-template-columns: minmax(0, 1fr); }
+    .chart-container.chart-fill { flex: none; height: clamp(300px, 45vh, 560px); }
     .live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -933,7 +938,7 @@ body.no-refill .refill-only { display: none !important; }
     .nav-tab { font-size: 14px; padding: 0 10px; }
     .node-bar { margin: 0 -16px; padding: 12px 16px 0; }
     .chart-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px; }
-    .dash-top, .stack { gap: 12px; }
+    .dash-top, .dash-side, .stack { gap: 12px; }
     .brand-name { font-size: 15px; }
     .card { padding: 16px; }
     .tab-content { padding-top: 16px; }
@@ -951,12 +956,12 @@ body.no-refill .refill-only { display: none !important; }
     .refill-block { margin: 16px -16px -18px; padding: 14px 16px 16px; }
     .refill-actions > * { flex: 1 1 auto; }
 
-    .facts-card { grid-template-columns: minmax(0, 1fr); }
+    .facts-card { grid-template-columns: minmax(0, 1fr); padding: 0; }
     .fact-group { padding: 16px; }
     .fact-group:nth-child(odd) { border-right: 0; }
     .fact-group:nth-child(n+2) { border-top: 1px solid var(--line); }
     .chart-container { height: 220px; }
-    .chart-container.chart-tall { height: 260px; }
+    .chart-container.chart-tall, .chart-container.chart-fill { height: 260px; }
     .span-2 { grid-column: auto; }
     .tank-meta { padding-top: 12px; gap: 8px; grid-template-columns: minmax(0, 1fr); }
     .level-litres { font-size: 16px; }

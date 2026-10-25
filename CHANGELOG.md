@@ -3,6 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.1] - 2026-10-25
+
+### Změněno
+- **Přehled nádrže bez prázdného místa:** graf *Hladina vody* je nově v pravém sloupci pod doplňkovými údaji a dorovná výšku karty nádrže (dřív vedle nádrže zůstávala prázdná plocha); schéma toků se v kartě nádrže svisle vycentruje. Na úzkém displeji zůstává vše pod sebou.
+
+### Opraveno
+- Karta doplňkových údajů měla na mobilu zdvojený vnitřní okraj.
+
 ## [1.14.0] - 2026-10-25
 
 ### Přidáno
