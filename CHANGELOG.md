@@ -19,6 +19,7 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 - **Nastavení na mobilu přetékalo doprava** (mřížka `.stack` bez omezení šířky sloupce).
 - **Datumová pole v mazání dat** měla ikonu kalendáře odtrženou od pole.
 - Odstraněn inline `style` u skryté sekce, který porušoval Content-Security-Policy (chyba v konzoli).
+- **Trhané kolečko čekání v dialogu aktualizací:** dialog se při čekání na restart každých ~1,5 s překresluje a nové kolečko začínalo animaci od nuly (skok zpět zhruba na „3 hodiny“). Animace všech koleček je teď ukotvená na začátek časové osy dokumentu, takže nové kolečko pokračuje plynule ve stejném úhlu.
 
 ## [1.13.1] - 2026-10-25
 

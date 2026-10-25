@@ -2597,6 +2597,17 @@
         if (text != null) e.textContent = text;
         return e;
     }
+    // Dialog se při čekání každou chvíli překreslí a nové kolečko by se roztočilo od nuly
+    // (trhaný skok). Všechna kolečka mají animaci ukotvenou na začátek časové osy dokumentu,
+    // takže nové pokračuje přesně v úhlu starého.
+    function spinnerEl() {
+        const sp = el('span', 'spinner');
+        queueMicrotask(() => {                       // to už je kolečko vložené do stránky
+            if (sp.getAnimations) sp.getAnimations().forEach((a) => { a.startTime = 0; });
+        });
+        return sp;
+    }
+
     function updButton(label, cls, fn) {
         const b = el('button', 'btn ' + cls, label);
         b.type = 'button';
@@ -2614,7 +2625,7 @@
         $('updModal').classList.toggle('busy', kind === 'install' || kind === 'restart');
         if (kind === 'checking') {
             const row = el('div', 'upd-wait');
-            row.append(el('span', 'spinner'), el('span', '', 'Hledám aktualizace…'));
+            row.append(spinnerEl(), el('span', '', 'Hledám aktualizace…'));
             body.appendChild(row);
             foot.appendChild(close());
         } else if (kind === 'up_to_date') {
@@ -2658,7 +2669,7 @@
             });
             body.appendChild(ol);
             const msg = el('div', 'upd-wait');
-            msg.append(el('span', 'spinner'), el('span', '', kind === 'restart' ? 'Čekám na restart…'
+            msg.append(spinnerEl(), el('span', '', kind === 'restart' ? 'Čekám na restart…'
                 : (UPD_STEPS.some(([k]) => k === st.state) && st.message) || 'Připravuji instalaci…'));
             body.appendChild(msg);
             body.appendChild(el('p', 'muted small', 'Nezavírejte prosím stránku, hub se během aktualizace krátce restartuje.'));
