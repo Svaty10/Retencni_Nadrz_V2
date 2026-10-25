@@ -46,6 +46,7 @@
         <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/></symbol>
         <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
         <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7 6.5a7.5 7.5 0 1 0 10 0"/></symbol>
+        <symbol id="i-tap" viewBox="0 0 24 24"><path d="M3.5 8.5h9a3 3 0 0 1 3 3v1.5"/><path d="M3.5 12h7.5a1 1 0 0 1 1 1v0"/><path d="M8 8.5V6M5.5 6h5"/><path d="M15.5 16.5c-.9 1.2-1.4 2-1.4 2.6a1.4 1.4 0 0 0 2.8 0c0-.6-.5-1.4-1.4-2.6z"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
     </defs>
 </svg>
@@ -121,7 +122,12 @@
         <div id="diskBanner" class="banner disk-banner hidden" role="alert"></div>
         <!-- Přehled všech nádrží (volba „Všechny nádrže“ v liště nádrží) -->
         <div id="overview" class="hidden">
-            <div class="overview-grid" id="overviewGrid"></div>
+            <!-- Mapa systému: hub uprostřed, nádrže kolem; cesta = rádiové spojení čidla
+                 (zelená online, oranžová zpožděná data, červená offline) -->
+            <section class="card hubmap-card" aria-label="Mapa systému">
+                <div class="hubmap" id="hubMap"></div>
+            </section>
+            <div class="overview-grid mt-20" id="overviewGrid"></div>
             <section class="card chart-card span-all mt-20">
                 <div class="card-head">
                     <div class="card-head-text"><h2>Hladina všech nádrží</h2><p class="card-desc">Hladiny všech nádrží v jednom grafu, aby šly porovnat.</p></div>
@@ -135,32 +141,40 @@
             <div class="dash-top">
                 <!-- Hlavní blok: nádrž -->
                 <section class="card tank-card" aria-labelledby="tankTitle">
-                    <div class="tank-main">
-                        <div class="tank-figures">
-                            <h2 class="tank-name" id="tankTitle"><span translate="no" id="txtTankName">Nádrž</span></h2>
-                            <p class="tank-status" id="txtTankStatus"><span class="dot"></span><span>–</span></p>
-                            <div class="level-big" id="txtPercent">– %</div>
-                            <div class="level-litres" id="txtLiters">– L</div>
-                            <dl class="tank-meta">
-                                <div><dt>Výška hladiny</dt><dd id="txtLevelCm">–</dd></div>
-                                <div><dt>Poslední aktualizace</dt><dd id="txtUpdated">–</dd></div>
-                            </dl>
-                        </div>
-                        <div class="gauge-wrap" aria-hidden="true">
-                            <div class="gauge" id="gauge">
-                                <div class="water-level" id="waterLevel">
-                                    <div class="wave">
-                                        <svg class="wave-a" viewBox="0 0 200 10" preserveAspectRatio="none" focusable="false"><path class="wave-fill" d="M0 5Q25 0 50 5T100 5T150 5T200 5V10H0Z"/><path class="wave-line" d="M0 5Q25 0 50 5T100 5T150 5T200 5"/></svg>
-                                        <svg class="wave-b" viewBox="0 0 200 10" preserveAspectRatio="none" focusable="false"><path class="wave-fill" d="M0 5Q25 10 50 5T100 5T150 5T200 5V10H0Z"/></svg>
-                                    </div>
+                    <div class="tank-head">
+                        <h2 class="tank-name" id="tankTitle"><span translate="no" id="txtTankName">Nádrž</span></h2>
+                        <p class="tank-status" id="txtTankStatus"><span class="dot"></span><span>–</span></p>
+                    </div>
+                    <!-- Schéma toků: kulatá nádrž uprostřed, kolem jen to, co je nastavené.
+                         Cesta: zelená = funguje (tečky běží, když dnes teklo), červená = porucha. -->
+                    <div class="flow" id="flow">
+                        <svg class="flow-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                            <path class="fl" id="flRain" d="M16 17L50 50"/>
+                            <path class="fl" id="flMains" d="M84 17L50 50"/>
+                            <path class="fl fl-dashed" id="flFcst" d="M16 77L50 50"/>
+                            <path class="fl" id="flUse" d="M50 50L84 77"/>
+                        </svg>
+                        <div class="fnode fn-tl" id="fnRain"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg></span><span class="fn-val" id="txtRainToday">–</span><span class="fn-lbl">Déšť dnes</span></div>
+                        <div class="fnode fn-tr" id="fnMains"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-tap"/></svg></span><span class="fn-val" id="txtRefillToday">–</span><span class="fn-lbl">Z řadu dnes</span></div>
+                        <div class="fnode fn-bl" id="fnFcst"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span class="fn-val" id="txtFcst">–</span><span class="fn-lbl">Déšť 7 dní</span></div>
+                        <div class="fnode fn-br" id="fnUse"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg></span><span class="fn-val" id="txtUseToday">–</span><span class="fn-lbl">Spotřeba dnes</span></div>
+                        <div class="ftank" id="gauge">
+                            <div class="water-level" id="waterLevel">
+                                <div class="wave" aria-hidden="true">
+                                    <svg class="wave-a" viewBox="0 0 200 10" preserveAspectRatio="none" focusable="false"><path class="wave-fill" d="M0 5Q25 0 50 5T100 5T150 5T200 5V10H0Z"/><path class="wave-line" d="M0 5Q25 0 50 5T100 5T150 5T200 5"/></svg>
+                                    <svg class="wave-b" viewBox="0 0 200 10" preserveAspectRatio="none" focusable="false"><path class="wave-fill" d="M0 5Q25 10 50 5T100 5T150 5T200 5V10H0Z"/></svg>
                                 </div>
-                                <span class="gauge-tick t25"></span><span class="gauge-tick t50"></span><span class="gauge-tick t75"></span>
                             </div>
-                            <div class="gauge-scale">
-                                <span class="gs g100">100 %</span><span class="gs g75">75</span><span class="gs g50">50</span><span class="gs g25">25</span><span class="gs g0">0</span>
+                            <div class="ftank-text">
+                                <span class="level-big" id="txtPercent">– %</span>
+                                <span class="level-litres" id="txtLiters">– L</span>
                             </div>
                         </div>
                     </div>
+                    <dl class="tank-meta">
+                        <div><dt>Výška hladiny</dt><dd id="txtLevelCm">–</dd></div>
+                        <div><dt>Poslední aktualizace</dt><dd id="txtUpdated">–</dd></div>
+                    </dl>
 
                     <div class="refill-block hidden" id="refillBox">
                         <div class="refill-state">

@@ -5,8 +5,15 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
 ## [1.14.0] - 2026-10-25
 
+### Přidáno
+- **Schéma toků vody u nádrže:** kulatá nádrž s hladinou uprostřed a kolem ní *Déšť dnes*, *Z řadu dnes*, *Déšť 7 dní* (předpověď, čárkovaně) a *Spotřeba dnes*. Uzel se ukáže, jen když je nastavený (déšť a předpověď podle plochy střechy, řad podle ventilu). Cesta je zelená, když vše funguje (tečky běží, když tudy dnes teklo), oranžová při zpožděných datech čidla a červená při poruše (čidlo offline, chyba ventilu). API `/api/state` má nově `catchment_m2`, `rain_today`, `refill_today` a `refill.fault`.
+- **Mapa systému v přehledu Všechny nádrže:** hub uprostřed, nádrže kolem (s hladinou), cesta ke každé nádrži zelená (online), oranžová (zpožděná data) nebo červená (offline); klepnutím se otevře detail nádrže.
+- **IP adresa hubu** v Nastavení → Systém → Adresa v síti (`/api/system` vrací `ips`).
+
 ### Změněno
-- **Nový vzhled rozhraní** (světlý i tmavý motiv): chladná „vodohospodářská“ paleta s hlubokou vodní modří, tmavý pruh hlavičky, čísla v písmu Bahnschrift / DIN ze systému (nic se nestahuje) a výrazná měrka nádrže s vodočetnou latí.
+- **Nový vzhled rozhraní** (světlý i tmavý motiv): chladná „vodohospodářská“ paleta s hlubokou vodní modří, tmavý pruh hlavičky a čísla v písmu Bahnschrift / DIN ze systému (nic se nestahuje).
+- **Plynulá změna hladiny:** voda v nádrži stoupá a klesá plynule (i při přepnutí nádrže), a to i v režimu omezených animací systému, stejně jako vlnka.
+- **Srozumitelné údaje o systému:** *Aplikace běží*, *Vytížení procesoru zařízení*, *Paměť zařízení (RAM)*, *Paměť, kterou zabírá aplikace* (dříve „Paměť procesu“), *Databáze / volné místo na kartě*.
 - **Navigace:** sekce *Přehled / Nastavení / Historie událostí* jsou přímo v hlavní liště (dřív schované v menu účtu); nádrže mají vlastní řádek pod hlavičkou. Menu účtu obsahuje jen *Můj účet*, *Správa uživatelů*, motiv, jazyk a akce zařízení; tečka o dostupné aktualizaci svítí u záložky *Nastavení*.
 - **Stav čidel:** hlavička ukazuje stav celého hubu („Čidla online: 2/3“), stav vybraného čidla je na kartě nádrže pod jejím názvem (u zastaralých dat zvýrazněný). Zdvojený štítek u procent byl odstraněn.
 - **Přehled nádrže:** doplňkové údaje ve čtyřech skupinách 2 × 2 (Výhled, Spotřeba, Baterie čidla, Čidlo v šachtě) bez zbytečných popisků a prázdných míst; karty v přehledu všech nádrží jsou tlačítka s větší měrkou a čísly.

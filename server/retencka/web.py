@@ -17,6 +17,7 @@ import os
 import shutil
 import secrets
 import signal
+import socket
 import time
 import zlib
 from datetime import datetime
@@ -1112,10 +1113,28 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             pass
         return None, None, None
 
+    def lan_ips(request) -> list[str]:
+        """IPv4 addresses of the hub: the one on the default route (UDP connect sends nothing)
+        and the one this browser actually reached, if it is a different real address."""
+        ips: list[str] = []
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as so:
+                so.connect(("192.0.2.1", 9))                 # TEST-NET-1, no packet leaves
+                ips.append(so.getsockname()[0])
+        except OSError:
+            pass
+        try:
+            here = (request.transport.get_extra_info("sockname") or ("",))[0]
+            if here and ipaddress.ip_address(here).version == 4 and not ipaddress.ip_address(here).is_loopback:
+                ips.append(here)
+        except (ValueError, AttributeError, TypeError):
+            pass
+        return [ip for i, ip in enumerate(ips) if ip not in ips[:i] and not ip.startswith(("0.", "127."))]
+
     @need("admin")
     async def api_system(request):
         info: dict[str, Any] = {"version": __version__, "uptime_s": int(time.time() - core.started),
-                                "hostnames": core.hostnames()}
+                                "hostnames": core.hostnames(), "ips": lan_ips(request)}
         cpu = await get_cpu_pct()
         if cpu is not None:
             info["cpu_pct"] = cpu

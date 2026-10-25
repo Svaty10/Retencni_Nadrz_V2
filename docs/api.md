@@ -53,7 +53,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů: `role` `{username, role: user\|admin}`, `password` `{username, password}` (nové heslo jinému uživateli, odhlásí ho), `delete` `{username}`; nejde na vlastním účtu a nikdy nezůstane žádný administrátor („Musí zůstat alespoň jeden administrátor.“) |
 | GET | `/api/audit?page=&category=&who=&q=&from=&to=` | admin | log: `category` = login/users/settings/refill/sensors/system/problems, `who` = people/system/jméno, `q` = text. Výsledky root updateru zapisuje aplikace podle `update-status.json`: `UPDATE_AVAILABLE`, `UPDATE_INSTALLED`, `UPDATE_ROLLED_BACK`, `UPDATE_ERROR` (stejná chyba jen jednou), `UPDATE_UP_TO_DATE` (jen po ruční kontrole); dále `TLS_CERT_ISSUED`, `FACTORY_RESET`, `NODE_PAIRING_CANCELLED` |
 | GET | `/api/ha` · POST `/api/ha/rotate` | admin | token pro HA |
-| GET | `/api/system` | admin | stav systému; `cpu_pct`, `ram_used_mb`, `ram_total_mb`, `ram_pct`, `rss_kb`, `db_mb`, `disk_free_mb`, `disk_low`, `low_disk_mb` (300), `update` = poslední `update-status.json`, `update_prefs` |
+| GET | `/api/system` | admin | stav systému; `hostnames`, `ips` (IPv4 hubu: výchozí cesta + adresa, na kterou se připojil prohlížeč), `cpu_pct`, `ram_used_mb`, `ram_total_mb`, `ram_pct`, `rss_kb`, `db_mb`, `disk_free_mb`, `disk_low`, `low_disk_mb` (300), `update` = poslední `update-status.json`, `update_prefs` |
 | POST | `/api/system/factory-reset` | admin | `{"password": "heslo přihlášeného admina", "confirm": "OBNOVIT"}` – obnova továrního nastavení: zapíše `data/factory-reset` a restartuje aplikaci, ta před otevřením databáze smaže obsah datového adresáře kromě `setup_code` (heslo ze štítku); 403 při špatném hesle |
 | POST | `/api/system/restart` · `/api/system/reboot` · `/api/system/poweroff` | admin | restart aplikace (SIGTERM, systemd ji spustí znovu) / restart zařízení / vypnutí zařízení (root helper `retencka-control`: `control-reboot`, `control-poweroff`); zapíše se do auditu |
 | POST | `/api/data/delete` | admin | `{"node": "XXXX" \| null (všechny), "from": epoch \| null, "to": epoch \| null, "dry_run": true}` – smaže měření, hodinové souhrny a dokončená dopouštění v rozsahu `[from, to)`; `dry_run` (výchozí) jen spočítá: `{"counts": {measurements, hourly, refills}, "total"}`. Audit se nemaže, smazání se do něj zapíše |
@@ -66,7 +66,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/backup` · `/api/backup/download` | admin | `{"backups": [{name, size_mb, ts}], "keep": 7, "dir": "…/backup"}` – automatické denní zálohy na kartě; stažení aktuální zálohy (`.db.gz`) |
 | POST | `/api/backup/import[?full=1]` | admin | tělo = soubor zálohy (`.db.gz` / `.db`, max 1 GB, streamuje se); sloučení bez duplicit, `full=1` i nastavení a uživatelé; vrací počty |
 
-`/api/state` navíc obsahuje `outlook` (`days_left`, `use_per_day_l`, `rain_7d_mm`, `inflow_7d_l`, `pct_after_rain`)
+`/api/state` navíc obsahuje `outlook` (`days_left`, `use_per_day_l`, `rain_7d_mm`, `inflow_7d_l`, `pct_after_rain`), pro schéma toků `catchment_m2`, `rain_today`, `refill_today` (litry za dnešek) a v `refill` příznak `fault` (poslední pokus o dopouštění skončil chybou ventilu)
 a v `refill.zone_controlled_by` nádrž, která ovládá stejný ventil (pak je dopouštění u této nádrže vypnuté).
 
 ## Rádiový protokol v3

@@ -1216,6 +1216,9 @@ class Core:
             "outlook": self.outlook(node, lv, flows),
             "consumption_today": round(sum(d["use"] for d in flows if d["day"] == today)),
             "consumption_7d": round(sum(d["use"] for d in flows if d["day"] >= week_start)),
+            "catchment_m2": float(node["catchment_area_m2"] or 0),                          # schéma toků
+            "rain_today": round(sum(d["rain"] for d in flows if d["day"] == today)),
+            "refill_today": round(sum(d["refill"] for d in flows if d["day"] == today)),
         }
 
     def outlook(self, node: dict, lv: Optional[model.Level], flows: list[dict]) -> dict:
@@ -1296,9 +1299,12 @@ class Core:
         if owner is not None and owner != nid:
             on = self.nodes.get(owner) or {}
             shared = {"id": f"{owner:04X}", "name": on.get("name", "")}
+        note = self.refill_notes.get(nid) or ""
         info = {"configured": self._provider(node) is not None, "provider": node.get("refill_provider"),
                 "zone_controlled_by": shared,
-                "active": r is not None, "status": self.refill_notes.get(nid) or self._refill_idle_note(node),
+                "active": r is not None, "status": note or self._refill_idle_note(node),
+                # poslední pokus skončil chybou ventilu / Hydrawise (červená cesta ve schématu toků)
+                "fault": any(w in note for w in ("selhalo", "nepotvrdil", "nespuštěno")),
                 "max_pct": node["max_refill_pct"], "auto_target_pct": node["auto_refill_target_pct"],
                 "auto": node["auto_refill_enabled"],
                 "waiting_for_rain": nid in self._rain_wait,
