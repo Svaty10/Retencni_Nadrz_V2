@@ -270,7 +270,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   (běžící tečky, když tudy dnes teklo), oranžová = zpožděná data čidla, červená = porucha (čidlo offline,
   chyba ventilu), šedá = předpověď se načítá. Okraj nádrže má barvu stavu čidla.
 - Vedle karty nádrže (na širokém displeji) doplňkové údaje 2 × 2 (Výhled, Spotřeba, Baterie čidla, Čidlo v šachtě)
-  a pod nimi **graf hladiny**, který dorovná výšku karty nádrže; ostatní grafy jsou pod tím. Na úzkém displeji jde vše pod sebe.
+  a pod nimi **graf hladiny** (dorovná výšku karty nádrže, ale nikdy není menší než ostatní grafy); ostatní grafy jsou pod tím. Na úzkém displeji jde vše pod sebe.
 - Přehled **Všechny nádrže**: nahoře mapa systému (hub uprostřed, nádrže kolem, cesta podle stavu čidla),
   pod ní karty nádrží a společný graf.
 - Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):

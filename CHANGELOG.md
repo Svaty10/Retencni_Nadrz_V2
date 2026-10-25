@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.2] - 2026-10-25
+
+### Změněno
+- **Graf hladiny není menší než ostatní:** v pravém sloupci vedle nádrže má nejméně 320 px (na mobilu 280 px, ostatní grafy 260 px); když je vyšší než karta nádrže, karta se protáhne a schéma toků se v ní vycentruje.
+
 ## [1.14.1] - 2026-10-25
 
 ### Změněno
