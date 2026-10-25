@@ -373,8 +373,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .wave-line { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 @keyframes wave-slide { to { transform: translateX(-50%); } }
 .gauge.empty .wave { display: none; }
+/* omezené animace (např. Windows „Efekty animace“ vypnuté): vlnka jen pomalu plyne, nezastaví se */
 @media (prefers-reduced-motion: reduce) {
-    .wave svg { animation: none; }
+    .wave svg { animation: wave-slide 18s linear infinite !important; }
+    .wave .wave-b { animation: wave-slide 27s linear infinite reverse !important; }
 }
 .gauge-tick { position: absolute; right: 0; width: 10px; height: 1px; background: var(--line-strong); }
 .gauge-tick.t25 { bottom: 25%; }
@@ -1113,6 +1115,10 @@ body.set-tank #nastaveni .scope-general, body.set-tank #nastaveni .scope-all { d
 }
 
 .modal-sm { max-width: 460px; }
+.modal-sm.modal-md { max-width: 680px; }
+.modal-body .steps { margin: 4px 0 4px; }
+.modal-body .pair-panel { margin-top: 16px; }
+.modal-body .pair-panel h3 { margin: 0 0 6px; font-size: 14px; }
 .modal-sm .modal-body p { font-size: 14px; margin: 0 0 10px; }
 .wait-overlay {
     position: fixed; inset: 0; z-index: 300;

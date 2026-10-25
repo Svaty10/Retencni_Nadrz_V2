@@ -28,6 +28,13 @@
         return Number(v).toLocaleString('cs-CZ', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + (unit || '');
     }
 
+    // síla signálu v % lineárně mezi −110 dBm (mez citlivosti CC1101) a −50 dBm (velmi silný)
+    function sigPct(dbm) {
+        if (dbm === null || dbm === undefined || Number.isNaN(dbm)) return null;
+        return Math.round(Math.min(100, Math.max(0, (dbm + 110) / 60 * 100)));
+    }
+    function sigTxt(dbm) { return sigPct(dbm) == null ? '–' : `${sigPct(dbm)} % (${num(dbm, 0)} dBm)`; }
+
     function pad(n) { return String(n).padStart(2, '0'); }
     function fmtDateTime(ms) {
         const d = new Date(ms);
@@ -107,6 +114,8 @@
     //             (type 'checkbox' = zaškrtávátko → true / false)
     //   validate: (hodnoty) → text chyby | {field, message} | null     (při chybě dialog zůstane otevřený)
     //   submit:   async (hodnoty) → text chyby (dialog zůstane otevřený) | nic (zavře se)
+    //   stay:     (hodnoty) → po úspěšném submit dialog nezavírat (zavře ho až tlačítko cancel)
+    //   after:    [Node] pod poli · wide: širší dialog · onOpen({inputs, submit}) po otevření
     // → Promise<false | true | {hodnoty polí}>. Enter potvrdí, Esc / klik mimo dialog zruší.
     function openDialog(o) {
         return new Promise((resolve) => {
@@ -114,13 +123,15 @@
             const opener = document.activeElement;
             const fields = o.fields || [];
             const inputs = {};
-            let busy = false;
+            let busy = false, stayed = null;
             $('cfmTitle').textContent = o.title;
+            m.querySelector('.modal').classList.toggle('modal-md', !!o.wide);
             body.textContent = '';
-            (Array.isArray(o.body) ? o.body : [o.body]).forEach((x) => {
+            const put = (x) => {
                 if (x == null) return;
                 if (typeof x === 'string') { const p = document.createElement('p'); p.textContent = x; body.appendChild(p); } else body.appendChild(x);
-            });
+            };
+            (Array.isArray(o.body) ? o.body : [o.body]).forEach(put);
             fields.forEach((f, i) => {
                 const id = 'cfmF' + i;
                 const g = document.createElement('div');
@@ -166,6 +177,7 @@
             err.id = 'cfmErr';
             err.setAttribute('role', 'alert');
             body.appendChild(err);
+            (o.after || []).forEach(put);
             const hideErr = () => {
                 err.classList.add('hidden');
                 Object.values(inputs).forEach((i) => { i.removeAttribute('aria-invalid'); i.removeAttribute('aria-describedby'); });
@@ -196,7 +208,7 @@
             };
             const cancel = document.createElement('button');
             cancel.type = 'button'; cancel.className = 'btn btn-outline'; cancel.textContent = o.cancel || 'Zrušit';
-            cancel.addEventListener('click', () => { if (!busy) done(false); });
+            cancel.addEventListener('click', () => { if (!busy) done(stayed || false); });
             const ok = document.createElement('button');
             ok.type = 'button'; ok.className = 'btn ' + (o.danger ? 'btn-danger-solid' : 'btn-primary'); ok.textContent = o.confirm || 'Potvrdit';
             const submit = async () => {
@@ -211,12 +223,13 @@
                     busy = false; ok.disabled = false; cancel.disabled = false;
                     if (e) { fail(e); return; }
                 }
+                if (o.stay) { stayed = values; o.stay(values); return; }
                 done(fields.length ? values : true);
             };
             ok.addEventListener('click', submit);
             foot.append(cancel, ok);
             const onKey = (e) => {
-                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) done(false); return; }
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) done(stayed || false); return; }
                 if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') { e.preventDefault(); submit(); return; }
                 if (e.key !== 'Tab') return;
                 const f = Array.from(m.querySelectorAll('button, [href], input, select')).filter((x) => !x.disabled && x.offsetParent !== null);
@@ -225,13 +238,15 @@
                 if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
             };
             m.addEventListener('keydown', onKey, true);
-            $('cfmClose').onclick = () => { if (!busy) done(false); };
-            m.onmousedown = (e) => { if (e.target === m && !busy) done(false); };
+            $('cfmClose').onclick = () => { if (!busy) done(stayed || false); };
+            m.onmousedown = (e) => { if (e.target === m && !busy) done(stayed || false); };
             m.classList.remove('hidden');
             document.body.classList.add('modal-open');
-            const first = fields.length ? inputs[fields[0].name] : cancel;     // formulář: první pole; potvrzení: bezpečná volba
+            const first = fields.find((f) => !f.value) ? inputs[fields.find((f) => !f.value).name]
+                : fields.length ? inputs[fields[0].name] : cancel;     // formulář: první prázdné pole; potvrzení: bezpečná volba
             first.focus();
             if (first.select && first.type !== 'checkbox') first.select();
+            if (o.onOpen) o.onOpen({ inputs, submit, hideErr });
         });
     }
     const confirmDialog = (o) => openDialog(o).then((r) => !!r);
@@ -933,7 +948,7 @@
             data: {
                 datasets: [
                     line(T.s3, { label: 'Baterie (%)', data: series(d.t, d.bat_pct || []), spanGaps: true, yAxisID: 'y' }),
-                    line(T.s4, { label: 'Signál (dBm)', data: series(d.t, d.rssi || []), borderWidth: 1.5, yAxisID: 'y1' })
+                    line(T.s4, { label: 'Signál (%)', data: series(d.t, (d.rssi || []).map(sigPct)), borderWidth: 1.5, yAxisID: 'y' })
                 ]
             },
             options: Object.assign(baseOpts(), {
@@ -944,7 +959,7 @@
                             title: timeTooltip.callbacks.title,
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
-                                if (ctx.datasetIndex === 1) return 'Signál ' + num(ctx.parsed.y, 0, ' dBm');
+                                if (ctx.datasetIndex === 1) return 'Signál ' + sigTxt(d.rssi[i]);
                                 const sag = d.sag_mv && d.sag_mv[i] ? ` (při vysílání −${num(d.sag_mv[i], 0)} mV)` : '';
                                 return `Baterie ${num(d.bat_pct[i], 0, ' %')} · ${num(d.vbat[i], 2, ' V')}${sag}`;
                             },
@@ -959,8 +974,7 @@
                 },
                 scales: {
                     x: timeScale(r),
-                    y: pctAxis(),
-                    y1: { position: 'right', suggestedMin: -110, suggestedMax: -50, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' dBm', maxTicksLimit: 6 } }
+                    y: pctAxis()
                 }
             })
         });
@@ -1087,7 +1101,7 @@
         ].filter(Boolean).join(' · ');
 
         const n = s.node || {};
-        $('txtRssi').textContent = n.rssi == null ? '–' : `${num(n.rssi, 0)} dBm`;
+        $('txtRssi').textContent = sigTxt(n.rssi);
         $('txtLoss').textContent = n.loss_pct == null ? '–' : `ztráty 24 h: ${num(n.loss_pct, 1)} %`
             + (n.busy_pct ? ` · rušení ${num(n.busy_pct, 0)} %` : '');
         $('linkBox').classList.toggle('warn', n.rssi != null && (n.rssi < -100 || (n.loss_pct || 0) > 10 || (n.busy_pct || 0) > 20));
@@ -2056,24 +2070,38 @@
         });
     }
 
-    // Přidání čidla / spárování nového čidla z nabídky: ID (ze štítku) + název → start párování
+    // Přidání čidla – celé v dialogu: kroky, ID ze štítku + povinný název, nová čidla v dosahu.
+    // Dialog zůstává otevřený a kroky / tabulka se obnovují s refreshNodes (každé 4 s).
+    let pairFill = null;            // otevřený dialog: „Spárovat“ v tabulce doplní ID
     async function pairDialog(knownId) {
-        const fields = [];
-        if (!knownId) fields.push({ name: 'id', label: 'ID ze štítku', maxLength: 6, trim: true, placeholder: 'např. 3F2A', hint: 'Čtyři znaky 0–9 / A–F vytištěné na štítku čidla.' });
-        fields.push({ name: 'name', label: 'Název', maxLength: 40, trim: true, placeholder: 'např. Jímka' });
-        const r = await formDialog({
-            title: knownId ? `Spárovat čidlo ${knownId}` : 'Přidat čidlo',
-            body: [knownId ? `Ověřte, že ID ${knownId} souhlasí se štítkem čidla, a zadejte název.`
-                : 'Zadejte ID ze štítku čidla a jeho název. Hub pak čeká na první zprávu čidla – vložte do něj baterii.'],
-            fields,
-            validate: (v) => (!knownId && !/^(0x)?[0-9a-f]{1,4}$/i.test(v.id) ? { field: 'id', message: 'ID čidla jsou 4 znaky 0–9 / A–F (např. 3F2A).' } : null),
+        const panel = $('pairPanel');
+        panel.classList.remove('hidden');
+        await formDialog({
+            title: 'Přidat čidlo', wide: true, cancel: 'Zavřít', confirm: 'Čekat na čidlo',
+            body: ['Zadejte ID ze štítku čidla a jeho název, potvrďte a vložte do čidla baterii. Nové čidlo v dosahu se objeví v tabulce dole – stačí u něj kliknout „Spárovat“.',
+                $('pairSteps')],
+            fields: [{ name: 'id', label: 'ID ze štítku', value: knownId || '', maxLength: 6, trim: true, placeholder: '4 znaky, např. 3F2A', hint: 'Čtyři znaky 0–9 / A–F vytištěné na štítku čidla.' },
+                { name: 'name', label: 'Název', maxLength: 40, trim: true, hint: 'Povinný – pod tímto jménem se nádrž ukáže v přehledu.' }],
+            after: [panel],
+            validate: (v) => (!/^(0x)?[0-9a-f]{1,4}$/i.test(v.id) ? { field: 'id', message: 'ID čidla jsou 4 znaky 0–9 / A–F (např. 3F2A).' }
+                : !v.name ? { field: 'name', message: 'Zadejte název čidla.' } : null),
             submit: async (v) => {
-                try { await api('POST', '/api/pairing/start', { node_id: knownId || v.id, name: v.name }); } catch (e) { return e.message; }
+                try { await api('POST', '/api/pairing/start', { node_id: v.id, name: v.name }); } catch (e) { return e.message; }
                 return null;
             },
-            confirm: 'Čekat na čidlo'
+            stay: () => { toast('Čekám na čidlo – vložte do něj baterii.'); refreshNodes(); },
+            onOpen: ({ inputs, submit, hideErr }) => {
+                pairFill = (id) => {
+                    hideErr();
+                    inputs.id.value = id;
+                    if (inputs.name.value.trim()) submit(); else inputs.name.focus();
+                };
+            }
         });
-        if (r) { toast('Čekám na čidlo…'); await refreshNodes(); }
+        pairFill = null;
+        panel.classList.add('hidden');
+        panel.prepend($('pairSteps'));
+        $('pairHint').parentNode.after(panel);
     }
 
     // Tovární nastavení: 1. co se smaže + záloha, 2. potvrzení slovem OBNOVIT a heslem
@@ -2145,7 +2173,7 @@
             const st = n.unpairing ? 'odpárování – vyjměte a vložte baterii'
                 : ({ online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status);
             tr.innerHTML = `<td><strong>${esc(n.name)}</strong>${n.refill_configured ? `<span title="Ovládá dopouštění">${ico('drop', 'ico-sm')}</span>` : ''}${n.paired ? `<span title="Spárováno">${ico('lock', 'ico-sm')}</span>` : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
-                <td>${esc(st)}${!n.unpairing && n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${num(n.rssi, 0, ' dBm')}</td>
+                <td>${esc(st)}${!n.unpairing && n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${sigTxt(n.rssi)}</td>
                 <td>${num(n.battery && n.battery.percent, 0, ' %')}</td><td class="td-actions"></td>`;
             const btn = (label, cls, fn) => {
                 const b = document.createElement('button');
@@ -2198,18 +2226,19 @@
                 : (q.node_paired && !q.known) ? 'odebrané čidlo (klíč v archivu)'
                 : q.known ? (q.node_paired ? 'výměna baterie' : 'čidlo ztratilo klíč')
                 : 'nové';
-            tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${num(q.rssi, 0, ' dBm')}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td class="td-actions"></td>`;
+            tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${sigTxt(q.rssi)}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td class="td-actions"></td>`;
             if (!q.target && !foreign) {
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'btn btn-primary btn-sm';
                 b.textContent = q.known ? 'Znovu spárovat' : (q.node_paired ? 'Spárovat znovu' : 'Spárovat');
-                b.addEventListener('click', async () => {
-                    if (!q.known && q.node_paired) {
-                        if (!await confirmDialog({ title: `Spárovat znovu čidlo ${q.id}?`, body: ['Hub ho uvolní uschovaným klíčem a dá mu nový.'], confirm: 'Spárovat znovu' })) return;
-                    } else if (!q.known) {
-                        pairDialog(q.id);                    // název + ověření ID podle štítku
+                // the table lives in the Add-sensor dialog: no nested confirmation, the button says it
+                b.title = !q.known && q.node_paired ? 'Hub ho uvolní uschovaným klíčem a dá mu nový.'
+                    : q.known ? 'Starý klíč se zruší a vygeneruje se nový.' : 'Doplní ID; zadejte název a potvrďte.';
+                b.addEventListener('click', () => {
+                    if (!q.known && !q.node_paired) {        // nové čidlo: název + ověření ID podle štítku
+                        if (pairFill) pairFill(q.id); else pairDialog(q.id);
                         return;
-                    } else if (!await confirmDialog({ title: `Znovu spárovat čidlo ${q.id}?`, body: ['Starý klíč se zruší a vygeneruje se nový.'], confirm: 'Znovu spárovat' })) return;
+                    }
                     startPairing(q.id, '');
                 });
                 tr.lastElementChild.appendChild(b);
@@ -2247,7 +2276,7 @@
         d.heard.forEach((h) => {
             const tr = document.createElement('tr');
             const foreign = h.kind !== 'pair' && !h.added;
-            tr.innerHTML = `<td><code>${esc(h.id)}</code>${h.added ? ico('check', 'ico-sm') : ''}</td><td>${num(h.rssi, 0, ' dBm')}</td>
+            tr.innerHTML = `<td><code>${esc(h.id)}</code>${h.added ? ico('check', 'ico-sm') : ''}</td><td>${sigTxt(h.rssi)}</td>
                 <td>${fmtAgo(h.age_s)}</td><td>${esc(h.count)}</td><td class="muted small">${h.kind === 'pair' ? 'nabízí párování' : (h.added ? 'data' : 'cizí čidlo')}</td><td class="td-actions"></td>`;
             const cell = tr.lastElementChild;
             if (foreign && targetIds.has(h.id)) {
@@ -2284,6 +2313,11 @@
         if (answered) step = 3;
         if (!offering && !waiting && pairDone > Date.now()) step = 4;
         if (answered) pairDone = Date.now() + 60000;
+        const hint = $('pairHint');
+        hint.dataset.idle = hint.dataset.idle || hint.textContent;
+        hint.textContent = offering ? 'Nové čidlo nabízí párování – otevřete „Přidat čidlo“.'
+            : waiting ? `Čekám na čidlo ${targets.map((t) => t.id).join(', ')}.` : hint.dataset.idle;
+        hint.classList.toggle('muted', !offering);
         document.querySelectorAll('#pairSteps li').forEach((li) => {
             const n = +li.dataset.step;
             li.classList.toggle('done', n < step || (step === 4 && n === 4));

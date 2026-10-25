@@ -627,6 +627,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         if core.nodes.get(nid) is None and len(core.nodes.ids()) >= 16:
             return jerr("Maximálně 16 čidel.")
         name = str(data.get("name") or "").strip()[:40]
+        if core.nodes.get(nid) is None and not name:
+            # a new sensor needs a name; a re-paired removed one keeps its old one
+            name = core.archive_info(nid)["archived_name"]
+            if not name:
+                return jerr("Zadejte název čidla.")
         core.start_pairing(nid, name, request["session"]["username"])
         core.audit("NODE_PAIRING", f"Čeká se na párování čidla {nid:04X}", *user_of(request))
         return jresp({"ok": True, "pairing": core.pairing_status()})

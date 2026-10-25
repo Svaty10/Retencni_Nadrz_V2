@@ -3,6 +3,17 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.11.0] - 2026-10-25
+
+### Změněno
+- **Přidání čidla je celé v dialogu** *Přidat čidlo…*: kroky (baterie → ID → první data → hotovo), ID ze štítku, **povinný název** a tabulka nových čidel v dosahu. Dialog po potvrzení zůstane otevřený a průběh se v něm obnovuje; „Spárovat“ u nalezeného čidla doplní jeho ID. Na kartě *Čidla* zůstalo jen tlačítko a upozornění, když nové čidlo nabízí párování. Server nové čidlo bez názvu odmítne (odebrané čidlo spárované znovu si vezme svůj dřívější název).
+- **Signál v procentech**: v grafu *Baterie a signál* (společná osa 0–100 %), v kartě *Spojení* i v tabulkách čidel – „67 % (−70 dBm)“. Převod lineárně mezi −110 dBm (0 %) a −50 dBm (100 %).
+- Výběr **zóny Hydrawise** je přes celou šířku karty, dlouhé názvy zón se neořezávají.
+- Pole názvu čidla už nemá vzorový text „Jímka“.
+
+### Opraveno
+- **Vlnka na hladině se nehýbala**, když má systém omezené animace (ve Windows *Efekty animace* vypnuté, v telefonu „Omezit pohyb“). Teď se vlní vždy, při omezených animacích pomaleji.
+
 ## [1.10.0] - 2026-10-24
 
 ### Odstraněno

@@ -208,6 +208,8 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(js["node"]["deadband_cm"], 0.4)
         st, js, _ = self.req("POST", "/api/pairing/start", {"node_id": "XYZ"}, headers=h)
         self.assertEqual(st, 400)
+        st, js, _ = self.req("POST", "/api/pairing/start", {"node_id": "5555", "name": "  "}, headers=h)
+        self.assertEqual(st, 400)                                # a new sensor needs a name
 
         # a paired node ignores pairing unless its own hub asks (battery re-inserted)
         n1.reboot()

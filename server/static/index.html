@@ -305,23 +305,24 @@
                         <tbody id="nodesBody"></tbody>
                     </table>
                 </div>
-                <div class="config-form">
-                    <h3>Přidat čidlo</h3>
+                <div class="inline-actions">
+                    <button class="btn btn-primary" type="button" id="addNodeBtn">Přidat čidlo…</button>
+                    <span class="muted small" id="pairHint">ID ze štítku, název a vložení baterie – vše v dialogu.</span>
+                </div>
+                <!-- obsah dialogu Přidat čidlo (pairDialog ho přesune do dialogu a zpět) -->
+                <div class="pair-panel hidden" id="pairPanel">
                     <ol class="steps" id="pairSteps">
                         <li data-step="1"><b>Vložte baterii</b><span>do čidla</span></li>
                         <li data-step="2"><b>Potvrďte ID</b><span>podle štítku</span></li>
                         <li data-step="3"><b>První data</b><span>čekám na čidlo</span></li>
                         <li data-step="4"><b>Hotovo</b><span>čidlo je přidané</span></li>
                     </ol>
+                    <h3>Nová čidla v dosahu</h3>
                     <div class="table-responsive">
                         <table class="user-table">
                             <thead><tr><th>Čidlo</th><th>Signál</th><th>Naposledy</th><th>Stav</th><th></th></tr></thead>
                             <tbody id="pairBody"></tbody>
                         </table>
-                    </div>
-                    <div class="inline-actions">
-                        <button class="btn btn-primary" type="button" id="addNodeBtn">Přidat čidlo…</button>
-                        <span class="muted small">Zadáte ID ze štítku a název, pak do čidla vložte baterii.</span>
                     </div>
                 </div>
                 <div class="adv">
@@ -606,7 +607,7 @@
                             <option value="hydrawise">Hunter Hydrawise</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group span-all">
                         <label for="zoneSelect">Zóna <button type="button" class="help-tip" data-help="zone"></button></label>
                         <div class="select-action">
                             <select id="zoneSelect" class="unified-select"><option value="">– bez zóny –</option></select>
