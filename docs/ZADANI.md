@@ -270,7 +270,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   (běžící tečky, když tudy dnes teklo), oranžová = zpožděná data čidla, červená = porucha (čidlo offline,
   chyba ventilu), šedá = předpověď se načítá. Okraj nádrže má barvu stavu čidla.
 - Vedle karty nádrže (na širokém displeji) doplňkové údaje 2 × 2 (Výhled, Spotřeba, Baterie čidla, Čidlo v šachtě)
-  a pod nimi **graf hladiny** (dorovná výšku karty nádrže, ale nikdy není menší než ostatní grafy); ostatní grafy jsou pod tím. Na úzkém displeji jde vše pod sebe.
+  a pod nimi **graf hladiny** (stejně vysoký jako ostatní grafy; karta nádrže se výškou srovná s pravým sloupcem); ostatní grafy jsou pod tím. Na úzkém displeji jde vše pod sebe.
 - Přehled **Všechny nádrže**: nahoře mapa systému (hub uprostřed, nádrže kolem, cesta podle stavu čidla),
   pod ní karty nádrží a společný graf.
 - Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):
@@ -284,7 +284,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - **Záznamy (log):** kategorie (dopouštění, čidla, nastavení, přihlášení, uživatelé, systém, problémy), filtr
   kdo (uživatelé / automatika / konkrétní uživatel), hledání v textu, rozsah dat; seskupení po dnech,
   barevné odlišení závažnosti, „Načíst starší“.
-- Nastavení i logy **jen pro admina** (záložky skryté, API vrací 403). Nastavení je jeden sloupec karet
+- Nastavení i logy **jen pro admina** (záložky skryté, API vrací 403). Nastavení je jeden sloupec karet přes celou šířku stránky,
   rozdělený do pojmenovaných sekcí s rozcestníkem vlevo (na mobilu vodorovná lišta), který zvýrazní
   právě viditelnou kartu. Změny nádrže se ukládají jedním tlačítkem v dolní liště *Uložit změny*
   (objeví se po úpravě, nabízí i *Zahodit*). Přepínač *Zobrazit pokročilá nastavení* (pokročilé: offset a kalibrační body sondy, přesnost, limity a průtok dopouštění,

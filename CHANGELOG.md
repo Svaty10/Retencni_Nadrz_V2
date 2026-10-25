@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.3] - 2026-10-25
+
+### Změněno
+- **Nastavení přes celou šířku stránky** (dřív nejvýš 960 px, na širokém monitoru zůstávalo vpravo prázdné místo).
+- **Graf hladiny stejně vysoký jako ostatní grafy**; karta nádrže se výškou srovná s pravým sloupcem.
+
 ## [1.14.2] - 2026-10-25
 
 ### Změněno
