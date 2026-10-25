@@ -173,7 +173,7 @@ Když je k dispozici nová verze, svítí tečka u záložky *Nastavení* v hlav
 je řádek „K dispozici verze X“ s tlačítkem do dialogu.
 
 **Automaticky v noci:** 1× denně (03:30 + náhodné zpoždění, a 15 min po startu) se hub podívá na
-GitHub. Přepínač *Instalovat aktualizace automaticky (v noci)* (v dialogu i v kartě *Systém*)
+GitHub. Přepínač *Automatické aktualizace* (v dialogu i v kartě *Systém*)
 rozhoduje, zda novou verzi rovnou nainstaluje, nebo ji jen nabídne.
 
 Jak to funguje uvnitř: web (bez práv roota) zapíše žádost `data/update-request`

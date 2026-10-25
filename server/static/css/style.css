@@ -1054,7 +1054,7 @@ body.modal-open { overflow: hidden; }
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
 .modal-backdrop.busy .icon-btn { visibility: hidden; }
 .modal-body { padding: 8px 20px 12px; overflow-y: auto; min-height: 80px; }
-.modal-prefs { padding: 12px 20px; border-top: 1px solid var(--line); }
+.modal-prefs { padding: 4px 20px; border-top: 1px solid var(--line); }
 .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--line); }
 .modal-foot:empty { display: none; }
 .upd-big { font-size: 18px; font-weight: 600; margin: 4px 0 4px; }
@@ -1085,10 +1085,16 @@ body.modal-open { overflow: hidden; }
 .upd-steps li.active .step-dot { border-color: var(--accent); background: var(--accent-soft); }
 .upd-steps li.done { color: var(--ink-2); }
 .upd-steps li.done .step-dot { border-color: var(--green); background: var(--green); }
-.upd-prefs { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
-.upd-prefs .toggle { flex: 1 1 260px; }
-.upd-channel { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
-.upd-channel .unified-select { width: 140px; }
+.upd-prefs { display: grid; }
+.upd-pref {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    min-height: 52px; padding: 8px 0; cursor: pointer;
+}
+.upd-pref + .upd-pref { border-top: 1px solid var(--line); }
+.upd-pref-text { display: grid; gap: 2px; min-width: 0; }
+.upd-pref-name { font-size: 14px; font-weight: 500; color: var(--ink); }
+.upd-pref-hint { font-size: 13px; color: var(--muted); }
+.upd-pref .unified-select { width: 140px; flex-shrink: 0; }
 .upd-line { margin-bottom: 12px; }
 .upd-line p { margin: 0; }
 .upd-avail-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
