@@ -110,6 +110,7 @@ Podrobně v [docs/instalace.md](docs/instalace.md).
 | [Zapojení](docs/zapojeni_rpi.md) | CC1101 ↔ Raspberry Pi |
 | [Programování čidla](docs/programovani_uzlu.md) | nahrání firmwaru přes UPDI (USB-UART nebo Arduino), fuses, řešení problémů |
 | [Architektura](docs/architektura.md) | jak je systém poskládaný, výpočty, řízení dopouštění |
+| [Posudek frontendu](docs/posudek-frontendu.md) | návrh a srozumitelnost webového rozhraní: silné stránky, nálezy, doporučené pořadí úprav |
 | [API](docs/api.md) | REST API webu a Home Assistantu, rádiový protokol |
 | [Home Assistant](docs/home_assistant.yaml) | vzorová konfigurace (aktuální YAML vygeneruje web) |
 | [Vydání verze](docs/vydani.md) | číslování, kontrola, tag, ověření aktualizace |

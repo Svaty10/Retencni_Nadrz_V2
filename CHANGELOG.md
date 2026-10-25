@@ -5,6 +5,9 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
 ## [Unreleased]
 
+### Přidáno
+- **Posudek frontendu (`docs/posudek-frontendu.md`):** posouzení webového rozhraní z pohledu uživatele nad verzí 1.12.1 – silné stránky, nálezy (zastaralá data vypadají jako aktuální, tlačítko zastavení bez ohledu na stav, míchání pojmů nádrž / čidlo, vývojářské názvy, ztráta neuložených změn v nastavení, oříznutá navigace na mobilu) a doporučené pořadí úprav; odkaz v `README.md`.
+
 ### Opraveno
 - **Dokumentace:** odznak verze v `README.md` odpovídá aktuální verzi (1.12.1); `docs/architektura.md` uvádí migrace databáze v1–v13 (motiv a jazyk u účtu v tabulce `users`) a mezi soubory webu `js/i18n.js` a `js/theme.js`.
 
