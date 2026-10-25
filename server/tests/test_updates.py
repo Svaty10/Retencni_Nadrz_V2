@@ -225,10 +225,12 @@ class InstallAndRollback(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         d = self.d = Path(self.tmp.name)
-        self.saved = {k: getattr(upd, k) for k in ("APP", "RELEASES", "CURRENT", "PUBKEY", "BAD", "http_get",
+        self.saved = {k: getattr(upd, k) for k in ("APP", "RELEASES", "CURRENT", "DATA", "PUBKEY", "BAD", "http_get",
                                                    "switch", "sync_units", "restore_units", "healthy", "subprocess")}
         upd.APP = d / "app"
         upd.RELEASES = upd.APP / "releases"
+        upd.DATA = d / "data"
+        upd.DATA.mkdir(parents=True)
         prev = upd.RELEASES / "1.1.0"
         (prev / "server" / "retencka").mkdir(parents=True)
         upd.CURRENT = prev                                    # stands for the "current" symlink
@@ -310,6 +312,32 @@ class InstallAndRollback(unittest.TestCase):
         self.assertEqual(json.loads(upd.BAD.read_text()), ["1.2.0"])        # timer will not retry it
         self.assertEqual(self.state(), "rolled_back")
         self.assertEqual(upd.decide(None, True, "1.1.0", "1.2.0", upd.load_bad()), "failed_before")
+
+    def test_unhealthy_update_restores_database(self):
+        import sqlite3
+        db_file = upd.DATA / "retencka.db"
+        with contextlib.closing(sqlite3.connect(str(db_file))) as conn:
+            conn.execute("CREATE TABLE t (v TEXT)")
+            conn.execute("INSERT INTO t VALUES ('before-update')")
+            conn.execute("PRAGMA user_version = 13")
+            conn.commit()
+
+        def fail_after_migrating(expected, timeout=120):
+            # Simulate the new version migrating the DB before failing healthcheck
+            with contextlib.closing(sqlite3.connect(str(db_file))) as conn:
+                conn.execute("UPDATE t SET v = 'mutated-by-failed-release'")
+                conn.execute("PRAGMA user_version = 99")
+                conn.commit()
+            return False
+
+        upd.healthy = fail_after_migrating
+        self.assertEqual(upd.install(self.release(), "1.1.0", set(), self.st), 3)
+        with contextlib.closing(sqlite3.connect(str(db_file))) as conn:
+            val = conn.execute("SELECT v FROM t").fetchone()[0]
+            ver = conn.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual(val, "before-update")
+        self.assertEqual(ver, 13)
+        self.assertFalse((upd.APP / ".db-pre-update.sqlite").exists())
 
     def test_bad_signature_refused(self):
         self.assertEqual(upd.install(self.release(tamper=True), "1.1.0", set(), self.st), 2)

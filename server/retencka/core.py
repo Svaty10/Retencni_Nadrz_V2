@@ -43,7 +43,7 @@ PAIR_TARGET_S = 15 * 60           # user's confirmation of an ID: new PAIR_ACKs 
 # DATA frame this long, even after the pairing window closed (first DATA lost); it is
 # persisted, so a hub restart does not strand the sensor either. Then it is archived.
 PENDING_KEY_S = 24 * 3600
-PENDING_MAX = 4                   # pending keys kept per node (forged requests cannot evict the real one)
+PENDING_MAX = 4                   # pending keys kept per node (strongest RSSI preferred when full)
 ARCHIVE_MAX = 8                   # archived keys kept per node (see db.py v10)
 ARCHIVE_SEEN_WRITE_S = 600        # node_key_archive.seen_at is refreshed at most this often
 # unpairing: the sensor answers an UNPAIR by an unpaired PAIR_REQ ~6 s later (next
@@ -60,8 +60,8 @@ BACKUP_KEEP = 7                   # nightly local backups kept
 IMPORT_MAX_BYTES = 4 << 30        # an imported backup, uncompressed (years of data are < 1 GiB)
 SERVIS_24H_S = 24 * 3600
 # same rules as system/bin/retencka-control.py (the root helper validates again)
-NETBIRD_KEY_RE = re.compile(r"^[A-Za-z0-9-]{20,80}$")
-NETBIRD_URL_RE = re.compile(r"^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?/?$")
+NETBIRD_KEY_RE = re.compile(r"^[A-Za-z0-9-]{20,80}\Z")
+NETBIRD_URL_RE = re.compile(r"^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?/?\Z")
 
 # audit actions forwarded to Telegram: action -> admins only
 NOTIFY_ACTIONS = {"AUTO_REFILL": False, "MANUAL_REFILL": False, "REFILL_ERROR": False, "REFILL_FAULT": False,
@@ -140,8 +140,10 @@ class Core:
         self._time_anchor: Optional[tuple[float, float, int]] = None   # (wall, monotonic, first id)
 
         self._migrate_v2()
+        self._restore_keys_mirror()
         self._load_keys()
         self._restore()
+        self._sync_keys_mirror()
 
     # ================================================================ helpers
     def audit(self, action: str, detail: str = "", user: str = "system", ip: str = "") -> None:
@@ -500,7 +502,8 @@ class Core:
                 return None
             lst = self._pending_keys.setdefault(nid, [])
             if not any(e["k_mac"] == keys[1] for e in lst):     # a retry gives the same key
-                lst.append({"k_enc": keys[0], "k_mac": keys[1], "ts": now, "name": t.get("name") or "",
+                lst.append({"k_enc": keys[0], "k_mac": keys[1], "ts": now, "rssi": -120.0,
+                            "pub": node_pub.hex(), "name": t.get("name") or "",
                             "user": t.get("user") or "system", "id": None})
             return crypto.build_pair_ack(nid, t["pub"])
 
@@ -576,13 +579,17 @@ class Core:
             self.db.execute("DELETE FROM node_key_archive WHERE id=?", (old,))
 
     def _persist_pending(self, nid: int) -> None:
-        """Write keys the radio thread handed out to the DB; at most PENDING_MAX stay pending."""
+        """Write keys the radio thread handed out to the DB; at most PENDING_MAX stay pending
+        (strongest RSSI preferred so weak spoofed requests cannot evict a nearby sensor)."""
         with self._pair_lock:
             lst = self._pending_keys.get(nid) or []
             new = [e for e in lst if e["id"] is None]
-            over = lst[:-PENDING_MAX] if len(lst) > PENDING_MAX else []
-            if over:
-                self._pending_keys[nid] = lst[-PENDING_MAX:]
+            over = []
+            if len(lst) > PENDING_MAX:
+                ranked = sorted(lst, key=lambda e: (e.get("rssi", -120.0), e["ts"]))
+                over = ranked[:-PENDING_MAX]
+                keep_ids = {id(e) for e in ranked[-PENDING_MAX:]}
+                self._pending_keys[nid] = [e for e in lst if id(e) in keep_ids]
         for e in new:
             cur = self.db.execute("INSERT INTO node_key_archive(node_id, k_enc, k_mac, removed_at, reason, name, username) "
                                   "VALUES(?,?,?,?,'pending',?,?)", (nid, e["k_enc"].hex(), e["k_mac"].hex(),
@@ -653,12 +660,18 @@ class Core:
     def _on_frame(self, payload: bytes, rssi: float, lqi: int) -> None:
         req = crypto.parse_pair_req(payload)
         if req is not None:
-            nid, _, node_paired = req
+            nid, node_pub, node_paired = req
             self._heard(nid, rssi, "pair")
             with self._pair_lock:
-                pr = self.pair_requests.get(nid, {"count": 0})
-                pr.update(ts=int(time.time()), rssi=rssi, count=pr["count"] + 1, node_paired=node_paired)
+                pr = self.pair_requests.get(nid, {"count": 0, "pubs": set()})
+                pubs = set(pr.get("pubs") or ())
+                pubs.add(node_pub.hex())
+                pr.update(ts=int(time.time()), rssi=rssi, count=pr["count"] + 1,
+                          node_paired=node_paired, pubs=pubs, pub_count=len(pubs))
                 self.pair_requests[nid] = pr
+                for e in self._pending_keys.get(nid, ()):
+                    if e.get("pub") == node_pub.hex():
+                        e["rssi"] = max(e.get("rssi", -120.0), rssi)
             self._persist_pending(nid)
             node = self.nodes.get(nid)
             if node and node.get("_unpair"):
@@ -760,6 +773,7 @@ class Core:
             self.heard[nid].pop("key_match", None)
         self.audit("NODE_PAIRED", f"Čidlo {nid:04X} {'spárováno' if new else 'znovu spárováno (nový klíč)'}",
                    t.get("user") or entry.get("user") or "system")
+        self._sync_keys_mirror()
         log.info("Node %04X paired", nid)
         return True
 
@@ -846,8 +860,111 @@ class Core:
         self._last_ctr.pop(nid, None)
         self._jump_ctr.pop(nid, None)
         self.invalidate()
+        self._sync_keys_mirror()
         self.audit(action, detail + "; naměřená data zůstávají", user, ip)
         log.info("Node %04X removed (%s)", nid, action)
+
+    def _keys_mirror_path(self) -> str:
+        return f"{self.db.path}.keys"
+
+    def _sync_keys_mirror(self) -> None:
+        """Keep paired sensor keys in a separate small atomic file next to the DB so
+        a corrupted database without a recent backup never loses sensor pairings."""
+        path = self._keys_mirror_path()
+        try:
+            nodes = [
+                dict(r)
+                for r in self.db.query(
+                    "SELECT node_id, name, config, created, sort, secret, paired_at, last_ctr "
+                    "FROM nodes WHERE secret IS NOT NULL ORDER BY sort, node_id"
+                )
+            ]
+            arch = [
+                dict(r)
+                for r in self.db.query(
+                    "SELECT node_id, k_enc, k_mac, removed_at, reason, name, username, seen_at "
+                    "FROM node_key_archive WHERE reason<>'pending' ORDER BY id"
+                )
+            ]
+            d = os.path.dirname(os.path.abspath(path))
+            fd, tmp = tempfile.mkstemp(dir=d, prefix="." + os.path.basename(path) + ".")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"nodes": nodes, "archive": arch}, f)
+                f.flush()
+                if hasattr(os, "fchmod"):
+                    os.fchmod(f.fileno(), 0o600)
+            os.replace(tmp, path)
+        except Exception:
+            log.exception("could not write keys mirror %s", path)
+
+    def _restore_keys_mirror(self) -> None:
+        """If the database lost paired sensors (e.g. fresh DB after corruption or older
+        nightly backup), recover them from the atomic keys mirror."""
+        path = self._keys_mirror_path()
+        if not os.path.isfile(path):
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return
+        except (OSError, ValueError):
+            return
+        restored = 0
+        archived_nids = {
+            r["node_id"]
+            for r in self.db.query("SELECT DISTINCT node_id FROM node_key_archive WHERE reason IN ('removed', 'unpaired')")
+        }
+        for row in data.get("nodes") or ():
+            if not isinstance(row, dict) or not row.get("secret"):
+                continue
+            nid = int(row["node_id"])
+            existing = self.db.one("SELECT secret FROM nodes WHERE node_id=?", (nid,))
+            if existing is None and nid not in archived_nids and len(self.nodes.ids()) < MAX_NODES:
+                self.db.execute(
+                    "INSERT INTO nodes(node_id, name, config, created, sort, secret, paired_at, last_ctr) "
+                    "VALUES(?,?,?,?,?,?,?,?)",
+                    (
+                        nid,
+                        row.get("name") or f"Čidlo {nid:04X}",
+                        row.get("config") or "{}",
+                        int(row.get("created") or time.time()),
+                        int(row.get("sort") or len(self.nodes.ids())),
+                        row["secret"],
+                        row.get("paired_at"),
+                        row.get("last_ctr"),
+                    ),
+                )
+                self.nodes.reload()
+                restored += 1
+            elif existing is not None and not existing["secret"]:
+                self.db.execute(
+                    "UPDATE nodes SET secret=?, paired_at=?, last_ctr=COALESCE(last_ctr, ?) WHERE node_id=?",
+                    (row["secret"], row.get("paired_at"), row.get("last_ctr"), nid),
+                )
+                self.nodes.reload()
+                restored += 1
+        for a in data.get("archive") or ():
+            if not isinstance(a, dict) or not a.get("k_enc") or not a.get("k_mac"):
+                continue
+            nid = int(a["node_id"])
+            if not self.db.one("SELECT 1 FROM node_key_archive WHERE node_id=? AND k_mac=?", (nid, a["k_mac"])):
+                self.db.execute(
+                    "INSERT INTO node_key_archive(node_id, k_enc, k_mac, removed_at, reason, name, username, seen_at) "
+                    "VALUES(?,?,?,?,?,?,?,?)",
+                    (
+                        nid,
+                        a["k_enc"],
+                        a["k_mac"],
+                        int(a.get("removed_at") or time.time()),
+                        a.get("reason") or "removed",
+                        a.get("name") or "",
+                        a.get("username") or "system",
+                        a.get("seen_at"),
+                    ),
+                )
+        if restored:
+            log.warning("Restored %d paired sensor(s) from keys mirror %s", restored, path)
 
     def pairing_status(self) -> dict:
         now = time.time()
@@ -857,15 +974,23 @@ class Core:
                 self.pair_targets.pop(k, None)
             archived = {k for k, v in self._archive.items() if v} | {k for k, v in self._pending_keys.items() if v}
             reqs = [{"id": f"{k:04X}", "rssi": v["rssi"], "age_s": int(now - v["ts"]), "count": v["count"],
+                     "pub_count": v.get("pub_count", 1),
                      "known": self.nodes.get(k) is not None, "node_paired": v.get("node_paired", False),
                      "target": k in self.pair_targets, "answered": k in self._pending_keys,
                      "archived": k in archived}
                     for k, v in sorted(self.pair_requests.items(), key=lambda kv: -kv[1]["ts"])
                     if now - v["ts"] < 120]
             targets = [{"id": f"{k:04X}", "name": v["name"], "expires_in": int(v["expires"] - now),
-                        "answered": k in self._pending_keys} for k, v in self.pair_targets.items()]
+                        "answered": k in self._pending_keys,
+                        "rssi": (self.pair_requests.get(k) or {}).get("rssi"),
+                        "pub_count": max((self.pair_requests.get(k) or {}).get("pub_count", 0),
+                                         len(self._pending_keys.get(k, ())))}
+                       for k, v in self.pair_targets.items()]
             pending = [{"id": f"{k:04X}", "name": (v[-1]["name"] or ""),
-                        "expires_in": int(max(e["ts"] for e in v) + PENDING_KEY_S - now)}
+                        "expires_in": int(max(e["ts"] for e in v) + PENDING_KEY_S - now),
+                        "rssi": max((e.get("rssi") for e in v if e.get("rssi") is not None and e.get("rssi") > -120.0),
+                                    default=(self.pair_requests.get(k) or {}).get("rssi")),
+                        "pub_count": max((self.pair_requests.get(k) or {}).get("pub_count", 0), len(v))}
                        for k, v in self._pending_keys.items() if v and k not in self.pair_targets]
         return {"requests": reqs, "targets": targets, "pending": pending}
 
@@ -1171,7 +1296,8 @@ class Core:
         info = {"configured": self._provider(node) is not None, "provider": node.get("refill_provider"),
                 "zone_controlled_by": shared,
                 "active": r is not None, "status": self.refill_notes.get(nid) or self._refill_idle_note(node),
-                "max_pct": node["max_refill_pct"], "auto": node["auto_refill_enabled"],
+                "max_pct": node["max_refill_pct"], "auto_target_pct": node["auto_refill_target_pct"],
+                "auto": node["auto_refill_enabled"],
                 "waiting_for_rain": nid in self._rain_wait,
                 "waiting_for_data": nid in self.refill_wait,
                 "auto_paused_until": (int(self._auto_pause[nid])
@@ -1229,6 +1355,32 @@ class Core:
         ok, msg = await prov[0](seconds)
         if not ok:
             self.audit("REFILL_ERROR", f"{node['name']}: {msg}", user, ip)
+            # If the start request reached the provider before a timeout/network drop,
+            # the valve may be open: send a preventive stop, and if that also fails,
+            # track the refill as unconfirmed (stop_retry) so refill_tick retries stop.
+            stop_ok, _ = await prov[1]()
+            if not stop_ok:
+                now = int(time.time())
+                reason = f"Nejistý start ({msg}) – preventivní zastavení"
+                cur = self.db.execute(
+                    "INSERT INTO refills(start_ts, mode, target_pct, start_l, planned_s, username, node_id) "
+                    "VALUES(?,?,?,?,?,?,?)",
+                    (now, mode, target_pct, int(lv.volume_l), seconds, user, nid),
+                )
+                self.refills[nid] = {
+                    "id": cur.lastrowid,
+                    "start_ts": now,
+                    "mode": mode,
+                    "target_pct": target_pct,
+                    "start_l": int(lv.volume_l),
+                    "planned_s": seconds,
+                    "node_id": nid,
+                    "stop_retry": True,
+                    "stop_reason": reason,
+                    "stop_user": (user, ip),
+                }
+                self.refill_notes[nid] = f"{reason} – ventil nepotvrdil zastavení, opakuje se"
+                self.invalidate()
             return False, msg
         now = int(time.time())
         cur = self.db.execute(
@@ -1926,6 +2078,7 @@ class Core:
         for nid in self.nodes.ids():
             self._restore_node(nid)
             self._last_ctr[nid] = max(self._last_ctr.get(nid, -1), self._stored_ctr(nid))
+        self._sync_keys_mirror()
         self.invalidate()
         return stats
 

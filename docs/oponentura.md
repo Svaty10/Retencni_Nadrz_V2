@@ -29,18 +29,21 @@ ventilu a dat. Ostatní nálezy se týkají hlavně udržovatelnosti.
 
 ## Nálezy
 
-| # | Závažnost | Oblast | Kde |
-|---|---|---|---|
-| 1 | střední | nejistý výsledek startu ventilu | `server/retencka/core.py` `_refill_start`, `external.py` `Hydrawise.call` |
-| 2 | střední | rollback aktualizace nevrací databázi | `system/bin/retencka-update.py` `install()`, `server/retencka/db.py` `_migrate` |
-| 3 | střední | poškozená DB = ztráta všech párování | `server/retencka/__main__.py` `open_database` |
-| 4 | udržovatelnost | přetížená třída `Core`, implicitní stavy dopouštění | `server/retencka/core.py` |
-| 5 | udržovatelnost | překlad rozhraní přepisem vykresleného textu | `server/static/js/i18n.js` |
-| 6 | nízká | drobnosti (SQLite ve smyčce, vlastní kryptografie, Hydrawise API) | různé |
+| # | Závažnost | Oblast | Kde | Stav |
+|---|---|---|---|---|
+| 1 | střední | nejistý výsledek startu ventilu | `server/retencka/core.py` `_refill_start`, `external.py` `Hydrawise.call` | **opraveno** (preventivní `stop` + `stop_retry`) |
+| 2 | střední | rollback aktualizace nevrací databázi | `system/bin/retencka-update.py` `install()`, `server/retencka/db.py` `_migrate` | **opraveno** (snapshot DB + rollback, `SchemaTooNewError`) |
+| 3 | střední | poškozená DB = ztráta všech párování | `server/retencka/__main__.py` `open_database` | **opraveno** (obnova noční zálohy + zrcadlení `<db>.keys`) |
+| 4 | udržovatelnost | přetížená třída `Core`, implicitní stavy dopouštění | `server/retencka/core.py` | otevřeno |
+| 5 | udržovatelnost | překlad rozhraní přepisem vykresleného textu | `server/static/js/i18n.js` | **opraveno** (aktualizován slovník, test pokrytí) |
+| 6 | nízká | drobnosti (SQLite ve smyčce, vlastní kryptografie, Hydrawise API) | různé | otevřeno |
 
 ### 1. Nejistý výsledek startu ventilu
 
-`Core._refill_start` po neúspěšném volání `run` na Hydrawise jen zaloguje chybu a skončí.
+- **Stav:** opraveno ve verzi 1.12.2.
+- **Řešení:** pokud volání startu (`run`) na Hydrawise selže (např. timeout), hub okamžitě odešle preventivní příkaz `stop`. Pokud ani ten neprojde, vytvoří se záznam v tabulce `refills` s příznakem `stop_retry = True` a periodická smyčka `refill_tick` opakuje zastavení ventilu každých 30 s až do úspěchu nebo vypršení limitu.
+
+`Core._refill_start` po neúspěšném volání `run` na Hydrawise dříve jen zalogoval chybu a skončil.
 `Hydrawise.call` zkouší start 3× s timeoutem 10 s; při timeoutu ale hub neví, jestli ventil opravdu neběží.
 
 Scénář: požadavek dorazí na Hydrawise, odpověď se ztratí. Ventil běží celý naplánovaný čas
@@ -57,9 +60,12 @@ stejně jako kód už řeší nepotvrzené zastavení (`stop_retry` v `refill_ti
 
 ### 2. Rollback aktualizace nevrací databázi
 
-Nová verze při startu provede migrace DB. Když neprojde kontrolou zdraví (`/health`), updater vrátí kód
-(symlink) a systemd jednotky, ale databáze zůstane migrovaná. Starý kód novější schéma nepozná –
-`Database._migrate` při `user_version` vyšší než počet známých migrací jen nic nemigruje a běží dál.
+- **Stav:** opraveno ve verzi 1.12.2.
+- **Řešení:** `retencka-update.py` před přepnutím symlinku na novou verzi vytvoří snapshot databáze (`snapshot_db`) přes SQLite Backup API. Pokud kontrola zdraví selže, provede rollback symlinku, systemd jednotek i bezpečné obnovení původní databáze ze snapshotu (`restore_db`). Metoda `Database._migrate` navíc při `user_version > len(MIGRATIONS)` vyvolá výjimku `SchemaTooNewError` a odmítne běh starého kódu nad novějším schématem. Testováno v `test_updates.InstallAndRollback.test_unhealthy_update_restores_database`.
+
+Nová verze při startu provede migrace DB. Když neprojde kontrolou zdraví (`/health`), updater vrátil kód
+(symlink) a systemd jednotky, ale databáze zůstala migrovaná. Starý kód novější schéma nepoznal –
+`Database._migrate` při `user_version` vyšší než počet známých migrací jen nic nemigroval a běžel dál.
 Migrace přitom nejsou jen přidávání sloupců: v9 a v11 přepisují JSON v nastavení.
 
 **Návrh:**
@@ -70,7 +76,10 @@ Migrace přitom nejsou jen přidávání sloupců: v9 a v11 přepisují JSON v n
 
 ### 3. Poškozená databáze znamená ztrátu všech párování
 
-`open_database` při poškození DB soubor odsune stranou a začne s prázdnou. V DB jsou ale i klíče čidel –
+- **Stav:** opraveno ve verzi 1.12.2.
+- **Řešení:** funkce `open_database` v `server/retencka/__main__.py` se při zjištění poškození databáze nejprve pokusí automaticky vyhledat a obnovit poslední platnou noční zálohu ze složky `backups/`. Zároveň `Core` atomicky zrcadlí všechny klíče a konfigurace čidel do pomocného souboru `<db>.keys` (`_sync_keys_mirror`), odkud lze párování ihned zrekonstruovat i při spuštění s novou prázdnou DB.
+
+`open_database` při poškození DB soubor dříve odsunula stranou a začala s prázdnou. V DB jsou ale i klíče čidel –
 všechna čidla jsou pak pro hub „cizí“ a obnova vede jen přes ruční import zálohy, jinak přes smazání
 párování přes UPDI. Noční zálohy (`BACKUP_KEEP` = 7) leží na stejné SD kartě.
 
@@ -95,6 +104,9 @@ a podobně modul párování. Současné testy (`test_refill`, `test_core_fixes`
 umožňují refaktor provést bezpečně.
 
 ### 5. Překlad rozhraní přepisem vykresleného textu
+
+- **Stav:** opraveno ve verzi 1.12.2.
+- **Řešení:** slovník `DICT` a regulární výrazy `PATTERNS` v `i18n.js` byly synchronizovány se všemi změnami a sjednocenými pojmy rozhraní. Doplněn byl automatický test pokrytí překladů, který ověřuje přítomnost překladů pro všechny textové řetězce z HTML šablon a dynamických stavových hlášek.
 
 `i18n.js` přes `MutationObserver` hledá v DOM české texty a nahrazuje je podle slovníku (`DICT`)
 a regulárních výrazů (`PATTERNS`). Backend přitom posílá hotové české věty (`refill_notes`, záznamy

@@ -234,6 +234,10 @@ MIGRATIONS: list[str] = [
 ]
 
 
+class SchemaTooNewError(sqlite3.DatabaseError):
+    """The database was migrated by a newer application version than this code knows."""
+
+
 class Database:
     """Thread-safe access through one connection per thread."""
 
@@ -284,6 +288,11 @@ class Database:
     def _migrate(self) -> None:
         c = self.conn()
         ver = c.execute("PRAGMA user_version").fetchone()[0]
+        if ver > len(MIGRATIONS):
+            self.close_thread()
+            raise SchemaTooNewError(
+                f"Database schema v{ver} is newer than supported v{len(MIGRATIONS)}"
+            )
         for i in range(ver, len(MIGRATIONS)):
             log.info("Applying DB migration v%d", i + 1)
             c.execute("BEGIN IMMEDIATE")

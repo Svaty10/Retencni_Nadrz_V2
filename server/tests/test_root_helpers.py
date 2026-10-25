@@ -1,5 +1,6 @@
 """Root helpers vs. the unprivileged app: nothing written by root into the app's data
 directory may follow a symlink (or trip over a directory) the app planted there."""
+import ast
 import contextlib
 import importlib.util
 import io
@@ -13,7 +14,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "system" / "bin"
-BASH = shutil.which("bash")
+
+
+def _find_bash() -> str | None:
+    candidates = [shutil.which("bash"), r"C:\Program Files\Git\bin\bash.exe"]
+    for b in candidates:
+        if not b or not os.path.isfile(b):
+            continue
+        try:
+            r = subprocess.run([b, "-c", "true"], capture_output=True, timeout=5)
+            if r.returncode == 0:
+                return b
+        except OSError:
+            continue
+    return None
+
+
+BASH = _find_bash()
 
 
 def _symlinks_ok(d: str) -> bool:
@@ -89,12 +106,42 @@ class IdentitySetupCode(unittest.TestCase):
 
 class InstallScript(unittest.TestCase):
     def test_no_plain_writes_into_the_app_data_dir(self):
-        """install.sh runs as root while the app may already be running (reinstall):
-        `> "$DATA/…"` or `chown … "$DATA/…"` would follow a planted symlink."""
-        for line_no, line in enumerate((ROOT / "system" / "install.sh").read_text(encoding="utf-8").splitlines(), 1):
-            code = line.split("#", 1)[0]
-            self.assertNotRegex(code, r'>\s*"\$DATA/', f"install.sh:{line_no}")
-            self.assertNotRegex(code, r'\bch(own|mod)\b[^|;&]*"\$DATA/', f"install.sh:{line_no}")
+        """Root shell scripts must never `> "$DATA/…"` or `chown/chmod … "$DATA/…"`
+        because that would follow a symlink planted by the unprivileged app."""
+        scripts = [
+            ROOT / "system" / "install.sh",
+            BIN / "retencka-identity.sh",
+            BIN / "retencka-netbird-install.sh",
+            BIN / "retencka-alias.sh",
+            BIN / "retencka-netwatch.sh",
+        ]
+        for path in scripts:
+            for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                code = line.split("#", 1)[0]
+                self.assertNotRegex(code, r'>\s*"\$(DATA|1)/', f"{path.name}:{line_no}")
+                self.assertNotRegex(code, r'\bch(own|mod)\b[^|;&]*"\$(DATA|1)/', f"{path.name}:{line_no}")
+
+    def test_python_root_helpers_never_chown_or_chmod_by_path_in_data_writers(self):
+        """GHSA-pc46-j66c-c3w2: write_json, write_atomic and restore_db write into the
+        app-owned data directory and must set mode/owner via fchmod/fchown on the open
+        descriptor, never via path-based os.chmod / os.chown / shutil.chown."""
+        checks = [
+            (BIN / "retencka-control.py", ("write_json",)),
+            (BIN / "retencka-update.py", ("write_atomic", "restore_db")),
+        ]
+        for script, fn_names in checks:
+            tree = ast.parse(script.read_text(encoding="utf-8"), filename=str(script))
+            funcs = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+            for fn_name in fn_names:
+                self.assertIn(fn_name, funcs, f"{script.name}:{fn_name}")
+                for node in ast.walk(funcs[fn_name]):
+                    if isinstance(node, ast.Call):
+                        call_src = ast.unparse(node.func)
+                        self.assertNotIn(
+                            call_src,
+                            ("os.chmod", "os.chown", "shutil.chown", "Path.chmod"),
+                            f"{script.name}:{fn_name} must not call {call_src} by path",
+                        )
 
 
 _spec = importlib.util.spec_from_file_location("retencka_control", BIN / "retencka-control.py")
@@ -167,6 +214,33 @@ class ControlHelper(unittest.TestCase):
             ctl.subprocess.run = orig
         self.assertEqual(ran, [["systemctl", "reboot"]])
         self.assertFalse(os.path.lexists(ctl.DATA / "control-reboot"))
+
+    def test_write_json_never_uses_path_chmod_or_chown_and_replaces_symlink_or_dir(self):
+        orig_chmod, orig_shchown = ctl.os.chmod, ctl.shutil.chown
+
+        def forbid(*a, **kw):
+            raise AssertionError(f"path-based chmod/chown called: {a}")
+
+        ctl.os.chmod = forbid
+        ctl.shutil.chown = forbid
+        try:
+            # 1. normal write + planted directory at target
+            ctl.STATUS.mkdir()
+            (ctl.STATUS / "planted").write_text("x")
+            ctl.write_json(ctl.STATUS, {"ok": 1})
+            self.assertTrue(ctl.STATUS.is_file())
+            # 2. planted symlink at target is replaced, target untouched
+            if _symlinks_ok(self.tmp.name):
+                victim = Path(self.tmp.name, "victim")
+                victim.write_text("secret")
+                ctl.STATUS.unlink()
+                os.symlink(victim, ctl.STATUS)
+                ctl.write_json(ctl.STATUS, {"ok": 2})
+                self.assertFalse(ctl.STATUS.is_symlink())
+                self.assertEqual(victim.read_text(), "secret")
+        finally:
+            ctl.os.chmod = orig_chmod
+            ctl.shutil.chown = orig_shchown
 
 
 if __name__ == "__main__":

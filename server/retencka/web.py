@@ -214,9 +214,7 @@ def make_auth_middleware(core: Core):
             # CSRF: Origin must match Host (when sent) ...
             origin = request.headers.get("Origin")
             if origin:
-                host = request.headers.get("X-Forwarded-Host") if _is_loopback(request.remote) else None
-                host = host or request.host
-                if origin.split("://", 1)[-1] != host:
+                if origin.split("://", 1)[-1] != request.host:
                     return jerr("Neplatný původ požadavku", 403)
             # ... and logged-in requests must carry the session's CSRF token
             sess = request["session"]
@@ -265,11 +263,17 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     login_locks = app["login_locks"] = auth.LoginLocks()
     setup_lock = asyncio.Lock()
 
+    def _via_https_tunnel(request: web.Request) -> bool:
+        return _is_loopback(request.remote) and (
+            request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower() == "https"
+        )
+
     def set_session_cookie(request: web.Request, resp: web.Response, token: str) -> None:
         # plain http on the LAN (no Secure flag / __Host- prefix; a session cookie of
-        # 1.7–1.9 with that prefix is never sent over http -> one new login)
+        # 1.7–1.9 with that prefix is never sent over http -> one new login);
+        # behind a local HTTPS tunnel (X-Forwarded-Proto: https) set Secure
         resp.set_cookie(COOKIE_PLAIN, token, max_age=auth.SESSION_ABSOLUTE_S,
-                        path="/", httponly=True, samesite="Lax")
+                        path="/", httponly=True, secure=_via_https_tunnel(request), samesite="Lax")
 
     def clear_cookies(resp: web.Response) -> None:
         resp.del_cookie(COOKIE_PLAIN, path="/")

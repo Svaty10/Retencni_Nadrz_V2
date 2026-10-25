@@ -705,5 +705,67 @@ class ServerTest(unittest.TestCase):
         self.assertNotIn(b"500", data)
         self.assertEqual(data.count(b"HTTP/1.1"), 1)
 
+    def test_8_tunnel_secure_cookie_and_origin_host_check(self):
+        st, js, r = self.req("POST", "/api/auth/login",
+                             {"username": "admin2", "password": "Velmi-Tajne-Heslo1"},
+                             headers={"X-Forwarded-Proto": "https"})
+        self.assertEqual(st, 200, js)
+        cookie = r.getheader("Set-Cookie")
+        self.assertIsNotNone(cookie)
+        self.assertIn("Secure", cookie)
+
+        h = self.login()
+        h.update({
+            "Origin": "https://tunnel.example",
+            "X-Forwarded-Host": "tunnel.example",
+        })
+        st, js, _ = self.req("POST", "/api/node", {"name": "Test"}, headers=h)
+        self.assertEqual(st, 403)
+        self.assertIn("původ", (js or {}).get("error", "").lower())
+
+    def test_9_i18n_dictionary_covers_static_html(self):
+        import re
+        from html.parser import HTMLParser
+        from pathlib import Path
+
+        static_dir = Path(__file__).resolve().parent.parent / "static"
+        html_path = static_dir / "index.html"
+        i18n_path = static_dir / "js" / "i18n.js"
+
+        class TextExtractor(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.texts = []
+                self._ignored = 0
+
+            def handle_starttag(self, tag, attrs):
+                if tag in ("script", "style"):
+                    self._ignored += 1
+
+            def handle_endtag(self, tag):
+                if tag in ("script", "style") and self._ignored > 0:
+                    self._ignored -= 1
+
+            def handle_data(self, data):
+                if self._ignored == 0:
+                    txt = data.strip()
+                    if txt and re.search(r"[áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]", txt):
+                        self.texts.append(txt)
+
+        extractor = TextExtractor()
+        extractor.feed(html_path.read_text(encoding="utf-8"))
+
+        js_content = i18n_path.read_text(encoding="utf-8")
+        dict_match = re.search(r"const DICT = \{(.*?)\n\s*\};", js_content, re.DOTALL)
+        self.assertIsNotNone(dict_match, "const DICT not found in i18n.js")
+        dict_keys = set(re.findall(r'^\s*"([^"]+)"\s*:', dict_match.group(1), re.M))
+
+        self.assertGreater(len(extractor.texts), 0)
+        found = [t for t in extractor.texts if t in dict_keys]
+        coverage_pct = len(found) / len(extractor.texts) * 100.0
+        self.assertGreaterEqual(coverage_pct, 95.0,
+                                f"i18n DICT covers only {coverage_pct:.1f}% (< 95%) of static HTML phrases")
+
+
 if __name__ == "__main__":
     unittest.main()

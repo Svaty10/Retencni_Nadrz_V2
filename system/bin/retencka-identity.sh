@@ -77,7 +77,7 @@ if [ "$(hostname)" != "$name" ]; then
     systemctl --no-block try-restart avahi-daemon.service || true
 fi
 
-mkdir -p "$DATA"
+install -d -m 750 -o retencka -g retencka "$DATA" 2>/dev/null || mkdir -p "$DATA"
 if ! grep -q '^hotspot_password=' "$INFO" 2>/dev/null; then
     pw=$(gen 10)
     cat > "$INFO" <<INFOEOF
@@ -92,7 +92,6 @@ INFOEOF
 fi
 # the web bootstrap password always equals the label password
 pw=$(sed -n 's/^hotspot_password=//p' "$INFO" | head -n1)
-chown retencka:retencka "$DATA" 2>/dev/null || true
 if [ -n "$pw" ]; then
     # an app racing us (re-planting a directory) must not fail the boot unit
     publish_setup_code "$DATA" "$BASE" "$pw" || publish_setup_code "$DATA" "$BASE" "$pw" \

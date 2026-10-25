@@ -33,7 +33,7 @@ BODY_TIMEOUT = 20.0
 KEEPALIVE_TIMEOUT = 30.0
 MAX_CONNECTIONS = 64
 MAX_PER_IP_CONNECTIONS = 24
-_TOKEN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+_TOKEN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+\Z")
 
 
 # ============================================================== containers
