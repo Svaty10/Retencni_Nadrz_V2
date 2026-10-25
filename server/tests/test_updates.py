@@ -339,6 +339,13 @@ class InstallAndRollback(unittest.TestCase):
         self.assertEqual(ver, 13)
         self.assertFalse((upd.APP / ".db-pre-update.sqlite").exists())
 
+    def test_no_switch_without_database_snapshot(self):
+        (upd.DATA / "retencka.db").write_bytes(b"not a database")       # snapshot cannot be made
+        self.assertEqual(upd.install(self.release(), "1.1.0", set(), self.st), 1)
+        self.assertEqual(self.switched, [])                              # old version keeps running
+        self.assertEqual(self.state(), "error")
+        self.assertFalse((upd.APP / ".db-pre-update.sqlite").exists())
+
     def test_bad_signature_refused(self):
         self.assertEqual(upd.install(self.release(tamper=True), "1.1.0", set(), self.st), 2)
         self.assertEqual(self.switched, [])

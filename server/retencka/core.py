@@ -728,6 +728,9 @@ class Core:
         if last_ctr >= 0 and ctr - last_ctr > CTR_MAX_STEP:
             cand = self._jump_ctr.get(nid)
             if cand is None or not (0 < ctr - cand <= CTR_MAX_STEP):
+                if cand != ctr:
+                    log.warning("Node %04X: counter jump %d -> %d held until the next frame confirms it",
+                                nid, last_ctr, ctr)
                 self._jump_ctr[nid] = ctr
                 return                              # huge jump: wait for the next frame (rules out a 1:2^32 MAC hit)
         self._jump_ctr.pop(nid, None)
@@ -1354,11 +1357,17 @@ class Core:
         seconds = int(min(need_l / flow * 60 * 1.10, int(node["max_refill_minutes"]) * 60))
         ok, msg = await prov[0](seconds)
         if not ok:
-            self.audit("REFILL_ERROR", f"{node['name']}: {msg}", user, ip)
-            # If the start request reached the provider before a timeout/network drop,
-            # the valve may be open: send a preventive stop, and if that also fails,
-            # track the refill as unconfirmed (stop_retry) so refill_tick retries stop.
+            if msg != Hydrawise.UNSURE:
+                # the provider answered with an error: the valve surely did not open (no
+                # stop either – it would end a run the controller's own schedule started)
+                self.audit("REFILL_ERROR", f"{node['name']}: {msg}", user, ip)
+                return False, msg
+            # no answer (timeout, dropped connection): the start may have reached the
+            # provider and opened the valve – send a preventive stop; if that fails too,
+            # track the refill as unconfirmed (stop_retry) so refill_tick retries the stop
             stop_ok, _ = await prov[1]()
+            self.audit("REFILL_ERROR", f"{node['name']}: {msg} – start nepotvrzen, preventivní zastavení "
+                                       f"{'potvrzeno' if stop_ok else 'nepotvrzeno, opakuje se'}", user, ip)
             if not stop_ok:
                 now = int(time.time())
                 reason = f"Nejistý start ({msg}) – preventivní zastavení"

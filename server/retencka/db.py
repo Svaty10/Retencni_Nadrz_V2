@@ -231,6 +231,19 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'cs'
     """,
+    # --- v14: 1.13 changed two schema defaults (battery_type 'lifes2' -> 'alkaline',
+    # flow_rate_lpm 41.6 -> 0). A tank that inherited the old default (no own value and
+    # no stored shared default) keeps it as its own value, so nothing changes for it.
+    """
+    UPDATE nodes SET config = json_set(config, '$.battery_type', 'lifes2')
+     WHERE json_valid(config) AND json_extract(config, '$.battery_type') IS NULL
+       AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'node_defaults' AND json_valid(value)
+                       AND json_extract(value, '$.battery_type') IS NOT NULL);
+    UPDATE nodes SET config = json_set(config, '$.flow_rate_lpm', 41.6)
+     WHERE json_valid(config) AND json_extract(config, '$.flow_rate_lpm') IS NULL
+       AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'node_defaults' AND json_valid(value)
+                       AND json_extract(value, '$.flow_rate_lpm') IS NOT NULL)
+    """,
 ]
 
 

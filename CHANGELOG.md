@@ -3,12 +3,34 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.13.1] - 2026-10-25
+
+### Přidáno
+- **Oponentura architektury (`docs/oponentura.md`):** posouzení architektury nad verzí 1.12.1 – silné stránky, nálezy (nejistý výsledek startu ventilu, rollback aktualizace bez vrácení DB, ztráta párování při poškozené DB, přetížená třída `Core`, překlad rozhraní) a doporučené pořadí oprav; odkaz v `README.md`.
+- **Bezpečnostní kontrola 2026-10 (`docs/bezpecnostni-kontrola-2026-10.md`):** hloubková kontrola frontendu, backendu, root pomocníků, aktualizací, firmwaru a rádiového protokolu nad verzí 1.12.1; jeden neopravený nález vysoké závažnosti v root pomocnících (detaily v soukromém advisory do vydání opravy) a doporučení ke zpevnění; odkaz v `README.md`.
+- **Posudek frontendu (`docs/posudek-frontendu.md`):** posouzení webového rozhraní z pohledu uživatele nad verzí 1.12.1 – silné stránky, nálezy (zastaralá data vypadají jako aktuální, tlačítko zastavení bez ohledu na stav, míchání pojmů nádrž / čidlo, vývojářské názvy, ztráta neuložených změn v nastavení, oříznutá navigace na mobilu) a doporučené pořadí úprav; odkaz v `README.md`.
+
+### Změněno
+- **Ztlumení procent a měrky při stavu `stale` / `offline`** včetně štítku se stářím dat přímo u hladiny (`#txtStaleAge`, `.is-stale`).
+- **Tlačítko pro zastavení/zrušení dopouštění (`#refillStopBtn`)** se zobrazuje jen když dopouštění běží nebo čeká; dialog uvádí přesný čas pozastavení automatiky (`do zítřka HH:MM`).
+- **Sjednocení pojmů a UX vylepšení:** přejmenování na `Přehled`, `Všechny nádrže`, `Historie událostí`, stav `Čidlo: online/offline` a `Hub odpojen`, slovní hodnocení kvality signálu, zjednodušení popisku výhledu srážek s nápovědou `?` (`Srážky (48 h)`), předvyplnění cíle ručního dopouštění (`auto_target_pct`) a hlídání neuložených změn v nastavení nádrže (`#calSaveTop`, varování při přepnutí).
+
+### Opraveno
+- **Dokumentace:** odznak verze v `README.md` odpovídá aktuální verzi (1.12.1); `docs/architektura.md` uvádí migrace databáze v1–v13 (motiv a jazyk u účtu v tabulce `users`) a mezi soubory webu `js/i18n.js` a `js/theme.js`.
+- **`GHSA-pc46-j66c-c3w2` (eskalace oprávnění v root pomocnících):** `retencka-control.py`, `retencka-update.py` a `retencka-identity.sh` nyní nastavují práva a vlastníka výhradně přes otevřený deskriptor (`os.fchmod`, `os.fchown`, `install -d -o -g`), nikdy přes cestu v adresáři `data/` vlastněném aplikací; doplněno systemd sandboxing (`retencka-update.service`: `ProtectSystem=strict`, `NoNewPrivileges=yes`, `PrivateTmp=yes`; `retencka-control.service` jen omezení, která nebrání instalaci NetBirdu přes `apt`).
+- **Zpevnění z bezpečnostního auditu:** příznak `Secure` u session cookie za HTTPS tunelem (`X-Forwarded-Proto`), kontrola `Origin` výhradně proti hlavičce `Host`, ukotvení regulárních výrazů přes `\Z`, preference nejsilnějšího RSSI u čekajících klíčů (`PENDING_MAX`) a zobrazení RSSI + varování při více veřejných klíčích během párování.
+- **Pojistka při nejistém startu ventilu:** když Hydrawise na `run` vůbec neodpoví (timeout, přerušené spojení), hub pošle preventivní `stop` a při jeho neúspěchu zařadí dopouštění do `stop_retry`. Odpoví-li Hydrawise chybou, ventil se neotevřel – nic se nezastavuje (neukončí se běh z rozvrhu Hydrawise) a v historii nevznikne falešné dopouštění.
+- **Ochrana databáze a párování:** snapshot a automatický rollback databáze při neúspěšné aktualizaci (`retencka-update.py`), odmítnutí startu nad novějším schématem (`SchemaTooNewError`), automatická obnova z poslední noční zálohy při poškození DB a zrcadlení klíčů čidel do `<db>.keys`. Aktualizace se nespustí, pokud se nepodaří snímek databáze (návrat by jinak nechal starou verzi nad novějším schématem); snímek ověřuje, že soubor DB nebyl během zálohy vyměněn za odkaz.
+- **Oprava oříznutí mobilní navigace** (`.main-nav`, `.node-bar`) a aktualizovaný překladový slovník `i18n.js` včetně automatického testu pokrytí.
+- **Zachování dosavadních výchozích hodnot u stávajících nádrží (migrace v14):** nádrž, která jen dědila původní výchozí typ baterie (Li-FeS2) a průtok (41,6 L/min), je dostane uložené jako vlastní; nové nádrže dostanou nové výchozí hodnoty.
+- **Názvy nádrží se nepřekládají** do angličtiny (`translate="no"`, respektuje ho `i18n.js`); zadržený velký skok čítače čidla se zapisuje do logu.
+- **Dokumentace odpovídá kódu:** cesty v nastavení (*Obecné → Čidla* místo zrušené záložky *Všechna čidla* a karty *Výchozí nastavení nádrží*), výchozí alkalické baterie, sandbox systemd jednotek, cookie `Secure` za tunelem, snímek DB při aktualizaci; opravy z posudků jsou vedeny ve verzi 1.13.1 (verze 1.12.2 nikdy nevyšla).
+
 ## [1.13.0] - 2026-10-25
 
 ### Přidáno
 - **Volba tvaru nádrže (`tank_shape`):** podpora pro plochu dna (`area`), ležatý válec (`cyl_h`), stojatý válec (`cyl_v`) a kvádr (`rect`). U ležatého válce se objem i procento hladiny počítají přesně podle kruhového průřezu (v horní a spodní části přibývá objem pomaleji než uprostřed). Formulář dynamicky zobrazuje pouze relevantní rozměry pro zvolený tvar.
 - **Informace o systému v Nastavení:** na kartě *Systém* (`GET /api/system`) se nově zobrazuje vytížení procesoru (`cpu_pct` v %) a využití operační paměti (`ram_used_mb`, `ram_total_mb`, `ram_pct` v MB a %).
-- **Oponentura architektury (`docs/oponentura.md`), Bezpečnostní kontrola 2026-10 (`docs/bezpecnostni-kontrola-2026-10.md`) a Posudek frontendu (`docs/posudek-frontendu.md`):** komplexní revizní dokumenty včetně stavu zapracování všech nálezů a odkazů v `README.md`.
 
 ### Změněno
 - **Plná šířka rozhraní na širokoúhlých monitorech:** zrušeno omezení maximální šířky `.app-container` (`max-width: none;`), rozhraní plně využívá plochu 1440p i větších monitorů.
@@ -16,17 +38,6 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 - **Podmíněné zobrazení karet integrací:** karta *Telegram* v *Můj účet* i karta *Upozornění* u nádrže se zobrazují pouze při nakonfigurovaném Telegram botu; karta *Dopouštění* u nádrže se skrývá, pokud není zadán API klíč Hydrawise na úrovni hubu ani nádrže.
 - **Horní limit dopouštění („Nejvýš dopustit na“) v základním nastavení:** pole `max_refill_pct` bylo přesunuto z pokročilých voleb přímo mezi základní viditelná pravidla dopouštění každé nádrže.
 - Z popisku (tooltipu) grafu **Hladina v čase** byl odebrán údaj o napětí sondy (`sonda XXX mV`); zobrazuje se pouze procento, výška hladiny v cm a objem v litrech.
-- **Ztlumení procent a měrky při stavu `stale` / `offline`** včetně štítku se stářím dat přímo u hladiny (`#txtStaleAge`, `.is-stale`).
-- **Tlačítko pro zastavení/zrušení dopouštění (`#refillStopBtn`)** se zobrazuje jen když dopouštění běží nebo čeká; dialog uvádí přesný čas pozastavení automatiky (`do zítřka HH:MM`).
-- **Sjednocení pojmů a UX vylepšení:** přejmenování na `Přehled`, `Všechny nádrže`, `Historie událostí`, stav `Čidlo: online/offline` a `Hub odpojen`, slovní hodnocení kvality signálu, zjednodušení popisku výhledu srážek s nápovědou `?` (`Srážky (48 h)`), předvyplnění cíle ručního dopouštění (`auto_target_pct`) a hlídání neuložených změn v nastavení nádrže (`#calSaveTop`, varování při přepnutí).
-
-### Opraveno
-- **`GHSA-pc46-j66c-c3w2` (eskalace oprávnění v root pomocnících):** `retencka-control.py`, `retencka-update.py` a `retencka-identity.sh` nyní nastavují práva a vlastníka výhradně přes otevřený deskriptor (`os.fchmod`, `os.fchown`, `install -d -o -g`), nikdy přes cestu v adresáři `data/` vlastněném aplikací; doplněno systemd sandboxing (`ProtectSystem=strict`, `NoNewPrivileges=yes`, `PrivateTmp=yes`).
-- **Zpevnění z bezpečnostního auditu:** příznak `Secure` u session cookie za HTTPS tunelem (`X-Forwarded-Proto`), kontrola `Origin` výhradně proti hlavičce `Host`, ukotvení regulárních výrazů přes `\Z`, preference nejsilnějšího RSSI u čekajících klíčů (`PENDING_MAX`) a zobrazení RSSI + varování při více veřejných klíčích během párování.
-- **Pojistka při nejistém startu ventilu:** pokud volání `run` na Hydrawise selže (např. timeout), hub okamžitě odešle preventivní `stop` a při neúspěchu zařadí dopouštění do `stop_retry`.
-- **Ochrana databáze a párování:** snapshot a automatický rollback databáze při neúspěšné aktualizaci (`retencka-update.py`), odmítnutí startu nad novějším schématem (`SchemaTooNewError`), automatická obnova z poslední noční zálohy při poškození DB a zrcadlení klíčů čidel do `<db>.keys`.
-- **Oprava oříznutí mobilní navigace** (`.main-nav`, `.node-bar`) a aktualizovaný překladový slovník `i18n.js` včetně automatického testu pokrytí.
-- **Dokumentace:** `docs/architektura.md` uvádí migrace databáze v1–v13 a skripty `js/i18n.js` a `js/theme.js`.
 
 ## [1.12.1] - 2026-10-25
 

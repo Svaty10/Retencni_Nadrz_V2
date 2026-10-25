@@ -5,12 +5,11 @@ Description=Retenční nádrž – akce s právy roota na žádost aplikace (res
 Type=oneshot
 ExecStart=/usr/bin/python3 /var/lib/retencka/app/current/system/bin/retencka-control.py
 TimeoutStartSec=15min
+# No ProtectSystem/ProtectHome/RestrictSUIDSGID: the NetBird install runs apt/dpkg and
+# `netbird service install`, which write all over /etc, /usr, /var/lib and need gpg's
+# home in /root. Only restrictions that cannot get in the way of a package install:
 NoNewPrivileges=yes
-ProtectSystem=strict
-ReadWritePaths=/var/lib/retencka -/etc/netbird -/etc/apt -/usr/share/keyrings -/usr/bin -/usr/lib -/var/lib/apt -/var/lib/dpkg -/var/cache/apt -/var/log
-ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictSUIDSGID=yes

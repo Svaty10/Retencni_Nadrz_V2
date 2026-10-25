@@ -57,18 +57,18 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    V témže menu je **Motiv** (Auto / Světlý / Tmavý) – pamatuje si ho každý účet zvlášť, na všech zařízeních.
 
    *Nastavení* má záložky **Obecné** (celý systém: poloha, Hunter Hydrawise, Telegram a vzdálený servis,
-   Home Assistant, záloha a data, systém), **Všechna čidla** (čidla, párování, výchozí nastavení nádrží)
-   a **jednu záložku na každou nádrž** (všechny její parametry). Řádek s kartami pod záložkami vede rovnou
+   Home Assistant, čidla a párování, záloha a data, systém) a **jednu záložku na každou nádrž** (všechny její parametry). Řádek s kartami pod záložkami vede rovnou
    na danou kartu.
 6. *Nastavení → Obecné → Poloha*: do pole *Obec / adresa* napsat obec a vybrat ji ze seznamu (souřadnice
    pro předpověď počasí se doplní samy; ruční
    souřadnice jsou v pokročilém režimu).
-7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Všechna čidla → Čidla → Spárovat* u jeho ID
+7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Obecné → Čidla → Spárovat* u jeho ID
    (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
 8. *Nastavení → ‹nádrž›*: *Nádrž* (název, rozměry), *Kalibrace* (2 body „skutečná hladina je teď X cm“ –
    ideálně jednou při nízké a jednou při vysoké hladině), *Sonda* (výška nade dnem, přesnost, rozsah –
-   pokročilé), *Baterie*, *Upozornění*. Hodnoty označené **výchozí** se berou z *Všechna čidla →
-   Výchozí nastavení nádrží*; po změně u nádrže jsou **vlastní** (zpět tlačítkem *↺ výchozí*).
+   pokročilé), *Baterie*, *Upozornění*. Nová nádrž dostane výchozí hodnoty (baterie alkalické, sonda
+   0,5 % z rozsahu 200 cm, výška sondy 1 cm, pravidla dopouštění); rozměry nádrže, plocha střechy a průtok
+   jsou prázdné a je potřeba je vyplnit. Každá nádrž se nastavuje zvlášť.
 9. Dopouštění (volitelné): API klíč účtu do *Nastavení → Obecné → Hunter Hydrawise* (*Otestovat připojení*
    ukáže název ovladače), pak *Nastavení → ‹nádrž› → Dopouštění → Ventil: Hunter Hydrawise* →
    *Načíst zóny z Hydrawise* a vybrat zónu podle názvu (ruční Relay ID jen v pokročilém režimu; do pole
@@ -76,18 +76,17 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
    neukazuje (stav, tlačítka, graf).
 
 ### Výměna baterie čidla
-Do čidla patří 3× AA. Doporučené jsou **lithiové Li-FeS2** (Energizer Ultimate Lithium): 10+ let,
-nevytékají, snesou mráz. Jdou i **alkalické** (vydrží několik let) – pak u čidla nastavte
-*Nastavení → ‹nádrž› → Baterie → Baterie v čidle → Alkalické* (pro všechny nádrže najednou ve
-*Všechna čidla → Výchozí nastavení nádrží*; tam i kapacita baterií), jinak hub ukazuje špatná procenta a hlásí slabou
-baterii už v polovině životnosti. Alkalické vyměňte včas, vybité mohou vytéct.
+Do čidla patří 3× AA. Výchozí jsou **alkalické** (vydrží několik let; vyměňte je včas, vybité mohou
+vytéct). Lepší jsou **lithiové Li-FeS2** (Energizer Ultimate Lithium): 10+ let, nevytékají, snesou mráz –
+pak u nádrže nastavte *Nastavení → ‹nádrž› → Baterie → Baterie v čidle → Lithiové* (tam i kapacita
+baterií), jinak hub ukazuje špatná procenta a slabou baterii hlásí až pozdě.
 
 Vyndat a vložit novou baterii – čidlo hned pokračuje se stávajícím klíčem; **nic potvrzovat nemusíte**.
 Totéž platí po nahrání nového firmwaru: klíč je v EEPROM, kterou nahrávání nepřepisuje (fuse `EESAVE`),
 takže čidlo zůstane spárované se svým hubem.
 
 ### Odpárování / přesun čidla k jinému hubu
-1. Ve starém hubu *Nastavení → Všechna čidla → Čidla → Odpárovat* (hub hned přestane brát data).
+1. Ve starém hubu *Nastavení → Obecné → Čidla → Odpárovat* (hub hned přestane brát data).
 2. Vyndat a vložit do čidla baterii (může být i v opačném pořadí, do 10 minut). Čidlo smaže klíč a hub ho odebere.
 3. Čidlo teď nabízí párování – spárovat v novém hubu.
 
@@ -265,8 +264,7 @@ v Telegramu **Start**. Chat má roli svého účtu: uživatel jen čte, administ
 | `servis zap` / `trvale` / `vyp` | admin | vzdálený servisní přístup (NetBird, viz níže) |
 | `odhlasit` | všichni | odpojí chat |
 
-Upozornění: hladina pod nastavenou hranicí (*Upozornit v Telegramu pod* – výchozí pro všechny nádrže
-v *Nastavení → Všechna čidla → Výchozí nastavení nádrží*, vlastní hodnota v záložce nádrže), dopouštění spuštěno /
+Upozornění: hladina pod nastavenou hranicí (*Upozornit v Telegramu pod* v záložce nádrže), dopouštění spuštěno /
 dokončeno / porucha, čekání na déšť, slabá nebo vybitá baterie, čidlo neposílá data a znovu posílá.
 Administrátoři navíc dostávají restarty čidel, párování, málo místa na kartě a změny servisního přístupu.
 

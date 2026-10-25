@@ -71,6 +71,7 @@ class NodeDefaults(unittest.TestCase):
         full = {k: v[0] for k, v in NODE_SCHEMA.items()
                 if not k.startswith("battery_capacity")
                 and k not in ("tank_shape", "tank_diameter_cm", "tank_length_cm", "tank_width_cm")}
+        full.update(battery_type="lifes2", flow_rate_lpm=41.6)          # the schema defaults back then
         full.update(notify_low_pct=33.0, rain_wait_enabled=False, tank_area_m2=4.2)
         c = sqlite3.connect(self.path)
         c.execute("INSERT INTO nodes(node_id, name, config, created, sort) VALUES(?,?,?,?,?)",
@@ -90,6 +91,33 @@ class NodeDefaults(unittest.TestCase):
         for k, v in full.items():                                       # no effective value changed
             self.assertEqual(n[k], v, k)
         self.assertEqual(sorted(n["_overrides"]), ["battery_type", "flow_rate_lpm", "notify_low_pct", "rain_wait_enabled"])
+        db.close_thread()
+
+    def test_v14_keeps_the_old_battery_and_flow_defaults(self):
+        c = sqlite3.connect(self.path)
+        c.execute("INSERT INTO nodes(node_id, name, config, created, sort) VALUES(?,?,?,?,?)",
+                  (0xC, "Vlastní", json.dumps({"battery_type": "alkaline", "flow_rate_lpm": 12.0}), 0, 2))
+        c.execute("PRAGMA user_version=13")
+        c.commit()
+        c.close()
+        self.db.close_thread()
+        db = Database(self.path)
+        n = Nodes(db)
+        for nid in (0xA, 0xB):                       # inherited the 1.12 schema defaults
+            self.assertEqual((n.get(nid)["battery_type"], n.get(nid)["flow_rate_lpm"]), ("lifes2", 41.6))
+        self.assertEqual((n.get(0xC)["battery_type"], n.get(0xC)["flow_rate_lpm"]), ("alkaline", 12.0))
+        n.add(0xD, "Nová")                           # a new tank gets the new defaults
+        self.assertEqual(n.get(0xD)["battery_type"], NODE_SCHEMA["battery_type"][0])
+        db.close_thread()
+
+    def test_v14_leaves_stored_shared_defaults_alone(self):
+        self.nodes.set_defaults({"battery_type": "lifes2", "flow_rate_lpm": 30.0})
+        self.db.execute("PRAGMA user_version=13")
+        self.db.close_thread()
+        db = Database(self.path)
+        stored = json.loads(db.scalar("SELECT config FROM nodes WHERE node_id=?", (0xA,)))
+        self.assertNotIn("flow_rate_lpm", stored)    # still inherits the shared 30 L/min
+        self.assertEqual(Nodes(db).get(0xA)["flow_rate_lpm"], 30.0)
         db.close_thread()
 
     def test_strip_for_old_backups(self):

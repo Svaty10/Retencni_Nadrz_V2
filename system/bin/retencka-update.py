@@ -469,29 +469,37 @@ def load_bad() -> set:
         return set()
 
 
-def snapshot_db(db_path: Path, snap_path: Path) -> bool:
+def snapshot_db(db_path: Path, snap_path: Path) -> Optional[bool]:
     """Create a consistent SQLite backup in root-owned `snap_path` before switching
-    to a new version, so a failed update can roll back schema migrations too."""
+    to a new version, so a failed update can roll back schema migrations too.
+    True = snapshot made, None = no database yet (nothing to protect), False = failed.
+    sqlite opens the file by path, so the file must still be the same inode after the
+    backup (a link the app swapped in meanwhile would make it a root read of another file)."""
     snap_path.unlink(missing_ok=True)
     try:
         fd = os.open(db_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        return None
     except OSError:
         return False
     try:
         st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
+        if not stat.S_ISREG(st.st_mode):
             return False
-    finally:
-        os.close(fd)
-    try:
-        with contextlib.closing(sqlite3.connect(str(db_path), timeout=30.0)) as src, \
-                contextlib.closing(sqlite3.connect(str(snap_path))) as dst:
+        if st.st_size == 0:
+            return None
+        with contextlib.closing(sqlite3.connect(str(db_path), timeout=30.0)) as src,                 contextlib.closing(sqlite3.connect(str(snap_path))) as dst:
             src.backup(dst)
+        now = os.lstat(db_path)
+        if not stat.S_ISREG(now.st_mode) or (now.st_dev, now.st_ino) != (st.st_dev, st.st_ino):
+            raise RuntimeError("database file was replaced during the snapshot")
         return True
     except Exception as e:
         print(f"db snapshot failed: {e}", flush=True)
         snap_path.unlink(missing_ok=True)
         return False
+    finally:
+        os.close(fd)
 
 
 def restore_db(snap_path: Path, db_path: Path) -> None:
@@ -572,7 +580,13 @@ def install(rel: dict, cur: str, bad: set, st: Status) -> int:
     previous = CURRENT.resolve()
     db_path = DATA / "retencka.db"
     db_snap = APP / ".db-pre-update.sqlite"
-    has_db_snap = snapshot_db(db_path, db_snap)
+    snap = snapshot_db(db_path, db_snap)
+    if snap is False:
+        # without a snapshot a rollback would leave the old version on a newer schema,
+        # which it refuses to open (db.SchemaTooNewError) – do not switch at all
+        st("error", f"Instalace verze {ver} zrušena: nepodařilo se zálohovat databázi. Dál běží verze {cur}.")
+        return 1
+    has_db_snap = snap is True
     st("restarting", "Restartuji aplikaci…")
     switch(RELEASES / ver)
     units_backup: dict = {}

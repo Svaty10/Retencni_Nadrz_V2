@@ -189,7 +189,7 @@ stateDiagram-v2
   měření. *Obnovit automatiku* / Telegram `obnovit` pozastavení zruší.
 - `refill_tick` (každých 30 s): pojistky časovače a výpadku dat, propadnutí čekajících požadavků.
 
-### 3.6 Databáze (`db.py`, migrace v1–v13)
+### 3.6 Databáze (`db.py`, migrace v1–v14)
 
 | Tabulka | Obsah |
 |---|---|

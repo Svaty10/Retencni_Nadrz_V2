@@ -43,7 +43,7 @@ na Linuxu, kde běží v CI před každým vydáním.
 
 Při otevření 15minutového okna pro párování nového čidla nebo po stisku „Znovu spárovat“ existuje směrové rádiové riziko: útočník v dosahu 433 MHz může odeslat falešný `PAIR_REQ` s očekávaným ID dříve než legitimní čidlo po vložení baterie. Pokud by byl klíč potvrzen, útočník získá možnost podvrhovat měření hladiny (např. hlásit prázdnou nádrž a vyvolat nežádoucí dopouštění z řadu).
 
-**Mitice implementované v systému (1.12.2):**
+**Mitice implementované v systému (1.13.1):**
 - **Zobrazení RSSI v reálném čase:** V tabulce čekajících i detekovaných požadavků na párování webové rozhraní zobrazuje sílu signálu (dBm i %). Při párování v těsné blízkosti hubu má legitimní čidlo silný signál; podezřele slabý signál varuje před vzdáleným útočníkem.
 - **Detekce a varování při vícenásobných veřejných klíčích:** Pokud pro dané ID hub zachytí více různých veřejných klíčů (`pub_count > 1`), v UI se zobrazí výrazné červené varování `· pozor: X klíče!`. Správce vidí, že o registraci ID soupeří více vysílačů, a párování může zrušit.
 - **Preference nejsilnějšího RSSI ve frontě (`PENDING_MAX`):** Backend při naplnění kapacity čekajících klíčů upřednostňuje kandidáta s nejsilnějším signálem, což brání DoS útoku vytlačením legitimního klíče slabými podvrženými pakety.
@@ -51,11 +51,11 @@ Při otevření 15minutového okna pro párování nového čidla nebo po stisku
 
 ## Zkontrolováno bez nálezu
 
-- **Přihlášení a session**: scrypt s omezením parametrů, konstantní čas i pro neznámé jméno, zámek (jméno, IP) + exponenciální zdržení IP, náhodný token (v DB jen SHA-256), obnova session při přihlášení (bez fixace), cookie HttpOnly + SameSite=Lax (web v LAN po http, bez Secure).
-- **CSRF**: kontrola `Origin` proti `Host` + povinný `X-CSRF-Token` session pro všechny změny; proxy hlavičky jen z loopbacku.
+- **Přihlášení a session**: scrypt s omezením parametrů, konstantní čas i pro neznámé jméno, zámek (jméno, IP) + exponenciální zdržení IP, náhodný token (v DB jen SHA-256), obnova session při přihlášení (bez fixace), cookie HttpOnly + SameSite=Lax (web v LAN po http, bez Secure; za HTTPS tunelem – `X-Forwarded-Proto: https` z loopbacku – se Secure).
+- **CSRF**: kontrola `Origin` výhradně proti `Host` (`X-Forwarded-Host` se ignoruje) + povinný `X-CSRF-Token` session pro všechny změny; ostatní proxy hlavičky jen z loopbacku.
 - **Role**: všechny API cesty mají `@need` / `@need("admin")` kromě přihlášení, nastavení prvního účtu a statických souborů; poslední admin nejde smazat ani degradovat.
 - **HTTP server**: limity hlaviček (16 KiB / 64), odmítnutý `Transfer-Encoding` a zdvojený `Content-Length` (žádný request smuggling), limit spojení, timeouty, bezpečnostní hlavičky (CSP, frame DENY, nosniff).
-- **Aktualizace**: Ed25519 podpis přes `openssl pkeyutl`, kontrola cest v archivu + `filter="data"`, jen novější verze, verze v balíku = verze vydání, rollback (symlink i systemd jednotky) při nezdravém startu, vadná verze se nezkouší znovu; požadavky aplikace čteny bez symlinků a striktně validovány. Nové testy `InstallAndRollback` se skutečným podpisem.
+- **Aktualizace**: Ed25519 podpis přes `openssl pkeyutl`, kontrola cest v archivu + `filter="data"`, jen novější verze, verze v balíku = verze vydání, snímek databáze před přepnutím a rollback (symlink, systemd jednotky i databáze) při nezdravém startu – bez snímku se aktualizace nespustí, vadná verze se nezkouší znovu; požadavky aplikace čteny bez symlinků a striktně validovány. Nové testy `InstallAndRollback` se skutečným podpisem.
 - **Tovární reset**: jen admin + heslo + slovo OBNOVIT, mazání až při dalším startu před otevřením DB, symlinky se mažou, ne procházejí; ponechá `setup_code`.
 - **Telegram**: jen soukromé chaty, role se ověřuje z DB u každého příkazu, jednorázové 8znakové kódy s platností a limitem pokusů, vypnutí jen s potvrzením.
 - **Hydrawise / geocoding / počasí**: pevné HTTPS adresy s ověřením certifikátu (žádné SSRF – uživatel URL nezadává), parametry kódované, API klíč maskovaný v logu, omezená velikost odpovědi.
