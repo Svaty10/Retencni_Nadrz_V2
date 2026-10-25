@@ -520,7 +520,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 /* Graf hladiny v pravém sloupci vedle nádrže: dorovná výšku karty nádrže */
 .dash-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .level-card { flex: 1; display: flex; flex-direction: column; }
-.chart-container.chart-fill { flex: 1; height: auto; min-height: 200px; }
+.chart-container.chart-fill { flex: 1; height: auto; min-height: 320px; }
 .chart-legend-extra { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .chart-legend-extra span { display: inline-flex; align-items: center; gap: 6px; }
 .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
@@ -961,7 +961,8 @@ body.no-refill .refill-only { display: none !important; }
     .fact-group:nth-child(odd) { border-right: 0; }
     .fact-group:nth-child(n+2) { border-top: 1px solid var(--line); }
     .chart-container { height: 220px; }
-    .chart-container.chart-tall, .chart-container.chart-fill { height: 260px; }
+    .chart-container.chart-tall { height: 260px; }
+    .chart-container.chart-fill { min-height: 280px; height: 280px; }
     .span-2 { grid-column: auto; }
     .tank-meta { padding-top: 12px; gap: 8px; grid-template-columns: minmax(0, 1fr); }
     .level-litres { font-size: 16px; }
