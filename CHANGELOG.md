@@ -3,6 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.5] - 2026-10-25
+
+### Změněno
+- **Tvar nádrže zjednodušený:** *Kvádr* se zadává plochou dna a hloubkou (dřív zvlášť „podle plochy dna“ a kvádr délkou × šířkou), dál *Válec nastojato* a *Válec naležato*. Nádrž uložená jako kvádr délka × šířka se ve formuláři ukáže s plochou dna délka × šířka a objem vychází stejně.
+- **Odtokový součinitel střechy** je vidět i bez pokročilých nastavení (výchozí 0,8).
+- **Dopouštění bez ventilu:** zóna a pravidla (automatické dopouštění, čekání na předpovězený déšť, prahy) se ukážou až po výběru ventilu Hunter Hydrawise.
+- **Smazat naměřená data:** výchozí rozsah je *Vše*, pole od–do se ukážou až po volbě *Od – do*.
+
 ## [1.14.4] - 2026-10-25
 
 ### Změněno

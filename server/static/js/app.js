@@ -1638,11 +1638,24 @@
         layoutSettingsColumns();
     }
 
+    // Zóna a pravidla dopouštění mají smysl jen s ventilem
+    function syncValve() {
+        const prov = $('calForm').elements.namedItem('refill_provider');
+        const on = !!prov && prov.value !== 'none';
+        document.querySelectorAll('#tkRefill [data-needs-valve]').forEach((e) => e.classList.toggle('hidden', !on));
+    }
+
     function applyNode(n) {
         if (!n) return;
         $('calNodeName').textContent = n.name;
         $('calNodeId').value = n.id;
+        // starý kvádr zadaný délkou × šířkou: ve formuláři jako plocha dna (objem vychází stejně)
+        if (n.tank_shape === 'rect') {
+            n = Object.assign({}, n, { tank_shape: 'area',
+                tank_area_m2: Math.round((n.tank_length_cm || 0) * (n.tank_width_cm || 0) / 100) / 100 });
+        }
         fillForm($('calForm'), n);
+        syncValve();
         renderInheritTags($('calForm'), n);
         syncTankShape($('tkTank'));
         if ($('tkNotify')) $('tkNotify').classList.toggle('hidden', !tgConfigured);
@@ -2184,6 +2197,7 @@
                 if (r.changed.includes('telegram_token')) setTimeout(loadSettingsTab, 4000);   // bot se připojuje
             });
         }));
+        $('calForm').elements.namedItem('refill_provider').addEventListener('change', () => { syncValve(); layoutSettingsColumns(); });
         document.querySelectorAll('#nastaveni select[name="tank_shape"]').forEach((sel) => {
             sel.addEventListener('change', () => {
                 const root = sel.closest('#allDefaults, #tkTank');
