@@ -8,6 +8,7 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 ### Přidáno
 - **Přepínač jazyka (Čeština / English)** v uživatelském menu pod přepínačem motivu (`POST /api/me/lang`, databázová migrace v13): kompletní překlad celého webového rozhraní včetně grafů, popisků, nápovědy a auditního logu s okamžitým přepnutím bez nutnosti obnovení stránky a ukládáním volby do profilu uživatele i lokálního úložiště.
 - **GitHub Community Standards (`.github/`):** doplněna bezpečnostní politika (`SECURITY.md`), pokyny pro přispěvatele (`CONTRIBUTING.md`), kodex chování (`CODE_OF_CONDUCT.md`), prohlášení o přístupnosti (`ACCESSIBILITY.md`) a šablony pro Issues (`ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`) a Pull Requesty (`pull_request_template.md`).
+- **Licence (`LICENSE`):** přepnuto z MIT na **GNU AGPLv3** (ochrana proti uzavření kódu třetí stranou při zachování plných práv autora).
 
 ### Změněno
 - **Ruční dopouštění** (*Dopustit*) se ptá na cílovou hladinu pouze v dialogu *Dopustit z řadu* (duplicitní vstupní pole na kartě *Stav nádrže* bylo odstraněno) a nepředvyplňuje výchozí procenta.
