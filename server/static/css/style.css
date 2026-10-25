@@ -707,6 +707,8 @@ input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; }
 .form-actions { display: flex; gap: 8px; margin-top: 18px; }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .inline-actions > .unified-input, .inline-actions > .input-unit { flex: 1 1 180px; max-width: 280px; }
+/* Jedno textové pole (klíč, token, adresa): přes celou šířku, tlačítka hned vedle */
+.inline-actions.wide > .unified-input { flex: 1 1 260px; max-width: none; }
 .alert-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .alert-row p { margin: 0; }
 .backup-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

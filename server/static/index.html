@@ -657,15 +657,13 @@
                     <div><h2>Hunter Hydrawise</h2><p class="card-desc">Klíč účtu Hydrawise pro ovládání ventilů; nádrž může mít v Dopouštění vlastní.</p></div>
                 </div>
                 <form id="hwForm" class="config-form settings-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>API klíč účtu <span class="muted">(Hydrawise → Account Details)</span></label>
-                            <input type="password" name="hydrawise_api_key" class="unified-input" autocomplete="off">
+                    <div class="form-group">
+                        <label for="hwKey">API klíč účtu <span class="muted">(Hydrawise → Account Details)</span></label>
+                        <div class="inline-actions wide">
+                            <input type="password" id="hwKey" name="hydrawise_api_key" class="unified-input" autocomplete="off">
+                            <button type="submit" class="btn btn-primary">Uložit</button>
+                            <button type="button" class="btn btn-outline" id="hwTest">Otestovat připojení</button>
                         </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Uložit</button>
-                        <button type="button" class="btn btn-outline" id="hwTest">Otestovat připojení</button>
                     </div>
                     <p class="small field-note" id="hwTestResult" aria-live="polite"></p>
                 </form>
@@ -787,13 +785,13 @@
                 </div>
                 <form id="dataForm" class="config-form settings-form sub">
                     <h3>Uchovávání dat</h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Mazat podrobná data starší než <span class="muted">(0 = nikdy)</span> <button type="button" class="help-tip" data-help="retention"></button></label>
-                            <div class="input-unit"><input type="number" step="1" min="0" name="retention_days"><span class="unit">dní</span></div>
+                    <div class="form-group">
+                        <label for="retDays">Mazat podrobná data starší než <span class="muted">(0 = nikdy)</span> <button type="button" class="help-tip" data-help="retention"></button></label>
+                        <div class="inline-actions">
+                            <div class="input-unit"><input type="number" step="1" min="0" id="retDays" name="retention_days"><span class="unit">dní</span></div>
+                            <button type="submit" class="btn btn-primary">Uložit</button>
                         </div>
                     </div>
-                    <div class="form-actions"><button type="submit" class="btn btn-primary">Uložit</button></div>
                 </form>
                 <div class="sub" id="delSection">
                     <h3>Smazat naměřená data</h3>

@@ -77,7 +77,7 @@ flowchart LR
   <img src="docs/img/mobil.webp" alt="Mobilní zobrazení" width="190">
 </p>
 <p align="center">
-  <img src="docs/img/dashboard-tmavy.webp" alt="Tmavý režim" width="395">
+  <img src="docs/img/dashboard-svetly.webp" alt="Světlý režim" width="395">
   <img src="docs/img/bez-ventilu.webp" alt="Nádrž bez ventilu – bez ovládání dopouštění" width="395">
 </p>
 <p align="center">

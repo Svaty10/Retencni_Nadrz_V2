@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.4] - 2026-10-25
+
+### Změněno
+- **Jednotné formuláře v Nastavení:** formulář s jedním polem má tlačítka hned vedle pole (dřív u klíče Hydrawise pole jen do půlky a *Uložit* pod ním, u Home Assistanta a Telegramu vedle). Klíč Hydrawise je přes celou šířku s *Uložit* a *Otestovat připojení* vedle, *Uchovávání dat* má *Uložit* vedle počtu dní. Formuláře s více poli mají tlačítko dál pod poli.
+- Snímky v dokumentaci jsou v tmavém režimu (světlý jako ukázka `docs/img/dashboard-svetly.webp`).
+
 ## [1.14.3] - 2026-10-25
 
 ### Změněno

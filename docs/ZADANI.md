@@ -289,6 +289,9 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   právě viditelnou kartu. Změny nádrže se ukládají jedním tlačítkem v dolní liště *Uložit změny*
   (objeví se po úpravě, nabízí i *Zahodit*). Přepínač *Zobrazit pokročilá nastavení* (pokročilé: offset a kalibrační body sondy, přesnost, limity a průtok dopouštění,
   přepočet historie, kalibrace baterie, retence, slyšená čidla a statistiky rádia).
+  Formuláře jednotně: **jedno pole** (klíč Hydrawise, token Telegramu, hledání polohy, token HA, uchovávání dat,
+  kalibrační bod) má tlačítka hned vedle pole na stejném řádku; textový klíč/token je přes celou šířku, číslo
+  krátké. **Více polí** (souřadnice, mazání dat, NetBird) má tlačítko pod nimi.
 - Párování s průvodcem (1 vložit baterii → 2 potvrdit ID → 3 první data → 4 hotovo).
 - U grafů s historií (hladina, spotřeba, dopouštění, klima, baterie) volba 24 h / 7 d / 30 d / 1 rok
   **+ vlastní rozsah od–do** (date pickery). Předpověď počasí má pevný výhled 7 dní.
