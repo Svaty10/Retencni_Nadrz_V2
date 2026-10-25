@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.7] - 2026-10-25
+
+### Změněno
+- **Jedno pole *Kapacita baterie*:** ukazuje kapacitu zvoleného typu (alkalické výchozí 2500 mAh, lithiové 3000 mAh); hodnota druhého typu zůstává uložená a vrátí se po přepnutí.
+- Tvar nádrže se jmenuje jen *Kvádr* (bez vysvětlivky v závorce).
+
 ## [1.14.6] - 2026-10-25
 
 ### Změněno
