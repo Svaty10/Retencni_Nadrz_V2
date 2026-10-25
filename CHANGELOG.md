@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [Unreleased]
+
+### Opraveno
+- **Dokumentace:** odznak verze v `README.md` odpovídá aktuální verzi (1.12.1); `docs/architektura.md` uvádí migrace databáze v1–v13 (motiv a jazyk u účtu v tabulce `users`) a mezi soubory webu `js/i18n.js` a `js/theme.js`.
+
 ## [1.12.1] - 2026-10-25
 
 ### Opraveno
