@@ -267,7 +267,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Karta nádrže: **schéma toků** – kulatá nádrž s hladinou (%, litry, vlnka, plynulá změna výšky) uprostřed,
   kolem uzly *Déšť dnes*, *Z řadu dnes*, *Déšť 7 dní* (předpověď, čárkovaně) a *Spotřeba dnes*. Nenastavené
   se nezobrazují (bez plochy střechy není déšť ani předpověď, bez ventilu není řad). Cesta: zelená = funguje
-  (běžící tečky, když tudy dnes teklo), oranžová = zpožděná data čidla, červená = porucha (čidlo offline,
+  (běžící tečky, jen když tudy právě teče: dopouštění běží, nebo se hladina v posledních 15 min zvedla deštěm / klesla spotřebou), oranžová = zpožděná data čidla, červená = porucha (čidlo offline,
   chyba ventilu), šedá = předpověď se načítá. Okraj nádrže má barvu stavu čidla.
 - Vedle karty nádrže (na širokém displeji) doplňkové údaje 2 × 2 (Výhled, Spotřeba, Baterie čidla, Čidlo v šachtě)
   a pod nimi **graf hladiny** (stejně vysoký jako ostatní grafy; karta nádrže se výškou srovná s pravým sloupcem); ostatní grafy jsou pod tím. Na úzkém displeji jde vše pod sebe.

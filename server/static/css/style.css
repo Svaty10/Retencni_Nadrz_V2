@@ -466,7 +466,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .wave svg { position: absolute; left: 0; bottom: -1px; width: 200%; height: 100%; animation: wave-slide 3s linear infinite !important; }
 .wave .wave-b { animation: wave-slide 4.5s linear infinite reverse !important; }
 .wave-fill { fill: var(--water); }
-.wave-b .wave-fill { fill: var(--water-top); opacity: 0.25; }
+.wave-b { opacity: 0.55; }    /* druhá vlna: stejná barva jako voda, takže pod hřebenem nevzniká světlý pruh */
 .wave-line { fill: none; stroke: var(--water-top); stroke-width: 2; vector-effect: non-scaling-stroke; }
 @keyframes wave-slide { to { transform: translateX(-50%); } }
 .ftank.empty .wave { display: none; }

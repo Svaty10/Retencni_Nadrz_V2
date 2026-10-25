@@ -3,6 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.9] - 2026-10-25
+
+### Změněno
+- **Schéma toků jen při skutečném toku:** tečky na cestě deště a spotřeby běží jen tehdy, když se hladina v posledních 15 minutách opravdu zvedla nebo klesla (dřív celý den, kdykoli dnes něco přiteklo nebo se spotřebovalo). Dopouštění z řadu běží jako dřív jen při otevřeném ventilu.
+
+### Opraveno
+- Pod vlnkou hladiny už není světlý pruh (druhá vlna je ve stejné barvě jako voda).
+
 ## [1.14.8] - 2026-10-25
 
 ### Změněno

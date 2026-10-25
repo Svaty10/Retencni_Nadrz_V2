@@ -1215,7 +1215,7 @@
     }
 
     // Schéma toků kolem nádrže. Uzel se ukáže, jen když má smysl (nastavená střecha, ventil);
-    // cesta: zelená = funguje (tečky běží, když tudy dnes teklo), červená = porucha / bez dat.
+    // cesta: zelená = funguje (tečky běží, když tudy právě teče), červená = porucha / bez dat.
     function renderFlow(s, rf, hasValve) {
         const sensor = { online: 'ok', stale: 'warn' }[s.status] || 'bad';    // zpožděná data = oranžová
         const roof = (s.catchment_m2 || 0) > 0;
@@ -1230,12 +1230,13 @@
             line.classList.toggle('flowing', state === 'ok' && !!flowing);
             node.querySelector('.fn-val').textContent = value;
         };
-        set('Rain', roof, litres(s.rain_today, '+'), sensor, s.rain_today > 0);
+        const now = s.flowing || {};    // tečky běží, jen když voda teče právě teď (ne kvůli dnešnímu součtu)
+        set('Rain', roof, litres(s.rain_today, '+'), sensor, !!now.rain);
         set('Mains', hasValve, rf.active ? 'dopouští' : litres(s.refill_today, '+'), rf.fault ? 'bad' : 'ok', rf.active);
         // předpověď se po startu hubu chvíli načítá – to není porucha, jen šedá cesta
         set('Fcst', roof, o.inflow_7d_l == null ? 'načítám' : litres(o.inflow_7d_l, '+'),
             o.inflow_7d_l == null ? 'idle' : 'ok', o.inflow_7d_l > 0);
-        set('Use', true, litres(s.consumption_today, '−'), sensor, s.consumption_today > 0);
+        set('Use', true, litres(s.consumption_today, '−'), sensor, !!now.use);
         ['online', 'stale', 'offline'].forEach((c) => $('gauge').classList.toggle(c, s.status === c));
     }
 
