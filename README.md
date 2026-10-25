@@ -111,6 +111,7 @@ Podrobně v [docs/instalace.md](docs/instalace.md).
 | [Programování čidla](docs/programovani_uzlu.md) | nahrání firmwaru přes UPDI (USB-UART nebo Arduino), fuses, řešení problémů |
 | [Architektura](docs/architektura.md) | jak je systém poskládaný, výpočty, řízení dopouštění |
 | [Oponentura architektury](docs/oponentura.md) | nezávislé posouzení architektury: silné stránky, nálezy, doporučené pořadí oprav |
+| [Bezpečnostní kontrola 2026-10](docs/bezpecnostni-kontrola-2026-10.md) | hloubková bezpečnostní kontrola nad verzí 1.12.1: nálezy, zpevnění, co prošlo |
 | [API](docs/api.md) | REST API webu a Home Assistantu, rádiový protokol |
 | [Home Assistant](docs/home_assistant.yaml) | vzorová konfigurace (aktuální YAML vygeneruje web) |
 | [Vydání verze](docs/vydani.md) | číslování, kontrola, tag, ověření aktualizace |
