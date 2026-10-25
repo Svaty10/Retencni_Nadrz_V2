@@ -47,7 +47,7 @@ flowchart LR
   úseky, v tooltipu litry), spotřeba, dopouštění, klima, počasí, baterie a signál (s vyznačenou výměnou
   baterie); rozsah 24 h / 7 dní / 30 dní / rok nebo vlastní od–do.
 - **Výhled:** na kolik dní voda vystačí a kolik přiteče z předpovídaného deště.
-- **Schéma toků** u každé nádrže (déšť, řad, předpověď, spotřeba – jen nastavené části) se zelenými,
+- **Schéma toků** u každé nádrže (déšť, řad, spojení s hubem, spotřeba – jen nastavené části) se zelenými,
   oranžovými a červenými cestami podle stavu; v přehledu všech nádrží **mapa systému** s hubem a nádržemi.
 - **Chytré dopouštění:** když má brzy pršet a déšť nádrž doplní, hub nedopouští a čeká; když déšť nepřijde
   nebo hladina klesne příliš, dopustí – a jen tolik, kolik déšť nedodá.

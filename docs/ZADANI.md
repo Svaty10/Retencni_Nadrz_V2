@@ -215,7 +215,8 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   Pokud se dopouští a déšť je stále předpovězen, **dopustí se jen to, co déšť nedodá** (cíl − očekávaný přítok,
   min. práh + 2 %). Když déšť nádrž doplní, čekání se ukončí a zapíše do logu.
 - **Výhled:** „vystačí ~N dní“ (objem / průměrná spotřeba posledních 7 dní) a přítok z předpovědi deště na
-  7 dní (srážky × plocha střechy × odtokový součinitel, výchozí 0,8) → odhad % po dešti.
+  7 dní (srážky × plocha střechy × odtokový součinitel, výchozí 0,8) → odhad % po dešti; v kartě Výhled
+  řádek *Přítok deštěm (7 dní)* (jen s nastavenou střechou).
 - Systémy dopouštění jsou za rozhraním „provider“. Teď: **Hunter Hydrawise** (oficiální REST API s API
   klíčem – Hunter jej uvádí jako veřejné API pro domácí uživatele; GraphQL API aplikace není oficiálně
   dokumentované). Kandidáti do budoucna: OpenSprinkler (lokální HTTP API), Rachio (oficiální cloud API),
@@ -265,10 +266,11 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   Tečka = stav (zelená online, žlutá zpožděná, červená offline). Stav jednoho čidla ukazuje karta nádrže
   pod jejím názvem.
 - Karta nádrže: **schéma toků** – kulatá nádrž s hladinou (%, litry, vlnka, plynulá změna výšky) uprostřed,
-  kolem uzly *Déšť dnes*, *Z řadu dnes*, *Déšť 7 dní* (předpověď, čárkovaně) a *Spotřeba dnes*. Nenastavené
-  se nezobrazují (bez plochy střechy není déšť ani předpověď, bez ventilu není řad). Cesta: zelená = funguje
+  kolem uzly *Déšť dnes*, *Z řadu dnes*, *Spojení s hubem* (síla signálu čidla, barva podle stavu čidla, bez teček)
+  a *Spotřeba dnes*. Nenastavené se nezobrazují (bez plochy střechy není déšť, bez ventilu není řad). Vlnka
+  hladiny se hýbe, jen když voda právě teče (déšť, spotřeba, dopouštění). Cesta: zelená = funguje
   (běžící tečky, jen když tudy právě teče: dopouštění běží, nebo se hladina v posledních 15 min zvedla deštěm / klesla spotřebou), oranžová = zpožděná data čidla, červená = porucha (čidlo offline,
-  chyba ventilu), šedá = předpověď se načítá. Okraj nádrže má barvu stavu čidla.
+  chyba ventilu). Okraj nádrže má barvu stavu čidla.
 - Vedle karty nádrže (na širokém displeji) doplňkové údaje 2 × 2 (Výhled, Spotřeba, Baterie čidla, Čidlo v šachtě)
   a pod nimi **graf hladiny** (stejně vysoký jako ostatní grafy; karta nádrže se výškou srovná s pravým sloupcem); ostatní grafy jsou pod tím. Na úzkém displeji jde vše pod sebe.
 - Přehled **Všechny nádrže**: nahoře mapa systému (hub uprostřed, nádrže kolem, cesta podle stavu čidla),

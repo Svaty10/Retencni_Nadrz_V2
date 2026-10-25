@@ -367,7 +367,7 @@
         recompute: 'Přepočítá už uložená měření podle aktuální kalibrace a vyhlazení. Hodí se po opravě kalibrace nebo výšky sondy; nová měření se počítají vždy správně.',
         battrim: 'Změřte napětí baterií voltmetrem a zadejte ho. Hub z toho spočítá korekci (násobek), aby údaj souhlasil. Korekce 1,0000 = bez úpravy.',
         servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.',
-        outlook: 'Odhad výdrže vychází z průměrné denní spotřeby za poslední týden. Srážky (48 h) ukazují úhrn předpovězený na nejbližší 2 dny; čekání automatického dopouštění na déšť se řídí oknem „Výhled deště“ v nastavení nádrže.'
+        outlook: 'Odhad výdrže vychází z průměrné denní spotřeby za poslední týden. Srážky (48 h) ukazují úhrn předpovězený na nejbližší 2 dny, přítok deštěm (7 dní) kolik litrů by podle předpovědi přiteklo ze střechy; čekání automatického dopouštění na déšť se řídí oknem „Výhled deště“ v nastavení nádrže.'
     };
     let closeHelp = () => {};
     function bindHelpTips() {
@@ -1154,6 +1154,7 @@
         $('txtConsToday').textContent = num(s.consumption_today, 0, ' L');
         $('txtCons7d').textContent = num(s.consumption_7d, 0, ' L');
         $('txtRain').textContent = num(s.expected_rain_mm, 1, ' mm');
+        $('rowRain7d').classList.toggle('hidden', !((s.catchment_m2 || 0) > 0));      // jen s nastavenou střechou
         const o = s.outlook || {};
         $('txtOutlook').textContent = o.days_left == null ? '–' : (o.days_left > 365 ? 'vystačí > rok' : `vystačí ~${num(o.days_left, 0)} dní`);
         const outlookDetail = [
@@ -1164,6 +1165,7 @@
             ? `s předpovězeným deštěm déle (~${num(o.pct_after_rain, 0)} %)`
             : (o.use_per_day_l != null ? `spotřeba ~${num(o.use_per_day_l, 0)} L/den` : 'málo dat o spotřebě');
         $('txtOutlookSub').title = outlookDetail;
+        $('txtRain7d').textContent = o.inflow_7d_l == null ? 'načítám' : (o.inflow_7d_l > 0 ? '+' : '') + num(o.inflow_7d_l, 0, ' L');
 
         const n = s.node || {};
         $('txtRssi').textContent = sigTxt(n.rssi);
@@ -1234,10 +1236,13 @@
         set('Rain', roof, litres(s.rain_today, '+'), sensor, !!now.rain);
         set('Mains', hasValve, rf.active ? 'dopouští' : litres(s.refill_today, '+'), rf.fault ? 'bad' : 'ok', rf.active);
         // předpověď se po startu hubu chvíli načítá – to není porucha, jen šedá cesta
-        set('Fcst', roof, o.inflow_7d_l == null ? 'načítám' : litres(o.inflow_7d_l, '+'),
-            o.inflow_7d_l == null ? 'idle' : 'ok', o.inflow_7d_l > 0);
+        // spojení čidla s hubem: síla signálu, barva podle čerstvosti dat (bez teček – nic neteče)
+        const rssi = (s.node || {}).rssi;
+        set('Hub', true, s.status === 'offline' ? 'offline' : sigPct(rssi) == null ? '–' : `${sigPct(rssi)} %`, sensor, false);
         set('Use', true, litres(s.consumption_today, '−'), sensor, !!now.use);
         ['online', 'stale', 'offline'].forEach((c) => $('gauge').classList.toggle(c, s.status === c));
+        // vlnka se hýbe, jen když voda opravdu teče dovnitř nebo ven
+        $('gauge').classList.toggle('moving', !!(now.rain || now.use || rf.active));
     }
 
     function runRefillTimer() {

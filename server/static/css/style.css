@@ -410,8 +410,6 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .fl.ok { stroke: var(--green); opacity: 0.45; }
 .fl.bad { stroke: var(--red); stroke-dasharray: 2 6; }
 .fl.flowing { opacity: 1; stroke-dasharray: 1 9; stroke-width: 4; animation: flow-run 0.9s linear infinite !important; }
-.fl-dashed.ok { stroke-dasharray: 7 6; }
-.fl-dashed.flowing { stroke-width: 3; stroke-dasharray: 7 6; animation: none !important; opacity: 0.8; }
 @keyframes flow-run { to { stroke-dashoffset: -10; } }
 
 .fnode {
@@ -470,6 +468,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .wave-line { fill: none; stroke: var(--water-top); stroke-width: 2; vector-effect: non-scaling-stroke; }
 @keyframes wave-slide { to { transform: translateX(-50%); } }
 .ftank.empty .wave { display: none; }
+.ftank:not(.moving) .wave svg { animation-play-state: paused !important; }   /* klidná hladina, když nic neteče */
 
 .refill-block { margin: 20px -24px -22px; padding: 16px 24px 20px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); }
 .refill-state { display: flex; gap: 10px; align-items: flex-start; }
