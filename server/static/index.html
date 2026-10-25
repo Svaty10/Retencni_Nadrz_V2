@@ -146,17 +146,17 @@
                         <p class="tank-status" id="txtTankStatus"><span class="dot"></span><span>–</span></p>
                     </div>
                     <!-- Schéma toků: kulatá nádrž uprostřed, kolem jen to, co je nastavené.
-                         Cesta: zelená = funguje (tečky běží, když právě teče), červená = porucha. -->
+                         Cesta: zelená = funguje (tečky běží, když právě teče; spojení s hubem bez teček), červená = porucha. -->
                     <div class="flow" id="flow">
                         <svg class="flow-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
                             <path class="fl" id="flRain" d="M16 17L50 50"/>
                             <path class="fl" id="flMains" d="M84 17L50 50"/>
-                            <path class="fl fl-dashed" id="flFcst" d="M16 77L50 50"/>
+                            <path class="fl" id="flHub" d="M16 77L50 50"/>
                             <path class="fl" id="flUse" d="M50 50L84 77"/>
                         </svg>
                         <div class="fnode fn-tl" id="fnRain"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg></span><span class="fn-val" id="txtRainToday">–</span><span class="fn-lbl">Déšť dnes</span></div>
                         <div class="fnode fn-tr" id="fnMains"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-tap"/></svg></span><span class="fn-val" id="txtRefillToday">–</span><span class="fn-lbl">Z řadu dnes</span></div>
-                        <div class="fnode fn-bl" id="fnFcst"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-calendar"/></svg></span><span class="fn-val" id="txtFcst">–</span><span class="fn-lbl">Déšť 7 dní</span></div>
+                        <div class="fnode fn-bl" id="fnHub"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-antenna"/></svg></span><span class="fn-val" id="txtHubLink">–</span><span class="fn-lbl">Spojení s hubem</span></div>
                         <div class="fnode fn-br" id="fnUse"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg></span><span class="fn-val" id="txtUseToday">–</span><span class="fn-lbl">Spotřeba dnes</span></div>
                         <div class="ftank" id="gauge">
                             <div class="water-level" id="waterLevel">
@@ -200,6 +200,7 @@
                             <dl class="facts">
                                 <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
                                 <div class="fact"><dt>Srážky (48 h)</dt><dd id="txtRain">–</dd></div>
+                                <div class="fact" id="rowRain7d"><dt>Přítok deštěm (7 dní)</dt><dd id="txtRain7d">–</dd></div>
                             </dl>
                         </div>
                         <div class="fact-group">

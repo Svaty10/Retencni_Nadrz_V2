@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.15.0] - 2026-10-25
+
+### Změněno
+- **Schéma toků: *Spojení s hubem* místo *Déšť 7 dní*:** uzel vlevo dole ukazuje sílu signálu čidla a cesta má barvu podle stavu čidla (online / zpožděná data / offline). Předpovězený přítok na 7 dní je nově řádek *Přítok deštěm (7 dní)* v kartě Výhled.
+- **Vlnka hladiny se hýbe, jen když voda teče** (déšť nebo spotřeba v posledních 15 minutách, běžící dopouštění); jinak je hladina klidná.
+
 ## [1.14.9] - 2026-10-25
 
 ### Změněno
