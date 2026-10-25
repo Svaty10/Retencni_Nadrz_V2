@@ -33,6 +33,7 @@ log = logging.getLogger("retencka.core")
 FRESH_S = 15 * 60                 # data younger than this may drive the valve
 REFILL_WAIT_S = 15 * 60           # manual refill without valid data waits this long for a measurement
 AUTO_COOLDOWN_S = 30 * 60
+FLOWING_WINDOW_S = 15 * 60        # flow diagram: a level change this recent counts as flowing now
 NO_RISE_LOCK_S = 24 * 3600
 AUTO_CANCEL_S = 24 * 3600         # user cancelled an automatic refill -> automation paused this long
 AUTO_PAUSE_KEY = "auto_refill_pause"   # settings row: {node_id: until} (survives a restart)
@@ -1219,6 +1220,7 @@ class Core:
             "catchment_m2": float(node["catchment_area_m2"] or 0),                          # schéma toků
             "rain_today": round(sum(d["rain"] for d in flows if d["day"] == today)),
             "refill_today": round(sum(d["refill"] for d in flows if d["day"] == today)),
+            "flowing": self.cached(f"flowing:{nid}", 60, lambda: self.flowing_now(nid, now)),
         }
 
     def outlook(self, node: dict, lv: Optional[model.Level], flows: list[dict]) -> dict:
@@ -1800,6 +1802,23 @@ class Core:
             if key in days:
                 days[key][kind] += liters
         return [{k: (round(v) if isinstance(v, float) else v) for k, v in x.items()} for x in days.values()]
+
+    def flowing_now(self, nid: int, now: int) -> dict:
+        """Does water flow in (rain) or out (consumption) right now? True when the level
+        moved by more than the dead band within the last FLOWING_WINDOW_S – the flow
+        diagram animates only then, not for any flow earlier today."""
+        node = self.nodes.get(nid)
+        out = {"rain": False, "use": False}
+        if node is None:
+            return out
+        deadband = max(5.0, 0.5 * model.deadband_l(node))
+        rows = self.db.query("SELECT ts, volume_l AS v, refilling AS r FROM measurements "
+                             "WHERE node_id=? AND ts >= ? AND volume_l IS NOT NULL ORDER BY ts",
+                             (nid, now - 3600))
+        for ts, kind, _ in model.flows([(r["ts"], r["v"], r["r"]) for r in rows], deadband):
+            if ts >= now - FLOWING_WINDOW_S and kind in out:
+                out[kind] = True
+        return out
 
     def daily_flows(self, nid: int, t_from: int, t_to: int) -> list[dict]:
         return self._daily_flows(nid, t_from, t_to)
