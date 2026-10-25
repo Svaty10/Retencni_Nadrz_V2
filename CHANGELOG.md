@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.8] - 2026-10-25
+
+### Změněno
+- *Kapacita baterie* je v pokročilých nastaveních vedle typu baterie v jednom řádku (dřív samostatný řádek pod ním).
+
 ## [1.14.7] - 2026-10-25
 
 ### Změněno
