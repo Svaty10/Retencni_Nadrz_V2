@@ -1645,6 +1645,12 @@
         document.querySelectorAll('#tkRefill [data-needs-valve]').forEach((e) => e.classList.toggle('hidden', !on));
     }
 
+    // Kapacita: jen pole pro zvolený typ baterie (obě hodnoty se pamatují zvlášť)
+    function syncBattery() {
+        const t = $('calForm').elements.namedItem('battery_type');
+        document.querySelectorAll('#tkBat [data-battery]').forEach((g) => g.classList.toggle('hidden', !t || g.dataset.battery !== t.value));
+    }
+
     function applyNode(n) {
         if (!n) return;
         $('calNodeName').textContent = n.name;
@@ -1656,6 +1662,7 @@
         }
         fillForm($('calForm'), n);
         syncValve();
+        syncBattery();
         renderInheritTags($('calForm'), n);
         syncTankShape($('tkTank'));
         if ($('tkNotify')) $('tkNotify').classList.toggle('hidden', !tgConfigured);
@@ -2198,6 +2205,7 @@
             });
         }));
         $('calForm').elements.namedItem('refill_provider').addEventListener('change', () => { syncValve(); layoutSettingsColumns(); });
+        $('calForm').elements.namedItem('battery_type').addEventListener('change', syncBattery);
         document.querySelectorAll('#nastaveni select[name="tank_shape"]').forEach((sel) => {
             sel.addEventListener('change', () => {
                 const root = sel.closest('#allDefaults, #tkTank');

@@ -374,7 +374,7 @@
                     <div class="form-group">
                         <label>Tvar nádrže <button type="button" class="help-tip" data-help="shape"></button></label>
                         <select name="tank_shape" class="unified-select" form="calForm">
-                            <option value="area">Kvádr (plocha dna × hloubka)</option>
+                            <option value="area">Kvádr</option>
                             <option value="cyl_v">Válec nastojato</option>
                             <option value="cyl_h">Válec naležato</option>
                         </select>
@@ -481,13 +481,14 @@
                         </select>
                     </div>
                 </div>
+                <!-- jedno pole kapacity: ukáže se to pro zvolený typ, druhá hodnota zůstává uložená -->
                 <div class="form-row adv">
-                    <div class="form-group">
-                        <label>Kapacita lithiové baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
+                    <div class="form-group" data-battery="lifes2">
+                        <label>Kapacita baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="battery_capacity_mah" form="calForm"><span class="unit">mAh</span></div>
                     </div>
-                    <div class="form-group">
-                        <label>Kapacita alkalické baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
+                    <div class="form-group" data-battery="alkaline">
+                        <label>Kapacita baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="battery_capacity_alk_mah" form="calForm"><span class="unit">mAh</span></div>
                     </div>
                 </div>
