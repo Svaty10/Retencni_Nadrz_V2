@@ -264,6 +264,13 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   dopouštění pro každou nádrž + společný graf hladin) nebo konkrétní nádrž; v Nastavení *Obecné* + nádrže.
   Tečka = stav (zelená online, žlutá zpožděná, červená offline). Stav jednoho čidla ukazuje karta nádrže
   pod jejím názvem.
+- Karta nádrže: **schéma toků** – kulatá nádrž s hladinou (%, litry, vlnka, plynulá změna výšky) uprostřed,
+  kolem uzly *Déšť dnes*, *Z řadu dnes*, *Déšť 7 dní* (předpověď, čárkovaně) a *Spotřeba dnes*. Nenastavené
+  se nezobrazují (bez plochy střechy není déšť ani předpověď, bez ventilu není řad). Cesta: zelená = funguje
+  (běžící tečky, když tudy dnes teklo), oranžová = zpožděná data čidla, červená = porucha (čidlo offline,
+  chyba ventilu), šedá = předpověď se načítá. Okraj nádrže má barvu stavu čidla.
+- Přehled **Všechny nádrže**: nahoře mapa systému (hub uprostřed, nádrže kolem, cesta podle stavu čidla),
+  pod ní karty nádrží a společný graf.
 - Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):
   **dopouštění** zeleně (jako ve staré verzi) (přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo
   dopouštění nad mrtvé pásmo, začátek = poslední vzorek před stoupáním, konec = poslední stoupající vzorek,

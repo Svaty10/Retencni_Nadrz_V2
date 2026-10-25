@@ -1193,6 +1193,7 @@
         $('refillStopBtn').textContent = rf.active ? 'Zastavit dopouštění' : 'Zrušit čekání';
         $('refillResumeBtn').classList.toggle('hidden', !rf.auto_paused_until);
         runRefillTimer();
+        renderFlow(s, rf, hasValve);
 
         // výstrahy
         const warn = [];
@@ -1211,6 +1212,31 @@
         $('liveColumn').textContent = num(s.column_cm, 1, ' cm');
         $('liveLevel').textContent = num(s.water_level_cm, 1, ' cm');
         $('liveInterval').textContent = n.fast ? '60 s (rychlý)' : '5 min';
+    }
+
+    // Schéma toků kolem nádrže. Uzel se ukáže, jen když má smysl (nastavená střecha, ventil);
+    // cesta: zelená = funguje (tečky běží, když tudy dnes teklo), červená = porucha / bez dat.
+    function renderFlow(s, rf, hasValve) {
+        const sensor = { online: 'ok', stale: 'warn' }[s.status] || 'bad';    // zpožděná data = oranžová
+        const roof = (s.catchment_m2 || 0) > 0;
+        const o = s.outlook || {};
+        const litres = (v, sign) => (v == null ? '–' : (v > 0 ? sign : '') + num(v, 0, ' L'));
+        const set = (key, show, value, state, flowing) => {
+            const node = $('fn' + key), line = $('fl' + key);
+            node.classList.toggle('hidden', !show);
+            line.classList.toggle('hidden', !show);
+            if (!show) return;
+            ['ok', 'warn', 'bad', 'idle'].forEach((c) => { node.classList.toggle(c, c === state); line.classList.toggle(c, c === state); });
+            line.classList.toggle('flowing', state === 'ok' && !!flowing);
+            node.querySelector('.fn-val').textContent = value;
+        };
+        set('Rain', roof, litres(s.rain_today, '+'), sensor, s.rain_today > 0);
+        set('Mains', hasValve, rf.active ? 'dopouští' : litres(s.refill_today, '+'), rf.fault ? 'bad' : 'ok', rf.active);
+        // předpověď se po startu hubu chvíli načítá – to není porucha, jen šedá cesta
+        set('Fcst', roof, o.inflow_7d_l == null ? 'načítám' : litres(o.inflow_7d_l, '+'),
+            o.inflow_7d_l == null ? 'idle' : 'ok', o.inflow_7d_l > 0);
+        set('Use', true, litres(s.consumption_today, '−'), sensor, s.consumption_today > 0);
+        ['online', 'stale', 'offline'].forEach((c) => $('gauge').classList.toggle(c, s.status === c));
     }
 
     function runRefillTimer() {
@@ -1247,6 +1273,7 @@
     }
 
     function renderOverview(nodes) {
+        renderHubMap(nodes);
         const g = $('overviewGrid');
         g.textContent = '';
         nodes.forEach((n) => {
@@ -1256,7 +1283,7 @@
             const pct = n.level_pct == null ? 0 : Math.max(0, Math.min(100, n.level_pct));
             const b = n.battery || {};
             const st = { online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status;
-            c.innerHTML = `<div class="ov-tank"><div class="water-level"></div></div>
+            c.innerHTML = `<div class="ov-tank ${esc(n.status)}"><div class="water-level"></div></div>
                 <div class="ov-body"><h4>${nm(n.name)}</h4>
                 <div class="big">${num(n.level_pct, 0, ' %')}</div>
                 <div class="ov-litres">${num(n.volume_l, 0, ' L')}${n.max_l ? ' z ' + num(n.max_l, 0, ' L') : ''}</div>
@@ -1265,6 +1292,47 @@
             c.querySelector('.water-level').style.height = pct + '%';     // CSSOM (CSP bez inline stylů)
             c.addEventListener('click', () => { setViewAll(false); selectNode(n.id, true); renderNodeBar(nodes); });
             g.appendChild(c);
+        });
+    }
+
+    // Mapa systému: hub uprostřed, nádrže na elipse kolem. Tečky na cestě = data z čidla (online).
+    function renderHubMap(nodes) {
+        const m = $('hubMap');
+        const key = JSON.stringify(nodes.map((n) => [n.id, n.name, n.status, Math.round(n.level_pct || 0), n.refilling]));
+        if (m.dataset.key === key) return;                       // 10 s poll: bez zbytečného překreslení
+        m.dataset.key = key;
+        m.textContent = '';
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('class', 'flow-lines');
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        svg.setAttribute('aria-hidden', 'true');
+        m.appendChild(svg);
+        const hub = document.createElement('div');
+        hub.className = 'hm-hub';
+        const on = nodes.filter((n) => n.status === 'online').length;
+        hub.innerHTML = `<span class="fn-ring">${ico('antenna')}</span><span class="fn-val">Hub</span><span class="fn-lbl">${on}/${nodes.length} online</span>`;
+        m.appendChild(hub);
+        const st = { online: 'ok', stale: 'warn', offline: 'bad' };
+        nodes.forEach((n, i) => {
+            const a = -Math.PI / 2 + (2 * Math.PI * i) / nodes.length;
+            const x = 50 + 38 * Math.cos(a), y = 50 + 36 * Math.sin(a);
+            const line = document.createElementNS(ns, 'path');
+            line.setAttribute('d', `M${x.toFixed(2)} ${y.toFixed(2)}L50 50`);
+            line.setAttribute('class', `fl ${st[n.status] || 'bad'}${n.status === 'online' ? ' flowing' : ''}`);
+            svg.appendChild(line);
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = `hm-tank ${st[n.status] || 'bad'}`;
+            b.style.left = x + '%';                               // CSSOM (CSP bez inline stylů)
+            b.style.top = y + '%';
+            const pct = n.level_pct == null ? 0 : Math.max(0, Math.min(100, n.level_pct));
+            b.innerHTML = `<span class="hm-circle"><span class="water-level"></span><span class="hm-pct">${num(n.level_pct, 0, ' %')}</span></span>
+                <span class="hm-name">${nm(n.name)}</span>${n.refilling ? `<span class="hm-note">${ico('drop', 'ico-sm')} dopouští</span>` : ''}`;
+            b.querySelector('.water-level').style.height = pct + '%';
+            b.addEventListener('click', () => { setViewAll(false); selectNode(n.id, true); renderNodeBar(nodes); });
+            m.appendChild(b);
         });
     }
 
@@ -2506,12 +2574,12 @@
     function renderSystem(d) {
         $('sysInfo').innerHTML = `
             <dt>Verze</dt><dd>${esc(d.version)}</dd>
-            <dt>Adresa v síti</dt><dd>${(d.hostnames || []).map((h) => 'http://' + esc(h)).join('<br>')}</dd>
-            <dt>Běží</dt><dd>${fmtDuration(d.uptime_s)}</dd>
-            <dt>Vytížení procesoru</dt><dd>${d.cpu_pct != null ? num(d.cpu_pct, 1, ' %') : '–'}</dd>
-            <dt>Operační paměť (RAM)</dt><dd>${d.ram_total_mb ? `${num(d.ram_used_mb, 0, ' MB')} / ${num(d.ram_total_mb, 0, ' MB')} (${num(d.ram_pct, 0, ' %')})` : (d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–')}</dd>
-            <dt>Paměť procesu</dt><dd>${d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–'}</dd>
-            <dt>Databáze / volné místo</dt><dd>${num(d.db_mb, 1, ' MB')} / ${num(d.disk_free_mb, 0, ' MB')}</dd>`;
+            <dt>Adresa v síti</dt><dd>${(d.hostnames || []).concat(d.ips || []).map((h) => 'http://' + esc(h)).join('<br>')}</dd>
+            <dt>Aplikace běží</dt><dd>${fmtDuration(d.uptime_s)}</dd>
+            <dt>Vytížení procesoru zařízení</dt><dd>${d.cpu_pct != null ? num(d.cpu_pct, 1, ' %') : '–'}</dd>
+            <dt>Paměť zařízení (RAM)</dt><dd>${d.ram_total_mb ? `${num(d.ram_used_mb, 0, ' MB')} / ${num(d.ram_total_mb, 0, ' MB')} (${num(d.ram_pct, 0, ' %')})` : (d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–')}</dd>
+            <dt>Paměť, kterou zabírá aplikace</dt><dd>${d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–'}</dd>
+            <dt>Databáze / volné místo na kartě</dt><dd>${num(d.db_mb, 1, ' MB')} / ${num(d.disk_free_mb, 0, ' MB')}</dd>`;
         const dw = $('sysDiskWarn');
         dw.classList.toggle('hidden', !d.disk_low);
         if (d.disk_low) {

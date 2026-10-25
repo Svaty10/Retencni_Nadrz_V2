@@ -366,27 +366,21 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 /* --- Dashboard: nádrž --------------------------------------- */
 .dash-top {
     display: grid;
-    grid-template-columns: minmax(380px, 5fr) minmax(0, 7fr);
+    grid-template-columns: minmax(400px, 5fr) minmax(0, 7fr);
     gap: 16px;
+    align-items: start;
 }
 
 .tank-card { display: flex; flex-direction: column; padding: 22px 24px; }
-.tank-main { display: flex; gap: 28px; align-items: stretch; flex: 1; }
-.tank-figures { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tank-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; }
 .tank-name { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
-.tank-status { display: flex; align-items: center; gap: 7px; margin: 2px 0 10px; font-size: 13px; color: var(--muted); }
+.tank-status { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; color: var(--muted); }
 .tank-status .dot { width: 9px; height: 9px; }
 .tank-status.online .dot { background: var(--green); }
 .tank-status.stale .dot { background: var(--amber); }
 .tank-status.offline .dot { background: var(--red); }
 .tank-status.stale { color: var(--amber); font-weight: 600; }
 .tank-status.offline { color: var(--red); font-weight: 600; }
-.level-big {
-    font-family: var(--font-num);
-    font-size: 76px; font-weight: 600; line-height: 0.95; letter-spacing: -0.03em;
-    color: var(--ink); margin: 6px 0 4px;
-}
-.level-litres { font-family: var(--font-num); font-size: 22px; color: var(--ink-2); }
 
 /* Ztlumení zastaralých / offline dat */
 .tank-card.is-stale .level-big,
@@ -394,7 +388,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .ov-card.is-stale .big {
     color: var(--muted);
 }
-.tank-card.is-stale .gauge,
+.tank-card.is-stale .ftank .water-level,
 .ov-card.is-stale .ov-tank {
     opacity: 0.55;
     filter: grayscale(0.6);
@@ -402,50 +396,80 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .tank-card.is-stale .wave svg {
     animation: none !important;
 }
-.tank-meta { margin: auto 0 0; padding-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tank-meta { margin: auto 0 0; padding-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .tank-meta dt { font-size: 12px; color: var(--muted); }
 .tank-meta dd { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-num); }
 
-/* Měrka: nádoba + vodočetná lať (střídavé „E“ dílky po 5 %, čísla po 25 %) */
-.gauge {
-    position: relative; flex-shrink: 0;
-    width: 74px; min-height: 220px;
-    border: 2px solid var(--ink); border-radius: 4px 4px 12px 12px;
-    background: var(--surface-2); overflow: hidden;
+/* --- Schéma toků: kulatá nádrž uprostřed, uzly v rozích ------------------- */
+.flow { position: relative; height: 350px; margin: 8px 0 0; }
+.flow-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.fl {
+    fill: none; stroke-width: 3; stroke-linecap: round; vector-effect: non-scaling-stroke;
+    stroke: var(--line-strong);
 }
-.gauge .water-level, .ov-tank .water-level {
+.fl.ok { stroke: var(--green); opacity: 0.45; }
+.fl.bad { stroke: var(--red); stroke-dasharray: 2 6; }
+.fl.flowing { opacity: 1; stroke-dasharray: 1 9; stroke-width: 4; animation: flow-run 0.9s linear infinite !important; }
+.fl-dashed.ok { stroke-dasharray: 7 6; }
+.fl-dashed.flowing { stroke-width: 3; stroke-dasharray: 7 6; animation: none !important; opacity: 0.8; }
+@keyframes flow-run { to { stroke-dashoffset: -10; } }
+
+.fnode {
+    position: absolute; z-index: 1; width: 110px; transform: translate(-50%, -32px);
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.fn-tl { left: 16%; top: 17%; } .fn-tr { left: 84%; top: 17%; }
+.fn-bl { left: 16%; top: 77%; } .fn-br { left: 84%; top: 77%; }
+.fn-ring {
+    display: flex; align-items: center; justify-content: center;
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--surface); border: 3px solid var(--line-strong); color: var(--muted);
+}
+.fn-ring .ico { width: 26px; height: 26px; stroke-width: 1.6; }
+.fnode.ok .fn-ring { border-color: var(--green); color: var(--green); }
+.fnode.warn .fn-ring { border-color: var(--amber); color: var(--amber); }
+.fnode.bad .fn-ring { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+.fn-val { margin-top: 6px; font-family: var(--font-num); font-size: 17px; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+.fnode.bad .fn-val { color: var(--red); }
+.fn-lbl { font-size: 12px; color: var(--muted); line-height: 1.3; }
+
+.ftank {
+    position: absolute; left: 50%; top: 50%; z-index: 2; transform: translate(-50%, -50%);
+    width: 176px; height: 176px; border-radius: 50%; overflow: hidden;
+    background: var(--surface); border: 4px solid var(--line-strong);
+    box-shadow: 0 0 0 6px var(--surface);
+}
+.ftank.online { border-color: var(--green); }
+.ftank.stale { border-color: var(--amber); }
+.ftank.offline { border-color: var(--red); }
+.ftank .water-level {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+    background: var(--water);
+    /* plynulá změna hladiny (i při přepnutí nádrže); záměrně i při omezených animacích, jako vlnka */
+    transition: height 1.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+.ftank-text {
+    position: absolute; inset: 0; z-index: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.level-big {
+    font-family: var(--font-num);
+    font-size: 46px; font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--ink);
+}
+.level-litres { font-family: var(--font-num); font-size: 16px; font-weight: 500; color: var(--ink-2); margin-top: 2px; }
+.ov-tank .water-level {
     position: absolute; left: 0; right: 0; bottom: 0; height: 0;
     background: var(--water); border-top: 2px solid var(--water-top);
-    transition: height 150ms ease-out;
+    transition: height 1.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
 }
-.gauge .water-level { border-top: 0; }
-
-.gauge-wrap { display: flex; align-items: stretch; gap: 0; flex-shrink: 0; padding: 6px 0; }
-.gauge-scale {
-    position: relative; width: 40px; margin-left: 6px;
-    border-left: 2px solid var(--staff);
-    background:
-        repeating-linear-gradient(to top, var(--staff) 0 2.5%, transparent 2.5% 5%) left / 9px 100% no-repeat;
-}
-.gs {
-    position: absolute; left: 13px; transform: translateY(50%);
-    font-family: var(--font-num); font-size: 12px; font-weight: 600; line-height: 1;
-    color: var(--ink-2); white-space: nowrap;
-}
-.gs.g0 { bottom: 0; } .gs.g25 { bottom: 25%; } .gs.g50 { bottom: 50%; }
-.gs.g75 { bottom: 75%; } .gs.g100 { bottom: 100%; }
-.wave { position: absolute; left: 0; right: 0; bottom: 100%; height: 8px; overflow: hidden; pointer-events: none; }
+.wave { position: absolute; left: 0; right: 0; bottom: 100%; height: 9px; overflow: hidden; pointer-events: none; }
 .wave svg { position: absolute; left: 0; bottom: -1px; width: 200%; height: 100%; animation: wave-slide 3s linear infinite !important; }
 .wave .wave-b { animation: wave-slide 4.5s linear infinite reverse !important; }
 .wave-fill { fill: var(--water); }
 .wave-b .wave-fill { fill: var(--water-top); opacity: 0.25; }
 .wave-line { fill: none; stroke: var(--water-top); stroke-width: 2; vector-effect: non-scaling-stroke; }
 @keyframes wave-slide { to { transform: translateX(-50%); } }
-.gauge.empty .wave { display: none; }
-.gauge-tick { position: absolute; right: 0; width: 12px; height: 2px; background: var(--line-strong); }
-.gauge-tick.t25 { bottom: 25%; }
-.gauge-tick.t50 { bottom: 50%; width: 20px; }
-.gauge-tick.t75 { bottom: 75%; }
+.ftank.empty .wave { display: none; }
 
 .refill-block { margin: 20px -24px -22px; padding: 16px 24px 20px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); }
 .refill-state { display: flex; gap: 10px; align-items: flex-start; }
@@ -523,7 +547,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .range-custom > span { font-size: 13px; color: var(--muted); }
 
 /* Přehled všech nádrží */
-.overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .ov-card {
     display: flex; gap: 20px; align-items: stretch; width: 100%;
     padding: 20px 22px; text-align: left; font: inherit; color: inherit; cursor: pointer;
@@ -531,9 +555,12 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 }
 .ov-card:hover { border-color: var(--accent); }
 .ov-tank {
-    position: relative; flex-shrink: 0; width: 46px; min-height: 120px;
-    border: 2px solid var(--ink); border-radius: 3px 3px 9px 9px; background: var(--surface-2); overflow: hidden;
+    position: relative; flex-shrink: 0; align-self: center; width: 76px; height: 76px;
+    border: 3px solid var(--line-strong); border-radius: 50%; background: var(--surface); overflow: hidden;
 }
+.ov-tank.online { border-color: var(--green); }
+.ov-tank.stale { border-color: var(--amber); }
+.ov-tank.offline { border-color: var(--red); }
 .ov-body { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .ov-body h4 { margin: 0; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
 .ov-body .big { font-family: var(--font-num); font-size: 44px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 4px; }
@@ -542,7 +569,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
     display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: auto; padding-top: 10px;
     font-size: 13px; color: var(--muted);
 }
-.ov-body .meta > span { display: inline-flex; align-items: center; gap: 5px; }
+.ov-body .meta > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .ov-body .meta .ico { width: 15px; height: 15px; }
 .ov-body .meta .warn { color: var(--amber); }
 .ov-body .meta .bad { color: var(--red); }
@@ -892,12 +919,6 @@ body.no-refill .refill-only { display: none !important; }
     .app-container { padding: 0 24px 32px; }
     .app-header { margin: 0 -24px; padding: 0 24px; }
 }
-@media (max-width: 960px) and (min-width: 641px) {
-    /* tablet: nádrž a dopouštění vedle sebe, ať karta nemá prázdnou polovinu */
-    .tank-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
-    .tank-card .refill-block { margin: -22px -24px -22px 0; padding: 22px 24px; border-top: 0; border-left: 1px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; }
-    body.no-refill .tank-card { display: flex; }
-}
 @media (max-width: 960px) {
     .dash-top { grid-template-columns: minmax(0, 1fr); }
     .live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -918,9 +939,14 @@ body.no-refill .refill-only { display: none !important; }
     .tab-content { padding-top: 16px; }
     .page-head h1 { font-size: 20px; }
 
-    .level-big { font-size: 60px; }
-    .gauge { width: 56px; min-height: 190px; }
-    .tank-main { gap: 16px; }
+    .flow { height: 300px; }
+    .ftank { width: 140px; height: 140px; }
+    .level-big { font-size: 36px; }
+    .level-litres { font-size: 14px; }
+    .fnode { width: 92px; transform: translate(-50%, -28px); }
+    .fn-ring { width: 56px; height: 56px; }
+    .fn-ring .ico { width: 22px; height: 22px; }
+    .fn-tl, .fn-bl { left: 15%; } .fn-tr, .fn-br { left: 85%; }
     .tank-card { padding: 18px 16px; }
     .refill-block { margin: 16px -16px -18px; padding: 14px 16px 16px; }
     .refill-actions > * { flex: 1 1 auto; }
@@ -1325,3 +1351,42 @@ h3 .help-tip { margin-left: 6px; }
 /* České datum v mřížce polí: pole přes celou šířku buňky (ikona kalendáře u pole) */
 .field-grid .date-cz { display: flex; }
 .field-grid .date-cz input[type="text"] { width: 100%; }
+
+/* --- Mapa systému (Všechny nádrže): hub uprostřed, nádrže kolem ------------- */
+.hubmap { position: relative; height: 360px; max-width: 880px; margin: 0 auto; }
+.fl.warn { stroke: var(--amber); stroke-dasharray: 2 6; }
+.hm-hub {
+    position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -32px);
+    display: flex; flex-direction: column; align-items: center; text-align: center; width: 120px;
+}
+.hm-hub .fn-ring { border-color: var(--accent); color: var(--accent); width: 68px; height: 68px; }
+.hm-tank {
+    position: absolute; z-index: 1; transform: translate(-50%, -40px);
+    display: flex; flex-direction: column; align-items: center; gap: 2px; width: 130px;
+    padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer;
+}
+.hm-circle {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 80px; height: 80px; border-radius: 50%; overflow: hidden;
+    background: var(--surface); border: 3px solid var(--line-strong);
+    transition: transform 120ms;
+}
+.hm-tank:hover .hm-circle { transform: scale(1.05); }
+.hm-tank.ok .hm-circle { border-color: var(--green); }
+.hm-tank.warn .hm-circle { border-color: var(--amber); }
+.hm-tank.bad .hm-circle { border-color: var(--red); }
+.hm-circle .water-level {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--water);
+    transition: height 1.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+.hm-pct { position: relative; font-family: var(--font-num); font-size: 22px; font-weight: 600; }
+.hm-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; line-height: 1.25; padding: 1px 6px; border-radius: 4px; background: var(--surface); }
+.hm-hub .fn-val, .hm-hub .fn-lbl { padding: 0 6px; background: var(--surface); }
+.hm-tank.bad .hm-name { color: var(--red); }
+.hm-note { font-size: 12px; color: var(--green); display: inline-flex; align-items: center; gap: 3px; }
+@media (max-width: 640px) {
+    .hubmap { height: 320px; }
+    .hm-tank { width: 100px; transform: translate(-50%, -34px); }
+    .hm-circle { width: 64px; height: 64px; }
+    .hm-pct { font-size: 18px; }
+}
