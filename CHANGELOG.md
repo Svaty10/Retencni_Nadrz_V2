@@ -9,6 +9,7 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 - **Schéma toků vody u nádrže:** kulatá nádrž s hladinou uprostřed a kolem ní *Déšť dnes*, *Z řadu dnes*, *Déšť 7 dní* (předpověď, čárkovaně) a *Spotřeba dnes*. Uzel se ukáže, jen když je nastavený (déšť a předpověď podle plochy střechy, řad podle ventilu). Cesta je zelená, když vše funguje (tečky běží, když tudy dnes teklo), oranžová při zpožděných datech čidla a červená při poruše (čidlo offline, chyba ventilu). API `/api/state` má nově `catchment_m2`, `rain_today`, `refill_today` a `refill.fault`.
 - **Mapa systému v přehledu Všechny nádrže:** hub uprostřed, nádrže kolem (s hladinou), cesta ke každé nádrži zelená (online), oranžová (zpožděná data) nebo červená (offline); klepnutím se otevře detail nádrže.
 - **IP adresa hubu** v Nastavení → Systém → Adresa v síti (`/api/system` vrací `ips`).
+- **Volby aktualizací** (dialog i karta Systém) ve dvou zarovnaných řádcích s vysvětlivkou: *Automatické aktualizace* (instalace v noci) a *Kanál* (Stabilní / Beta).
 
 ### Změněno
 - **Nový vzhled rozhraní** (světlý i tmavý motiv): chladná „vodohospodářská“ paleta s hlubokou vodní modří, tmavý pruh hlavičky a čísla v písmu Bahnschrift / DIN ze systému (nic se nestahuje).
