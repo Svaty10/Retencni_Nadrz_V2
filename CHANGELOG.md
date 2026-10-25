@@ -3,6 +3,23 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.0] - 2026-10-25
+
+### Změněno
+- **Nový vzhled rozhraní** (světlý i tmavý motiv): chladná „vodohospodářská“ paleta s hlubokou vodní modří, tmavý pruh hlavičky, čísla v písmu Bahnschrift / DIN ze systému (nic se nestahuje) a výrazná měrka nádrže s vodočetnou latí.
+- **Navigace:** sekce *Přehled / Nastavení / Historie událostí* jsou přímo v hlavní liště (dřív schované v menu účtu); nádrže mají vlastní řádek pod hlavičkou. Menu účtu obsahuje jen *Můj účet*, *Správa uživatelů*, motiv, jazyk a akce zařízení; tečka o dostupné aktualizaci svítí u záložky *Nastavení*.
+- **Stav čidel:** hlavička ukazuje stav celého hubu („Čidla online: 2/3“), stav vybraného čidla je na kartě nádrže pod jejím názvem (u zastaralých dat zvýrazněný). Zdvojený štítek u procent byl odstraněn.
+- **Přehled nádrže:** doplňkové údaje ve čtyřech skupinách 2 × 2 (Výhled, Spotřeba, Baterie čidla, Čidlo v šachtě) bez zbytečných popisků a prázdných míst; karty v přehledu všech nádrží jsou tlačítka s větší měrkou a čísly.
+- **Nastavení rozdělené do sekcí:** místo karet poskládaných do sloupců jeden sloupec s pojmenovanými skupinami (*Čidla a poloha, Propojení, Data a systém*; u nádrže *Nádrž a měření, Čidlo, Automatika*) a rozcestníkem vlevo, který zvýrazní právě viditelnou kartu (na mobilu vodorovná lišta).
+- **Jedno uložení nádrže:** šest tlačítek *Uložit*, která všechna ukládala celý formulář nádrže, nahradila dolní lišta *Neuložené změny nádrže – Zahodit / Uložit změny*, která se objeví po úpravě. Kalibrace má tlačítko *Přidat bod*, kalibrace baterie *Opravit měření*. Přepínač *Zobrazit pokročilá nastavení* místo „Pokročilé (zobrazeno: …)“.
+- *Historie událostí* bez zdvojeného nadpisu „Záznamy“; karta *Hunter Hydrawise* má kratší název.
+
+### Opraveno
+- **Lepicí hlavička a rozcestník nastavení se nelepily:** `overflow-x: hidden` na `html` i `body` dělal z `body` posuvný kontejner a rušil `position: sticky`; nahrazeno `overflow-x: clip`.
+- **Nastavení na mobilu přetékalo doprava** (mřížka `.stack` bez omezení šířky sloupce).
+- **Datumová pole v mazání dat** měla ikonu kalendáře odtrženou od pole.
+- Odstraněn inline `style` u skryté sekce, který porušoval Content-Security-Policy (chyba v konzoli).
+
 ## [1.13.1] - 2026-10-25
 
 ### Přidáno

@@ -93,7 +93,7 @@ Uživatel myslí v nádržích, čidlo je technický detail. Rozhraní dříve p
 ### 5. Nastavení nádrže může tiše zahodit rozpracované změny
 
 - **Stav:** opraveno ve verzi 1.13.1 (`index.html`, `js/app.js`).
-- **Řešení:** do horní lišty nastavení nádrže přidáno tlačítko „Uložit změny“ (`#calSaveTop`), které se zvýrazní při jakékoli úpravě polí formuláře `calForm`. Při pokusu o přepnutí nádrže nebo opuštění stránky bez uložení je uživatel varován dialogem.
+- **Řešení:** od 1.14.0 jediné tlačítko „Uložit změny“ v dolní liště neuložených změn (`#calBar`, i s „Zahodit“), která se objeví při jakékoli úpravě polí formuláře `calForm`; tlačítka „Uložit“ v jednotlivých kartách nádrže byla odstraněna (v 1.13.1 to bylo `#calSaveTop` v liště rozcestníku). Při pokusu o přepnutí nádrže nebo opuštění stránky bez uložení je uživatel varován dialogem.
 
 Pole všech karet nádrže patří do jednoho formuláře `calForm` (32 polí) a míří na něj několik tlačítek
 „Uložit“ – každé uloží všechny karty najednou, i když vypadá, že ukládá jen svou kartu. Při přepnutí na
@@ -129,6 +129,21 @@ posunu na okrajích lišty.
 - **Signál:** zobrazuje se „62 % (−82 dBm)“; srozumitelnější by bylo slovní hodnocení („dobrý / slabý“).
 - **Prázdné pole cílové hladiny** v dialogu *Dopustit z řadu* (záměrně od 1.12.0) – rozumná nabídka,
   třeba cíl automatiky, by ušetřila přemýšlení.
+
+## Druhé kolo (1.14.0)
+
+Při procházení běžící aplikace (demo režim, 1600 px i 390 px, světlý i tmavý motiv) se ukázala další
+krkolomná místa. Všechna jsou opravená ve verzi 1.14.0:
+
+| # | Co bylo krkolomné | Řešení |
+|---|---|---|
+| 8 | Nastavení a Historie byly jen v menu účtu; lišta s „Přehledem“ v nastavení měnila význam | sekce v hlavní liště, nádrže v řádku pod ní |
+| 9 | Hlavička ukazovala stav jen vybraného čidla, v přehledu všech nádrží něco jiného | hlavička = stav hubu, stav čidla na kartě nádrže |
+| 10 | Šest tlačítek „Uložit“ v nastavení nádrže, každé ukládalo všechny karty | jedna dolní lišta „Zahodit / Uložit změny“ |
+| 11 | Nastavení jako „guláš“ karet ve sloupcích podle výšky | jeden sloupec, pojmenované skupiny, rozcestník se zvýrazněním |
+| 12 | Karta doplňkových údajů: prázdný horní pás, díra v mřížce, popisky opakující nadpis | 4 skupiny 2 × 2 bez popisků |
+| 13 | Lepicí hlavička se nelepila (`overflow-x: hidden` na `html` i `body`) | `overflow-x: clip` |
+| 14 | Datumová pole v mazání dat s odtrženou ikonou, zdvojený nadpis v Historii | opraveno |
 
 ## Doporučené pořadí
 

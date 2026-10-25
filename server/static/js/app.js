@@ -363,7 +363,7 @@
         relay: 'Interní číslo zóny v Hydrawise. Vyplňujte ručně jen tehdy, když se názvy zón nepodaří načíst.',
         autorefill: 'Hub sám otevře ventil, když hladina klesne pod spouštěcí hladinu. Vypnuté = dopouští se jen ručně tlačítkem „Dopustit“.',
         retention: 'Podrobná měření (každých pár minut) se po této době mažou, hodinové průměry zůstávají navždy. 0 = nemazat. Při nedostatku místa na kartě se mažou dříve.',
-        calpoints: 'Dvojice „napětí sondy – výška vody nad sondou“. Z nich hub počítá přímku, která mění napětí na hladinu. Body se doplňují tlačítkem Uložit výše; ručně je upravujte jen výjimečně.',
+        calpoints: 'Dvojice „napětí sondy – výška vody nad sondou“. Z nich hub počítá přímku, která mění napětí na hladinu. Body se doplňují tlačítkem Přidat bod výše; ručně je upravujte jen výjimečně.',
         recompute: 'Přepočítá už uložená měření podle aktuální kalibrace a vyhlazení. Hodí se po opravě kalibrace nebo výšky sondy; nová měření se počítají vždy správně.',
         battrim: 'Změřte napětí baterií voltmetrem a zadejte ho. Hub z toho spočítá korekci (násobek), aby údaj souhlasil. Korekce 1,0000 = bez úpravy.',
         servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.',
@@ -539,6 +539,7 @@
         document.querySelectorAll('.tab-content').forEach((el) => el.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach((el) => { el.classList.remove('active'); el.removeAttribute('aria-current'); });
         $(id).classList.add('active');
+        setCalDirty(calDirty);                                     // lišta neuložených změn jen v nastavení
         btn.classList.add('active');
         btn.setAttribute('aria-current', 'page');
         try { sessionStorage.setItem('tab', id); } catch (e) { /* ignore */ }
@@ -1121,19 +1122,16 @@
 
     // ---------------------------------------------------------- live state
     function renderState(s) {
-        const pill = $('statusPill');
-        pill.className = 'status-pill ' + s.status;
-        pill.textContent = { online: 'Čidlo: online', stale: 'Čidlo: zpožděná data', offline: 'Čidlo: offline' }[s.status] || s.status;
+        const cur = (s.nodes || []).find((x) => x.id === CURRENT_NODE) || {};
+        $('txtTankName').textContent = cur.name || 'Nádrž';
+        const ts = $('txtTankStatus');
+        ts.className = 'tank-status ' + s.status;
+        ts.lastElementChild.textContent = ({ online: 'Čidlo online', stale: 'Zpožděná data', offline: 'Čidlo offline' }[s.status] || s.status)
+            + (s.timestamp ? ` · ${fmtAgo(s.last_seen_seconds_ago)}` : '');
 
         const isStale = s.status !== 'online';
         const tankCard = document.querySelector('#nodeDash .tank-card');
         if (tankCard) tankCard.classList.toggle('is-stale', isStale);
-        const staleEl = $('txtStaleAge');
-        if (staleEl) {
-            staleEl.classList.toggle('hidden', !isStale);
-            staleEl.textContent = !s.timestamp ? 'bez dat'
-                : `${s.status === 'offline' ? 'offline' : 'zpožděná data'} · naposledy ${fmtAgo(s.last_seen_seconds_ago)}`;
-        }
 
         const pct = s.water_level_percent;
         $('waterLevel').style.height = (pct == null ? 0 : Math.max(0, Math.min(100, pct))) + '%';
@@ -1252,17 +1250,18 @@
         const g = $('overviewGrid');
         g.textContent = '';
         nodes.forEach((n) => {
-            const c = document.createElement('div');
+            const c = document.createElement('button');
+            c.type = 'button';
             c.className = 'card ov-card' + (n.status !== 'online' ? ' is-stale' : '');
             const pct = n.level_pct == null ? 0 : Math.max(0, Math.min(100, n.level_pct));
             const b = n.battery || {};
             const st = { online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status;
             c.innerHTML = `<div class="ov-tank"><div class="water-level"></div></div>
-                <div class="ov-body"><h4><span class="dot ${esc(n.status)}"></span>${nm(n.name)}</h4>
+                <div class="ov-body"><h4>${nm(n.name)}</h4>
                 <div class="big">${num(n.level_pct, 0, ' %')}</div>
-                <div class="meta">${num(n.volume_l, 0, ' L')}${n.max_l ? ' z ' + num(n.max_l, 0, ' L') : ''}<br>
-                <span class="${n.status === 'online' ? '' : n.status === 'stale' ? 'warn' : 'bad'}">${esc(st)}</span>${n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}<br>
-                ${ico('battery')} <span class="${b.low ? 'bad' : ''}">${num(b.percent, 0, ' %')}</span>${n.refill_configured && n.refilling ? ` · <span class="ok">${ico('drop')} dopouští</span>` : ''}</div></div>`;
+                <div class="ov-litres">${num(n.volume_l, 0, ' L')}${n.max_l ? ' z ' + num(n.max_l, 0, ' L') : ''}</div>
+                <div class="meta"><span class="ov-st"><span class="dot ${esc(n.status)}"></span><span class="${n.status === 'online' ? '' : n.status === 'stale' ? 'warn' : 'bad'}">${esc(st)}</span>${n.age_s != null ? `<span>${fmtAgo(n.age_s)}</span>` : ''}</span>
+                <span>${ico('battery')} <span class="${b.low ? 'bad' : ''}">${num(b.percent, 0, ' %')}</span></span>${n.refill_configured && n.refilling ? `<span class="ok">${ico('drop')} dopouští</span>` : ''}</div></div>`;
             c.querySelector('.water-level').style.height = pct + '%';     // CSSOM (CSP bez inline stylů)
             c.addEventListener('click', () => { setViewAll(false); selectNode(n.id, true); renderNodeBar(nodes); });
             g.appendChild(c);
@@ -1330,8 +1329,11 @@
     let calDirty = false;
     function setCalDirty(dirty) {
         calDirty = !!dirty;
-        const btn = $('calSaveTop');
-        if (btn) btn.classList.toggle('hidden', !calDirty || SET_SCOPE !== 'tank');
+        const show = calDirty && SET_SCOPE === 'tank' && $('nastaveni').classList.contains('active');
+        const cfg = currentNodeCfg() || {};
+        $('calBarName').textContent = cfg.name ? `„${cfg.name}“` : '';
+        $('calBar').classList.toggle('hidden', !show);
+        document.body.classList.toggle('has-save-bar', show);
     }
     async function confirmDiscardCalChanges() {
         if (!calDirty || SET_SCOPE !== 'tank') return true;
@@ -1407,12 +1409,11 @@
                 return;
             }
             renderState(s);
-            if (VIEW_ALL) {
-                const ns = s.nodes || [], on = ns.filter((n) => n.status === 'online').length;
-                const pill = $('statusPill');
-                pill.className = 'status-pill ' + (on === ns.length ? 'online' : on ? 'stale' : 'offline');
-                pill.textContent = `Čidla online: ${on}/${ns.length}`;
-            }
+            // hlavička: stav celého systému (jednotlivé čidlo ukazuje karta nádrže)
+            const ns = s.nodes || [], on = ns.filter((n) => n.status === 'online').length;
+            const pill = $('statusPill');
+            pill.className = 'status-pill ' + (on === ns.length ? 'online' : on ? 'stale' : 'offline');
+            pill.textContent = ns.length === 1 ? (on ? 'Čidlo online' : 'Čidlo offline') : `Čidla online: ${on}/${ns.length}`;
             if (s.timestamp !== lastTs) {
                 if (lastTs !== null && $('dashboard').classList.contains('active')) loadAllCharts(true);
                 lastTs = s.timestamp;
@@ -1595,14 +1596,12 @@
     function setAdvanced(on) {
         document.body.classList.toggle('show-adv', !!on);
         $('advToggle').checked = !!on;
-        $('advLabel').textContent = on ? 'základní i pokročilé nastavení' : 'základní nastavení';
         try { localStorage.setItem('advSettings', on ? '1' : ''); } catch (e) { /* ignore */ }
         layoutSettingsColumns();
     }
 
-    // Karty aktuální záložky ve sloupcích: každá karta do nejkratšího sloupce (v pořadí),
-    // poslední karta sloupce se roztáhne → spodky všech sloupců na jedné lince. Karty jiných
-    // záložek čekají skryté v #setPark. 1 sloupec pod 1280 px, 2 do 1700 px, jinak 3.
+    // Karty aktuální záložky v jednom sloupci, rozdělené do pojmenovaných skupin (data-group);
+    // karty jiných záložek čekají skryté v #setPark. Rozcestník vlevo (renderSetNav) má stejné skupiny.
     // Moving a card in the DOM blurs a focused field and makes mobile browsers jump to
     // the top, so: never while the user edits a field (re-run on focusout), and move
     // only cards whose place actually changes.
@@ -1616,67 +1615,45 @@
         if (cur.length === cards.length && cur.every((c, i) => c === cards[i])) return;
         cards.forEach((c) => { if (c.parentNode !== col || col.lastElementChild !== c) col.appendChild(c); });
     }
+    const groupHeads = new Map();
+    function groupHead(name) {
+        if (!groupHeads.has(name)) {
+            const h = document.createElement('h2');
+            h.className = 'set-group';
+            h.textContent = name;
+            groupHeads.set(name, h);
+        }
+        return groupHeads.get(name);
+    }
+    function settingsCards() {
+        return Array.from(document.querySelectorAll('#nastaveni .col-card'))
+            .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
+    }
     function layoutSettingsColumns() {
         const host = $('setCols'), park = $('setPark');
         if (!host || !park) return;
         if (editingSettings()) { layoutPending = true; return; }
         layoutPending = false;
-        const all = Array.from(document.querySelectorAll('#nastaveni .col-card'))
-            .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
+        const all = settingsCards();
         const mine = all.filter((c) => c.classList.contains('scope-' + SET_SCOPE) && !c.classList.contains('hidden'));
         all.forEach((c) => { if (!mine.includes(c) && c.parentNode !== park) park.appendChild(c); });
-        const n = window.innerWidth >= 1700 ? 3 : window.innerWidth >= 1280 ? 2 : 1;
-        let cols = Array.from(host.children);
-        if (cols.length !== n) {
-            mine.forEach((c) => park.appendChild(c));
+        const list = [];
+        let group = null;
+        mine.forEach((c) => {
+            if (c.dataset.group && c.dataset.group !== group) { group = c.dataset.group; list.push(groupHead(group)); }
+            list.push(c);
+        });
+        groupHeads.forEach((h) => { if (!list.includes(h) && h.parentNode) h.remove(); });
+        let col = host.firstElementChild;
+        if (!col || host.children.length !== 1) {
             host.textContent = '';
-            cols = [];
-            for (let i = 0; i < n; i++) { const c = document.createElement('div'); c.className = 'set-col'; host.appendChild(c); cols.push(c); }
+            col = document.createElement('div');
+            col.className = 'set-col';
+            host.appendChild(col);
         }
-        host.dataset.cols = String(n);
-        // Root cause of the "all cards in the left column" bug: after the Všechna čidla tab
-        // (no column cards) the host stayed hidden, so the cards of the next tab were
-        // measured inside a display:none box (all heights 0 → everything into column 0).
+        host.dataset.cols = '1';
+        placeCards(col, list);
         host.classList.toggle('hidden', !mine.length);
-        if (!$('nastaveni').classList.contains('active')) { renderSetNav(); return; }   // skryté: změřit nejde
-        if (n === 1) {                                   // one column: just the order, no measuring
-            placeCards(cols[0], mine);
-            cols[0].querySelectorAll('.col-card.fill').forEach((c) => c.classList.remove('fill'));
-            host.classList.toggle('hidden', !mine.length);
-            renderSetNav();
-            return;
-        }
-        // změřit výšky v jednom sloupci (stejná šířka jako ve výsledku), v původním pořadí
-        const heights = mine.map((c) => {
-            cols[0].appendChild(c);
-            c.classList.remove('fill');
-            return c.offsetHeight;
-        });
-        if (heights.every((h) => !h) && mine.length && layoutTries < 5) {   // not rendered yet: next frame
-            layoutTries++;
-            requestAnimationFrame(layoutSettingsColumns);
-            return;
-        }
-        const sum = new Array(n).fill(0), plan = [];
-        mine.forEach((c, i) => {
-            let k = 0;
-            for (let j = 1; j < n; j++) if (sum[j] < sum[k] - 1) k = j;
-            plan.push(k);
-            if (heights[i]) sum[k] += heights[i] + 16;
-        });
-        cols.forEach((col, k) => placeCards(col, mine.filter((c, i) => plan[i] === k)));
-        cols.forEach((col) => {
-            const vis = Array.from(col.children).filter((c) => c.offsetParent !== null);
-            if (vis.length) vis[vis.length - 1].classList.add('fill');
-        });
-        host.classList.toggle('hidden', !mine.length);
-        // self-check: an empty column next to one with 2+ cards = a bad measurement → once more
-        const counts = cols.map((col) => Array.from(col.children).filter((c) => c.offsetParent !== null).length);
-        if (counts.some((x) => x === 0) && counts.some((x) => x >= 2) && layoutTries < 3) {
-            layoutTries++;
-            requestAnimationFrame(layoutSettingsColumns);
-            return;
-        }
         layoutTries = 0;
         lastHeights = new Map(mine.map((c) => [c, c.offsetHeight]));
         renderSetNav();
@@ -1696,15 +1673,27 @@
         requestAnimationFrame(() => requestAnimationFrame(layoutSettingsColumns));   // after the new tab is painted
     }
 
-    // Rychlá navigace po kartách aktuální záložky (lepivá pod hlavičkou)
+    // Rozcestník po kartách aktuální záložky: na širokém displeji svislý sloupec se skupinami,
+    // na úzkém vodorovná lišta; zvýrazní kartu, která je právě na obrazovce.
+    let spy = null;
     function renderSetNav() {
         const nav = $('setNav');
         if (!nav) return;
         nav.textContent = '';
+        if (spy) spy.disconnect();
         const cards = Array.from(document.querySelectorAll('#nastaveni .card[data-nav]'))
             .filter((c) => c.offsetParent !== null)
             .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
+        const chips = new Map();
+        let group = null;
         cards.forEach((c) => {
+            if (c.dataset.group && c.dataset.group !== group) {
+                group = c.dataset.group;
+                const g = document.createElement('span');
+                g.className = 'set-nav-group';
+                g.textContent = group;
+                nav.appendChild(g);
+            }
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'set-chip';
@@ -1715,17 +1704,17 @@
                 if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
             });
             nav.appendChild(b);
+            chips.set(c, b);
         });
-        if (SET_SCOPE === 'tank') {
-            const save = document.createElement('button');
-            save.type = 'submit';
-            save.setAttribute('form', 'calForm');
-            save.id = 'calSaveTop';
-            save.className = 'btn btn-primary btn-sm set-save' + (calDirty ? '' : ' hidden');
-            save.textContent = 'Uložit změny';
-            nav.appendChild(save);
-        }
-        nav.classList.toggle('hidden', cards.length < 2 && !(SET_SCOPE === 'tank' && calDirty));
+        nav.classList.toggle('hidden', cards.length < 2);
+        if (!window.IntersectionObserver || cards.length < 2) return;
+        const seen = new Set();
+        spy = new IntersectionObserver((entries) => {
+            entries.forEach((e) => { if (e.isIntersecting) seen.add(e.target); else seen.delete(e.target); });
+            const first = cards.find((c) => seen.has(c));
+            chips.forEach((b, c) => b.classList.toggle('active', c === first));
+        }, { rootMargin: '-120px 0px -55% 0px' });
+        cards.forEach((c) => spy.observe(c));
     }
 
     // Poloha: hledání obce (geocoding přes hub), poloha zařízení (prohlížeč ji dá jen zabezpečené stránce), ruční souřadnice (pokročilé)
@@ -2062,6 +2051,7 @@
                 histCache.clear(); flowsCache.clear(); loadSettingsTab(); pollState();
             } catch (err) { toast(err.message, true); }
         });
+        $('calDiscard').addEventListener('click', () => { applyNode(currentNodeCfg()); setCalDirty(false); });
         $('calForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const data = formData(e.target);
@@ -2811,7 +2801,6 @@
     function setUpdateBadge(sum) {
         const st = (sum && sum.status) || {};
         const avail = st.state === 'available' && st.latest && st.latest !== (sum.running || ME.version);
-        $('avatarDot').classList.toggle('hidden', !avail);
         $('menuUpdDot').classList.toggle('hidden', !avail);
         renderUpdateLine(sum);
         applyUpdatePrefs(sum && sum.prefs);
