@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.12.1] - 2026-10-25
+
+### Opraveno
+- **Animace vlnky v měrce nádrže se opět hýbe i při vypnutých systémových animacích ve Windows:** globální pravidlo `@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }` přebíjelo animaci `.wave svg` bez `!important`; doplněno `!important` přímo na `.wave svg` (`3 s`) a `.wave .wave-b` (`4,5 s`).
+
 ## [1.12.0] - 2026-10-25
 
 ### Přidáno
