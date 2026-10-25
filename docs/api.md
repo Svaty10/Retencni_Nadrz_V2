@@ -30,6 +30,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/me` | user | jméno, role, CSRF token, verze (session = cookie `rt_sid`, HttpOnly, SameSite=Lax) |
 | POST | `/api/me/password` | user | `old_password`, `new_password` |
 | POST | `/api/me/theme` | user | `theme`: `auto` / `light` / `dark` – motiv uložený u účtu (`GET /api/me` ho vrací v `theme`) |
+| POST | `/api/me/lang` | user | `lang`: `cs` / `en` – jazyk rozhraní uložený u účtu (`GET /api/me` ho vrací v `lang`) |
 | GET | `/api/state` | user | kompletní živý stav pro dashboard; `disk_low` (na kartě méně než 300 MB), `disk_free_mb` |
 | GET | `/api/history?range=24h\|7d\|30d\|365d` nebo `?from=&to=` (epoch s) | user | zprůměrovaná řada (max ~600 bodů): hladina, objem, `probe_mv` (napětí sondy), klima, baterie (`vbat` V, `bat_pct` % podle křivky typu baterie, `sag_mv` pokles při vysílání; `probe_mv`/`sag_mv` jen z 5min dat, v hodinových agregátech `null`), `rssi`, `refill`, `bands` (úseky dopouštění a přítoku z deště: `kind`, `start`, `end`, `litres`), `boots` (vložení baterie / restart čidla) |
 | GET | `/api/flows?…` | user | denní spotřeba / přítok ze srážek / dopouštění |

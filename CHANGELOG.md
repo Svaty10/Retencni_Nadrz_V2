@@ -3,24 +3,33 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
-## [1.11.0] - 2026-10-25
+## [1.12.0] - 2026-10-25
+
+### Přidáno
+- **Přepínač jazyka (Čeština / English)** v uživatelském menu pod přepínačem motivu (`POST /api/me/lang`, databázová migrace v13): kompletní překlad celého webového rozhraní včetně grafů, popisků, nápovědy a auditního logu s okamžitým přepnutím bez nutnosti obnovení stránky a ukládáním volby do profilu uživatele i lokálního úložiště.
+- **GitHub Community Standards (`.github/`):** doplněna bezpečnostní politika (`SECURITY.md`), pokyny pro přispěvatele (`CONTRIBUTING.md`), kodex chování (`CODE_OF_CONDUCT.md`), prohlášení o přístupnosti (`ACCESSIBILITY.md`) a šablony pro Issues (`ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`) a Pull Requesty (`pull_request_template.md`).
 
 ### Změněno
-- **Přidání čidla je celé v dialogu** *Přidat čidlo…*: kroky (baterie → ID → první data → hotovo), ID ze štítku, **povinný název** a tabulka nových čidel v dosahu. Dialog po potvrzení zůstane otevřený a průběh se v něm obnovuje; „Spárovat“ u nalezeného čidla doplní jeho ID. Na kartě *Čidla* zůstalo jen tlačítko a upozornění, když nové čidlo nabízí párování. Server nové čidlo bez názvu odmítne (odebrané čidlo spárované znovu si vezme svůj dřívější název).
-- **Signál v procentech**: v grafu *Baterie a signál* (společná osa 0–100 %), v kartě *Spojení* i v tabulkách čidel – „67 % (−70 dBm)“. Převod lineárně mezi −110 dBm (0 %) a −50 dBm (100 %).
 - **Ruční dopouštění** (*Dopustit*) se ptá na cílovou hladinu pouze v dialogu *Dopustit z řadu* (duplicitní vstupní pole na kartě *Stav nádrže* bylo odstraněno) a nepředvyplňuje výchozí procenta.
-- Výběr **zóny Hydrawise** je přes celou šířku karty, dlouhé názvy zón se neořezávají.
-- Pole názvu čidla už nemá vzorový text „Jímka“.
+- Výběr **zóny Hydrawise** v nastavení dopouštění je zarovnaný ve dvousloupcové mřížce vedle výběru ventilu (s vysvětlením v nápovědě, že API Hydrawise vrací názvy zkrácené na 15 ASCII znaků).
 
 ### Opraveno
-- **Animace vlnky na ukazateli hladiny nádrže je rychlejší** a už se nezpomaluje při omezených systémových animacích (např. vypnuté *Efekty animace* ve Windows).
+- **Animace vlnky na ukazateli hladiny nádrže je rychlejší** (`3 s` / `4,5 s`) a už se nezpomaluje při omezených systémových animacích (např. vypnuté *Efekty animace* ve Windows).
 - **Bezpečnostní zpřísnění (dokončení revize):**
   - *Rádiový čítač:* velký skok čítače rámců (`ctr > last_ctr + 4096`) vyžaduje potvrzení následujícím rámcem čidla – náhodně trefený 32bitový MAC s vysokým `ctr` tak nikdy neodřízne čidlo, zatímco čidlo vracející se po letech vypnutí se plynule resynchronizuje druhým rámcem.
   - *Captive portál a root pomocník:* odmítnutí SSID začínajícího `-` (ochrana před předáním přepínače do `nmcli`) a sjednocení kontroly `is_symlink()` u `control-reboot`.
   - *HTTP server:* přidán limit současných spojení na jednu IP (`MAX_PER_IP_CONNECTIONS = 24`) a slučování vícenásobných hlaviček `Cookie` podle RFC 6265.
 
-### Přidáno
-- **GitHub Community Standards (`.github/`):** doplněna bezpečnostní politika (`SECURITY.md`), pokyny pro přispěvatele (`CONTRIBUTING.md`), kodex chování (`CODE_OF_CONDUCT.md`), prohlášení o přístupnosti (`ACCESSIBILITY.md`) a šablony pro Issues (`ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`) a Pull Requesty (`pull_request_template.md`).
+## [1.11.0] - 2026-10-25
+
+### Změněno
+- **Přidání čidla je celé v dialogu** *Přidat čidlo…*: kroky (baterie → ID → první data → hotovo), ID ze štítku, **povinný název** a tabulka nových čidel v dosahu. Dialog po potvrzení zůstane otevřený a průběh se v něm obnovuje; „Spárovat“ u nalezeného čidla doplní jeho ID. Na kartě *Čidla* zůstalo jen tlačítko a upozornění, když nové čidlo nabízí párování. Server nové čidlo bez názvu odmítne (odebrané čidlo spárované znovu si vezme svůj dřívější název).
+- **Signál v procentech**: v grafu *Baterie a signál* (společná osa 0–100 %), v kartě *Spojení* i v tabulkách čidel – „67 % (−70 dBm)“. Převod lineárně mezi −110 dBm (0 %) a −50 dBm (100 %).
+- Výběr **zóny Hydrawise** je přes celou šířku karty, dlouhé názvy zón se neořezávají.
+- Pole názvu čidla už nemá vzorový text „Jímka“.
+
+### Opraveno
+- **Vlnka na hladině se nehýbala**, když má systém omezené animace (ve Windows *Efekty animace* vypnuté, v telefonu „Omezit pohyb“). Teď se vlní vždy, při omezených animacích pomaleji.
 
 ## [1.10.0] - 2026-10-24
 

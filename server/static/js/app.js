@@ -17,6 +17,8 @@
     let refillEndsAt = null;
     let settingsCache = null;
 
+    const tr = (s) => (window.I18N ? window.I18N.tr(s) : s);
+
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -25,7 +27,8 @@
 
     function num(v, digits, unit) {
         if (v === null || v === undefined || Number.isNaN(v)) return '–';
-        return Number(v).toLocaleString('cs-CZ', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + (unit || '');
+        const loc = (window.I18N && window.I18N.getLang() === 'en') ? 'en-US' : 'cs-CZ';
+        return Number(v).toLocaleString(loc, { minimumFractionDigits: digits, maximumFractionDigits: digits }) + (unit || '');
     }
 
     // síla signálu v % lineárně mezi −110 dBm (mez citlivosti CC1101) a −50 dBm (velmi silný)
@@ -51,10 +54,12 @@
     }
     function fmtAgo(sec) {
         if (sec == null) return '–';
-        if (sec < 90) return `před ${sec} s`;
-        if (sec < 5400) return `před ${Math.round(sec / 60)} min`;
-        if (sec < 172800) return `před ${Math.round(sec / 3600)} h`;
-        return `před ${Math.round(sec / 86400)} dny`;
+        const isEn = window.I18N && window.I18N.getLang() === 'en';
+        if (sec < 90) return isEn ? `${sec} s ago` : `před ${sec} s`;
+        if (sec < 5400) return isEn ? `${Math.round(sec / 60)} min ago` : `před ${Math.round(sec / 60)} min`;
+        if (sec < 172800) return isEn ? `${Math.round(sec / 3600)} h ago` : `před ${Math.round(sec / 3600)} h`;
+        const days = Math.round(sec / 86400);
+        return isEn ? `${days} ${days === 1 ? 'day' : 'days'} ago` : `před ${days} dny`;
     }
 
     function toast(msg, isError) {
@@ -343,7 +348,7 @@
         offset: 'Svislá vzdálenost od dna nádrže ke snímači sondy. Hladina ode dna = voda nad sondou + tato výška, proto ji zadejte podle skutečné montáže.',
         deadband: 'Nejmenší změna hladiny, kterou hub bere jako skutečnou. Menší výkyvy (vlnění, šum sondy) ignoruje. Počítá se z přesnosti a rozsahu sondy.',
         provider: 'Zařízení, kterým se nádrž dopouští z vodovodu. Bez ventilu hub jen měří a ovládání dopouštění je skryté.',
-        zone: 'Zóna ovladače Hydrawise, která otevírá ventil této nádrže. Názvy zón načtete tlačítkem vedle seznamu. Jednu zónu může ovládat jen jedna nádrž.',
+        zone: 'Zóna ovladače Hydrawise, která otevírá ventil této nádrže. Názvy zón načtete tlačítkem vedle seznamu (API Hydrawise vrací názvy zkrácené na 15 znaků bez diakritiky). Jednu zónu může ovládat jen jedna nádrž.',
         relay: 'Interní číslo zóny v Hydrawise. Vyplňujte ručně jen tehdy, když se názvy zón nepodaří načíst.',
         autorefill: 'Hub sám otevře ventil, když hladina klesne pod spouštěcí hladinu. Vypnuté = dopouští se jen ručně tlačítkem „Dopustit“.',
         retention: 'Podrobná měření (každých pár minut) se po této době mažou, hodinové průměry zůstávají navždy. 0 = nemazat. Při nedostatku místa na kartě se mažou dříve.',
@@ -386,7 +391,8 @@
         function show(b, pin) {
             if (cur && cur !== b) { cur.setAttribute('aria-expanded', 'false'); cur.removeAttribute('aria-describedby'); }
             cur = b; pinned = pin;
-            pop.textContent = HELP[b.dataset.help] || b.dataset.help;
+            const key = b.dataset.help;
+            pop.textContent = (window.I18N && window.I18N.getLang() === 'en' && window.I18N.HELP_EN[key]) || HELP[key] || key;
             pop.classList.remove('hidden');
             b.setAttribute('aria-expanded', 'true');
             b.setAttribute('aria-describedby', 'helpPop');
@@ -444,6 +450,39 @@
             const t = b.dataset.themePick, prev = ME.theme;
             applyTheme(t, true);
             api('POST', '/api/me/theme', { theme: t }).catch(() => { applyTheme(prev, true); toast('Motiv se nepodařilo uložit.'); });
+        }));
+    }
+
+    function applyLang(lang, redraw) {
+        const l = lang === 'en' ? 'en' : 'cs';
+        document.querySelectorAll('#langSeg [data-lang-pick]').forEach((b) =>
+            b.setAttribute('aria-pressed', b.dataset.langPick === l ? 'true' : 'false'));
+        ME.lang = l;
+        if (window.I18N) window.I18N.setLang(l);
+        if (redraw) {
+            const nav = $('setNav');
+            if (nav) {
+                const cards = Array.from(document.querySelectorAll('#nastaveni .card[data-nav]'))
+                    .filter((c) => c.offsetParent !== null)
+                    .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
+                const btns = nav.querySelectorAll('.set-chip');
+                cards.forEach((sec, i) => {
+                    if (btns[i]) btns[i].textContent = sec.dataset.nav;
+                });
+            }
+            if (lastState) renderState(lastState);
+            if ($('dashboard').classList.contains('active')) loadAllCharts();
+        }
+    }
+    function bindLangSwitch() {
+        document.querySelectorAll('#langSeg [data-lang-pick]').forEach((b) => b.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const l = b.dataset.langPick, prev = ME.lang;
+            applyLang(l, true);
+            api('POST', '/api/me/lang', { lang: l }).catch(() => {
+                applyLang(prev, true);
+                toast(tr('Jazyk se nepodařilo uložit.'), true);
+            });
         }));
     }
 
@@ -740,6 +779,7 @@
     // Chart.js by čas dělil jako obyčejná čísla – dílky na náhodných hodinách a popisky
     // dnů s mezerami (7.10., 9.10. …).
     const MONTHS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
+    const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     function timeTicks(fromMs, toMs, maxN) {
         const H = 3600e3, D = 86400e3, span = toMs - fromMs, out = [];
         const hours = [1, 2, 3, 6, 12].find((h) => span / (h * H) <= maxN);
@@ -767,7 +807,8 @@
     }
     function tickLabel(v, unit) {
         const d = new Date(v);
-        if (unit === 'm') return d.getMonth() === 0 ? `${MONTHS[0]} ${d.getFullYear()}` : MONTHS[d.getMonth()];
+        const mList = (window.I18N && window.I18N.getLang() === 'en') ? MONTHS_EN : MONTHS;
+        if (unit === 'm') return d.getMonth() === 0 ? `${mList[0]} ${d.getFullYear()}` : mList[d.getMonth()];
         if (unit === 'h' && (d.getHours() || d.getMinutes())) return `${d.getHours()}:${pad(d.getMinutes())}`;
         return `${d.getDate()}. ${d.getMonth() + 1}.`;
     }
@@ -832,7 +873,7 @@
         (bands || []).forEach((b) => {
             if (xVal < b.start - 150e3 || xVal > b.end + 150e3) return;
             const t = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-            const what = b.kind === 'refill' ? 'Dopouštění' : 'Přítok z deště';
+            const what = b.kind === 'refill' ? tr('Dopouštění') : tr('Přítok z deště');
             out.push(`${what} ${t(b.start)}–${t(b.end)}${b.litres != null ? ` · +${num(b.litres, 0, ' L')}` : ''}`);
         });
         return out;
@@ -871,7 +912,7 @@
         const d = await getHistory(r);
         upsert('level', 'historyChart', {
             type: 'line',
-            data: { datasets: [line(T.s1, Object.assign({ label: 'Hladina (%)', data: series(d.t, d.level_pct), backgroundColor: alpha(T.s1, 0.05), fill: 'origin', borderWidth: 2.5, spanGaps: false }, lastDot(d.level_pct, T.s1)))] },
+            data: { datasets: [line(T.s1, Object.assign({ label: tr('Hladina (%)'), data: series(d.t, d.level_pct), backgroundColor: alpha(T.s1, 0.05), fill: 'origin', borderWidth: 2.5, spanGaps: false }, lastDot(d.level_pct, T.s1)))] },
             plugins: [bandsPlugin],
             options: Object.assign(baseOpts(), {
                 plugins: {
@@ -883,7 +924,7 @@
                             title: timeTooltip.callbacks.title,
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
-                                const mv = d.probe_mv && d.probe_mv[i] != null ? ` · sonda ${num(d.probe_mv[i], 1, ' mV')}` : '';
+                                const mv = d.probe_mv && d.probe_mv[i] != null ? ` · ${tr('sonda')} ${num(d.probe_mv[i], 1, ' mV')}` : '';
                                 return `${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}${mv}`;
                             },
                             footer: (items) => items.length ? bandsAt(d.bands, items[0].parsed.x) : []
@@ -924,8 +965,8 @@
             type: 'line',
             data: {
                 datasets: [
-                    line(T.s2, { label: 'Teplota (°C)', data: series(d.t, d.temp), yAxisID: 'y' }),
-                    line(T.s1, { label: 'Vlhkost (%)', data: series(d.t, d.hum), yAxisID: 'y1' })
+                    line(T.s2, { label: tr('Teplota (°C)'), data: series(d.t, d.temp), yAxisID: 'y' }),
+                    line(T.s1, { label: tr('Vlhkost (%)'), data: series(d.t, d.hum), yAxisID: 'y1' })
                 ]
             },
             options: Object.assign(baseOpts(), {
@@ -947,8 +988,8 @@
             plugins: [bootMarks],
             data: {
                 datasets: [
-                    line(T.s3, { label: 'Baterie (%)', data: series(d.t, d.bat_pct || []), spanGaps: true, yAxisID: 'y' }),
-                    line(T.s4, { label: 'Signál (%)', data: series(d.t, (d.rssi || []).map(sigPct)), borderWidth: 1.5, yAxisID: 'y' })
+                    line(T.s3, { label: tr('Baterie (%)'), data: series(d.t, d.bat_pct || []), spanGaps: true, yAxisID: 'y' }),
+                    line(T.s4, { label: tr('Signál (%)'), data: series(d.t, (d.rssi || []).map(sigPct)), borderWidth: 1.5, yAxisID: 'y' })
                 ]
             },
             options: Object.assign(baseOpts(), {
@@ -959,15 +1000,15 @@
                             title: timeTooltip.callbacks.title,
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
-                                if (ctx.datasetIndex === 1) return 'Signál ' + sigTxt(d.rssi[i]);
-                                const sag = d.sag_mv && d.sag_mv[i] ? ` (při vysílání −${num(d.sag_mv[i], 0)} mV)` : '';
-                                return `Baterie ${num(d.bat_pct[i], 0, ' %')} · ${num(d.vbat[i], 2, ' V')}${sag}`;
+                                if (ctx.datasetIndex === 1) return tr('Signál') + ' ' + sigTxt(d.rssi[i]);
+                                const sag = d.sag_mv && d.sag_mv[i] ? ` (${tr('při vysílání')} −${num(d.sag_mv[i], 0)} mV)` : '';
+                                return `${tr('Baterie')} ${num(d.bat_pct[i], 0, ' %')} · ${num(d.vbat[i], 2, ' V')}${sag}`;
                             },
                             footer: (items) => {
                                 if (!items.length) return [];
                                 const xv = items[0].parsed.x, half = Math.max(d.bucket_s || 300, 900) * 1000;
                                 return (d.boots || []).filter((b) => Math.abs(b.t - xv) <= half)
-                                    .map((b) => b.wdt ? 'Restart čidla' : 'Vložení baterie');
+                                    .map((b) => b.wdt ? tr('Restart čidla') : tr('Vložení baterie'));
                             }
                         }
                     }
@@ -1008,8 +1049,8 @@
             data: {
                 labels: dayLabels(rows),
                 datasets: [
-                    { label: 'Denní spotřeba (L)', data: rows.map((x) => x.use), backgroundColor: alpha(T.s2, 0.9) },
-                    { label: 'Přítok ze srážek (L)', data: rows.map((x) => x.rain), backgroundColor: alpha(T.s1, 0.9) }
+                    { label: tr('Denní spotřeba (L)'), data: rows.map((x) => x.use), backgroundColor: alpha(T.s2, 0.9) },
+                    { label: tr('Přítok ze srážek (L)'), data: rows.map((x) => x.rain), backgroundColor: alpha(T.s1, 0.9) }
                 ]
             },
             options: barOpts()
@@ -1020,7 +1061,7 @@
         const rows = await getFlows(rangeOf('refill'));
         upsert('refill', 'refillChart', {
             type: 'bar',
-            data: { labels: dayLabels(rows), datasets: [{ label: 'Denní dopouštění (L)', data: rows.map((x) => x.refill), backgroundColor: alpha(T.s3, 0.9) }] },
+            data: { labels: dayLabels(rows), datasets: [{ label: tr('Denní dopouštění (L)'), data: rows.map((x) => x.refill), backgroundColor: alpha(T.s3, 0.9) }] },
             options: barOpts()
         });
     }
@@ -1032,8 +1073,8 @@
             data: {
                 labels: (d.time || []).map((x) => { const p = x.split('-'); return `${+p[2]}. ${+p[1]}.`; }),
                 datasets: [
-                    { label: 'Srážky (mm)', data: d.precipitation_sum || [], backgroundColor: alpha(T.s1, 0.9), yAxisID: 'y', order: 2 },
-                    line(T.s2, { label: 'Max teplota (°C)', data: d.temperature_2m_max || [], type: 'line', yAxisID: 'y1', order: 1, pointRadius: 2.5 })
+                    { label: tr('Srážky (mm)'), data: d.precipitation_sum || [], backgroundColor: alpha(T.s1, 0.9), yAxisID: 'y', order: 2 },
+                    line(T.s2, { label: tr('Max teplota (°C)'), data: d.temperature_2m_max || [], type: 'line', yAxisID: 'y1', order: 1, pointRadius: 2.5 })
                 ]
             },
             options: {
@@ -2754,14 +2795,17 @@
     };
     const LOG = { page: 1, cat: '', items: 0 };
     const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
+    const DAYS_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     function dayTitle(ms) {
         const d = new Date(ms), today = new Date();
         const y = new Date(Date.now() - 86400e3);
         const same = (a, b) => a.toDateString() === b.toDateString();
-        if (same(d, today)) return 'Dnes';
-        if (same(d, y)) return 'Včera';
-        return `${DAYS[d.getDay()]} ${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`;
+        const isEn = window.I18N && window.I18N.getLang() === 'en';
+        if (same(d, today)) return isEn ? 'Today' : 'Dnes';
+        if (same(d, y)) return isEn ? 'Yesterday' : 'Včera';
+        const dayName = isEn ? DAYS_EN[d.getDay()] : DAYS[d.getDay()];
+        return `${dayName} ${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`;
     }
 
     function auditQuery(page) {
@@ -2803,12 +2847,13 @@
                     LOG.lastDay = day;
                 }
                 const [icon, text, sev] = ACTIONS[l.action] || ['dot', l.action, ''];
+                const actionTitle = (window.I18N && window.I18N.getLang() === 'en' && window.I18N.ACTIONS_EN[l.action]) || text;
                 const sys = !l.username || l.username.startsWith('system');
                 const row = document.createElement('div');
                 row.className = 'log-row ' + (sev ? 'sev-' + sev : '');
                 const t = new Date(ms);
                 row.innerHTML = `<span class="log-time">${pad(t.getHours())}:${pad(t.getMinutes())}</span>
-                    <span class="log-what"><span class="log-icon">${ico(icon)}</span><span class="log-title">${esc(text)}</span></span>
+                    <span class="log-what"><span class="log-icon">${ico(icon)}</span><span class="log-title">${esc(actionTitle)}</span></span>
                     <span class="log-detail">${esc(l.detail || '')}</span>
                     <span class="log-who"><span class="log-user ${sys ? 'sys' : ''}">${sys ? 'automatika' : esc(l.username)}</span>
                     ${l.ip && !sys ? `<span class="log-ip">${esc(l.ip)}</span>` : ''}</span>`;
@@ -2938,11 +2983,13 @@
 
     // ------------------------------------------------------------------ init
     async function init() {
+        applyLang(localStorage.getItem('lang') || 'cs', false);
         try {
             Object.assign(ME, await api('GET', '/api/me'));
             try { CURRENT_NODE = sessionStorage.getItem('node'); VIEW_ALL = sessionStorage.getItem('viewAll') === '1'; } catch (e) { /* ignore */ }
         } catch (e) { return; }
         applyTheme(ME.theme, false);
+        applyLang(ME.lang || localStorage.getItem('lang') || 'cs', true);
         $('userBadge').textContent = ME.username;
         $('userRole').textContent = ME.role === 'admin' ? 'Administrátor' : 'Uživatel';
         const initial = (ME.username || '?').trim().charAt(0) || '?';
@@ -2957,6 +3004,7 @@
         document.querySelectorAll('input[type="date"]').forEach(czDateInput);
         bindAccountMenu();
         bindThemeSwitch();
+        bindLangSwitch();
         bindHelpTips();
         $('diskBanner').addEventListener('click', (e) => { if (e.target.closest('.disk-jump')) { e.preventDefault(); jumpToBackup(); } });
         if (ME.role === 'admin') bindPowerMenu();
