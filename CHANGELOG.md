@@ -7,6 +7,7 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
 ### Přidáno
 - **Oponentura architektury (`docs/oponentura.md`):** posouzení architektury nad verzí 1.12.1 – silné stránky, nálezy (nejistý výsledek startu ventilu, rollback aktualizace bez vrácení DB, ztráta párování při poškozené DB, přetížená třída `Core`, překlad rozhraní) a doporučené pořadí oprav; odkaz v `README.md`.
+- **Bezpečnostní kontrola 2026-10 (`docs/bezpecnostni-kontrola-2026-10.md`):** hloubková kontrola frontendu, backendu, root pomocníků, aktualizací, firmwaru a rádiového protokolu nad verzí 1.12.1; jeden neopravený nález vysoké závažnosti v root pomocnících (detaily v soukromém advisory do vydání opravy) a doporučení ke zpevnění; odkaz v `README.md`.
 
 ### Opraveno
 - **Dokumentace:** odznak verze v `README.md` odpovídá aktuální verzi (1.12.1); `docs/architektura.md` uvádí migrace databáze v1–v13 (motiv a jazyk u účtu v tabulce `users`) a mezi soubory webu `js/i18n.js` a `js/theme.js`.
