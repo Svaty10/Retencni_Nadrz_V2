@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.13.0-2b6cb0)
+![verze](https://img.shields.io/badge/verze-1.13.1-2b6cb0)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -42,7 +42,7 @@ flowchart LR
 - **Čidlo patří svému hubu** – cizí hub ho nepřevezme; odpárovat jde jen z hubu + vložením baterie.
 
 **Hub a web**
-- Více nádrží na jeden hub (až 16), přehled **Všechna čidla** i detail každé nádrže.
+- Více nádrží na jeden hub (až 16), přehled **Všechny nádrže** i detail každé nádrže.
 - Grafy kreslí prohlížeč: hladina s vyznačeným **dopouštěním** a **přítokem z deště** (jemně podbarvené
   úseky, v tooltipu litry), spotřeba, dopouštění, klima, počasí, baterie a signál (s vyznačenou výměnou
   baterie); rozsah 24 h / 7 dní / 30 dní / rok nebo vlastní od–do.

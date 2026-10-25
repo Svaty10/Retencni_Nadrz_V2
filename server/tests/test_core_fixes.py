@@ -16,6 +16,7 @@ from retencka import core as core_mod, crypto, model  # noqa: E402
 from retencka.__main__ import open_database  # noqa: E402
 from retencka.core import Core  # noqa: E402
 from retencka.db import Database, SchemaTooNewError  # noqa: E402
+from retencka.external import Hydrawise  # noqa: E402
 from retencka.settings import Settings, SettingsError, NODE_SCHEMA, coerce  # noqa: E402
 
 
@@ -301,7 +302,7 @@ class RefillStopRetryTest(RefillBase):
         async def fake_call(key, relay, action, seconds=0):
             calls.append(action)
             if action == "run":
-                return False, "timeout"
+                return False, Hydrawise.UNSURE
             if action == "stop":
                 return stop_results.pop(0) if stop_results else (True, "OK")
             return True, "OK"
@@ -317,6 +318,39 @@ class RefillStopRetryTest(RefillBase):
         self.assertEqual(calls, ["run", "stop", "stop"])
         self.assertNotIn(0x5555, self.core.refills)
         self.assertIsNotNone(self.row(rid)["end_ts"])
+
+    def test_refused_start_sends_no_stop_and_records_nothing(self):
+        calls = []
+
+        async def fake_call(key, relay, action, seconds=0):
+            calls.append(action)
+            return (False, "Hydrawise odpověděl chybou (HTTP 401).") if action == "run" else (True, "OK")
+
+        self.core.hydrawise.call = fake_call
+        ok, _ = self.run_(self.core.refill_start(0x5555, 50, "manual", "a"))
+        self.assertFalse(ok)
+        self.assertEqual(calls, ["run"])                 # a schedule run in the zone is left alone
+        self.assertNotIn(0x5555, self.core.refills)
+        self.assertEqual(self.core.db.scalar("SELECT COUNT(*) FROM refills"), 0)
+
+    def test_hydrawise_unanswered_attempt_makes_the_result_unsure(self):
+        answers = [TimeoutError(), (500, "x"), (500, "x")]
+
+        class FakeHttp:
+            async def get(self, url, params):
+                a = answers.pop(0)
+                if isinstance(a, Exception):
+                    raise a
+                return a
+
+        async def no_sleep(_):
+            pass
+
+        with mock.patch.object(asyncio, "sleep", no_sleep):
+            self.assertEqual(self.run_(Hydrawise(FakeHttp()).call("k", "1", "run", 60)), (False, Hydrawise.UNSURE))
+            answers[:] = [(500, "x")] * 3
+            ok, msg = self.run_(Hydrawise(FakeHttp()).call("k", "1", "run", 60))
+            self.assertNotEqual(msg, Hydrawise.UNSURE)
 
 
 class RefillFaultTest(RefillBase):

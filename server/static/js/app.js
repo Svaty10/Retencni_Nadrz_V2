@@ -25,6 +25,9 @@
         }[c]));
     }
 
+    // user-entered text (tank names): never run through the Czech -> English dictionary
+    const nm = (s) => `<span translate="no">${esc(s)}</span>`;
+
     function num(v, digits, unit) {
         if (v === null || v === undefined || Number.isNaN(v)) return '–';
         const loc = (window.I18N && window.I18N.getLang() === 'en') ? 'en-US' : 'cs-CZ';
@@ -1255,7 +1258,7 @@
             const b = n.battery || {};
             const st = { online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status;
             c.innerHTML = `<div class="ov-tank"><div class="water-level"></div></div>
-                <div class="ov-body"><h4><span class="dot ${esc(n.status)}"></span>${esc(n.name)}</h4>
+                <div class="ov-body"><h4><span class="dot ${esc(n.status)}"></span>${nm(n.name)}</h4>
                 <div class="big">${num(n.level_pct, 0, ' %')}</div>
                 <div class="meta">${num(n.volume_l, 0, ' L')}${n.max_l ? ' z ' + num(n.max_l, 0, ' L') : ''}<br>
                 <span class="${n.status === 'online' ? '' : n.status === 'stale' ? 'warn' : 'bad'}">${esc(st)}</span>${n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}<br>
@@ -1305,7 +1308,7 @@
             b.className = 'node-pill' + (n.id === CURRENT_NODE && !allActive ? ' active' : '');
             b.setAttribute('role', 'tab');
             b.setAttribute('aria-selected', n.id === CURRENT_NODE && !allActive ? 'true' : 'false');
-            b.innerHTML = `<span class="dot ${esc(n.status)}"></span>${esc(n.name)} <span class="pct">${num(n.level_pct, 0, ' %')}</span>`;
+            b.innerHTML = `<span class="dot ${esc(n.status)}"></span>${nm(n.name)} <span class="pct">${num(n.level_pct, 0, ' %')}</span>`;
             b.addEventListener('click', async () => {
                 if ($('nastaveni').classList.contains('active') && n.id !== CURRENT_NODE && !(await confirmDiscardCalChanges())) return;
                 const wasAll = VIEW_ALL;
@@ -1378,7 +1381,7 @@
         }, 'all');
 
         nodes.forEach((n) => {
-            tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, SET_SCOPE === 'tank' && n.id === CURRENT_NODE, async () => {
+            tab(`<span class="dot ${esc(n.status)}"></span>${nm(n.name)}`, SET_SCOPE === 'tank' && n.id === CURRENT_NODE, async () => {
                 if (SET_SCOPE === 'tank' && n.id !== CURRENT_NODE && !(await confirmDiscardCalChanges())) return;
                 if (n.id !== CURRENT_NODE) selectNode(n.id);
                 setSettingsScope('tank');
@@ -2311,7 +2314,7 @@
             const tr = document.createElement('tr');
             const st = n.unpairing ? 'odpárování – vyjměte a vložte baterii'
                 : ({ online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status);
-            tr.innerHTML = `<td><strong>${esc(n.name)}</strong>${n.refill_configured ? `<span title="Ovládá dopouštění">${ico('drop', 'ico-sm')}</span>` : ''}${n.paired ? `<span title="Spárováno">${ico('lock', 'ico-sm')}</span>` : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
+            tr.innerHTML = `<td><strong>${nm(n.name)}</strong>${n.refill_configured ? `<span title="Ovládá dopouštění">${ico('drop', 'ico-sm')}</span>` : ''}${n.paired ? `<span title="Spárováno">${ico('lock', 'ico-sm')}</span>` : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
                 <td>${esc(st)}${!n.unpairing && n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${sigTxt(n.rssi)}</td>
                 <td>${num(n.battery && n.battery.percent, 0, ' %')}</td><td class="td-actions"></td>`;
             const btn = (label, cls, fn) => {
@@ -2389,7 +2392,7 @@
             // PAIR_ACK sent, the first data did not arrive yet: accepted for up to 24 h
             const tr = document.createElement('tr');
             const multiKey = p.pub_count > 1 ? ` <span class="bad-text">· pozor: ${esc(p.pub_count)} klíče!</span>` : '';
-            tr.innerHTML = `<td><code>${esc(p.id)}</code> ${esc(p.name || '')}</td><td>${sigTxt(p.rssi)}</td><td>–</td>
+            tr.innerHTML = `<td><code>${esc(p.id)}</code> ${nm(p.name || '')}</td><td>${sigTxt(p.rssi)}</td><td>–</td>
                 <td>čekám na první data (${Math.max(1, Math.ceil(p.expires_in / 3600))} h)${multiKey}</td><td class="td-actions"></td>`;
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = 'Zrušit';
@@ -2400,7 +2403,7 @@
         targets.filter((t) => !pr.some((q) => q.id === t.id)).forEach((t) => {
             const tr = document.createElement('tr');
             const multiKey = t.pub_count > 1 ? ` <span class="bad-text">· pozor: ${esc(t.pub_count)} klíče!</span>` : '';
-            tr.innerHTML = `<td><code>${esc(t.id)}</code> ${esc(t.name || '')}</td><td>${sigTxt(t.rssi)}</td><td>–</td>
+            tr.innerHTML = `<td><code>${esc(t.id)}</code> ${nm(t.name || '')}</td><td>${sigTxt(t.rssi)}</td><td>–</td>
                 <td>čekám (${Math.ceil(t.expires_in / 60)} min)${multiKey}</td><td class="td-actions"></td>`;
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = 'Zrušit';

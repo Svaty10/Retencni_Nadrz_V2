@@ -1037,6 +1037,7 @@
         if (!node || node.nodeType !== 3) return;
         const parent = node.parentNode;
         if (parent && (parent.nodeName === 'SCRIPT' || parent.nodeName === 'STYLE')) return;
+        if (parent && parent.closest && parent.closest('[translate="no"]')) return;   // user text (tank names)
         const val = node.nodeValue;
         if (!val || !val.trim()) return;
         let rec = textMap.get(node);

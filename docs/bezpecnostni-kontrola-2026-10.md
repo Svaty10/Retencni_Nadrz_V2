@@ -18,18 +18,20 @@ závody se nehlásí.
 
 | # | Závažnost | Kde | Problém | Stav |
 |---|---|---|---|---|
-| 1 | **vysoká** | root pomocníci (`system/bin/`) | kompromitovaná aplikace může získat práva roota – detaily v soukromém advisory `GHSA-pc46-j66c-c3w2` | **opraveno** (`1.12.2`) |
+| 1 | **vysoká** | root pomocníci (`system/bin/`) | kompromitovaná aplikace může získat práva roota – detaily v soukromém advisory `GHSA-pc46-j66c-c3w2` | **opraveno** (`1.13.1`) |
 
 ### 1. Eskalace z aplikace na roota v root pomocnících
 
 - **Kategorie:** eskalace oprávnění
 - **Jistota:** 9/10
-- **Stav:** opraveno ve verzi 1.12.2 (`GHSA-pc46-j66c-c3w2`). Root pomocníci (`retencka-control.py`,
+- **Stav:** opraveno ve verzi 1.13.1 (`GHSA-pc46-j66c-c3w2`). Root pomocníci (`retencka-control.py`,
   `retencka-update.py`, `retencka-identity.sh`) nastavují práva a vlastníka souborů výhradně přes
   otevřený deskriptor (`os.fchmod`, `os.fchown`, `install -d -m 750 -o retencka -g retencka`), nikdy
   přes cestu v adresáři `data/` vlastněném aplikací; před atomickým nahrazením se podstrčený adresář
-  smaže (`rmtree`) a systemd služby dostaly sandboxing (`ProtectSystem=strict`, `NoNewPrivileges=yes`,
-  `PrivateTmp=yes`). Testováno v `test_root_helpers`.
+  smaže (`rmtree`). Druhá vrstva obrany: `retencka-update.service` má sandboxing (`ProtectSystem=strict`
+  s minimálními `ReadWritePaths`, `NoNewPrivileges=yes`, `PrivateTmp=yes`); `retencka-control.service`
+  jen omezení, která nebrání instalaci NetBirdu přes `apt`/`dpkg` (`NoNewPrivileges=yes`, `PrivateTmp=yes`,
+  `ProtectKernel*`) – `ProtectSystem=strict` by ji rozbil. Testováno v `test_root_helpers`.
 - **Předpoklad útoku:** kompromitovaná aplikace (útočník d) – sama o sobě nezpřístupňuje hub zvenčí.
 
 ## Pod prahem – ke zvážení jako zpevnění

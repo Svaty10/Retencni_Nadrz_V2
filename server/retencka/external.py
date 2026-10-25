@@ -146,6 +146,9 @@ def _local_date(epoch: float, utc_offset_s: int) -> str:
 
 class Hydrawise:
     URL = "https://api.hydrawise.com/api/v1/setzone.php"
+    # a request failed without an answer (timeout, dropped connection): it may still have
+    # reached Hydrawise, so a "run" may have opened the valve
+    UNSURE = "Hydrawise není dostupný."
 
     def __init__(self, http: Http):
         self.http = http
@@ -157,6 +160,7 @@ class Hydrawise:
         if action == "run":
             params["custom"] = int(seconds)
             params["period_id"] = 999
+        unsure = False
         for attempt in range(3):
             try:
                 status, text = await self.http.get(self.URL, params)
@@ -168,9 +172,10 @@ class Hydrawise:
                 msg = f"Hydrawise odpověděl chybou (HTTP {status})."
             except Exception as e:
                 log.warning("Hydrawise %s failed: %s", action, e)
-                msg = "Hydrawise není dostupný."
+                unsure = True
+                msg = self.UNSURE
             await asyncio.sleep(2 * (attempt + 1))
-        return False, msg
+        return False, (self.UNSURE if unsure else msg)
 
 
 class HydrawiseAccount:
