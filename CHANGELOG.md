@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.15.1] - 2026-10-25
+
+### Změněno
+- Když voda neteče, je hladina v nádrži rovná čára (dřív zůstala stojící vlnka).
+
 ## [1.15.0] - 2026-10-25
 
 ### Změněno
