@@ -517,10 +517,9 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .span-2 { grid-column: span 2; }
 .chart-container { position: relative; height: 260px; width: 100%; }
 .chart-container.chart-tall { height: clamp(300px, 45vh, 560px); }
-/* Graf hladiny v pravém sloupci vedle nádrže: dorovná výšku karty nádrže */
+/* Graf hladiny v pravém sloupci vedle nádrže (stejně vysoký jako ostatní grafy) */
 .dash-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .level-card { flex: 1; display: flex; flex-direction: column; }
-.chart-container.chart-fill { flex: 1; height: auto; min-height: 320px; }
 .chart-legend-extra { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .chart-legend-extra span { display: inline-flex; align-items: center; gap: 6px; }
 .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
@@ -925,7 +924,6 @@ body.no-refill .refill-only { display: none !important; }
 }
 @media (max-width: 960px) {
     .dash-top { grid-template-columns: minmax(0, 1fr); }
-    .chart-container.chart-fill { flex: none; height: clamp(300px, 45vh, 560px); }
     .live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -962,7 +960,6 @@ body.no-refill .refill-only { display: none !important; }
     .fact-group:nth-child(n+2) { border-top: 1px solid var(--line); }
     .chart-container { height: 220px; }
     .chart-container.chart-tall { height: 260px; }
-    .chart-container.chart-fill { min-height: 280px; height: 280px; }
     .span-2 { grid-column: auto; }
     .tank-meta { padding-top: 12px; gap: 8px; grid-template-columns: minmax(0, 1fr); }
     .level-litres { font-size: 16px; }
@@ -1117,7 +1114,7 @@ body.modal-open { overflow: hidden; }
 .modal-backdrop.busy .modal-prefs { display: none; }
 
 /* --- Nastavení: přepínač Všechny nádrže / nádrž, sloupce se zarovnanými spodky ---- */
-.set-layout { display: grid; grid-template-columns: 220px minmax(0, 960px); gap: 32px; align-items: start; }
+.set-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: start; }
 .set-cols { display: block; }
 .set-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 /* nadpis skupiny karet: výrazná předěl mezi oblastmi nastavení */
@@ -1148,7 +1145,6 @@ body.modal-open { overflow: hidden; }
 .tg-state .status-pill.stale::before { background: var(--amber); }
 .tg-state .status-pill.offline::before { background: var(--red); }
 .tg-state .status-pill.offline { color: var(--red); }
-#nastaveni .page-head { max-width: 1212px; }
 .setup-box { padding: 12px 14px; margin: 8px 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
 .setup-steps { margin: 0 0 12px; padding-left: 20px; font-size: 14px; }
 .setup-steps li { margin: 3px 0; }
