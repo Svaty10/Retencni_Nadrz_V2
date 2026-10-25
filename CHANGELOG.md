@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.14.6] - 2026-10-25
+
+### Změněno
+- **Můj účet přes celou šířku:** karty Telegram a Změna hesla jsou vedle sebe přes celou stránku (dřív nejvýš 1100 px a bez Telegramu jen levá půlka); na širší kartě jsou tři pole hesla vedle sebe.
+
 ## [1.14.5] - 2026-10-25
 
 ### Změněno
