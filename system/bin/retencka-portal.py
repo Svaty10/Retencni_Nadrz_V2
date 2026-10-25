@@ -155,7 +155,8 @@ class Handler(BaseHTTPRequestHandler):
         data = parse_qs(self.rfile.read(n).decode("utf-8", "replace"))
         ssid = (data.get("ssid_manual", [""])[0] or data.get("ssid", [""])[0]).strip()
         psk = data.get("psk", [""])[0]
-        if not 1 <= len(ssid.encode()) <= 32 or (psk and not 8 <= len(psk) <= 63) \
+        if not 1 <= len(ssid.encode()) <= 32 or ssid.startswith("-") \
+                or (psk and not 8 <= len(psk) <= 63) \
                 or any(ord(c) < 32 for c in ssid + psk):
             with open(os.path.join(RUN, "wifi-result"), "w") as f:
                 f.write("error:Neplatný název sítě nebo heslo (heslo má 8–63 znaků).")

@@ -366,18 +366,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .gs.g0 { bottom: 0; } .gs.g25 { bottom: 25%; } .gs.g50 { bottom: 50%; }
 .gs.g75 { bottom: 75%; } .gs.g100 { bottom: 100%; }
 .wave { position: absolute; left: 0; right: 0; bottom: 100%; height: 7px; overflow: hidden; pointer-events: none; }
-.wave svg { position: absolute; left: 0; bottom: -1px; width: 200%; height: 100%; animation: wave-slide 6s linear infinite; }
-.wave .wave-b { animation-duration: 9s; animation-direction: reverse; }
+.wave svg { position: absolute; left: 0; bottom: -1px; width: 200%; height: 100%; animation: wave-slide 3s linear infinite; }
+.wave .wave-b { animation-duration: 4.5s; animation-direction: reverse; }
 .wave-fill { fill: var(--water); }
 .wave-b .wave-fill { fill: var(--accent); opacity: 0.2; }
 .wave-line { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 @keyframes wave-slide { to { transform: translateX(-50%); } }
 .gauge.empty .wave { display: none; }
-/* omezené animace (např. Windows „Efekty animace“ vypnuté): vlnka jen pomalu plyne, nezastaví se */
-@media (prefers-reduced-motion: reduce) {
-    .wave svg { animation: wave-slide 18s linear infinite !important; }
-    .wave .wave-b { animation: wave-slide 27s linear infinite reverse !important; }
-}
 .gauge-tick { position: absolute; right: 0; width: 10px; height: 1px; background: var(--line-strong); }
 .gauge-tick.t25 { bottom: 25%; }
 .gauge-tick.t50 { bottom: 50%; width: 16px; }
@@ -389,7 +384,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .refill-title { font-size: 15px; }
 .refill-block.ok .refill-state .ico, .refill-block.ok .refill-title strong { color: var(--green); }
 .refill-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.refill-input { width: 160px; }
 
 /* Doplňkové hodnoty */
 .facts-card {
@@ -844,7 +838,6 @@ body.no-refill .refill-only { display: none !important; }
     .gauge { width: 44px; min-height: 160px; }
     .tank-main { gap: 16px; }
     .refill-actions > * { flex: 1 1 auto; }
-    .refill-input { width: 100%; flex-basis: 100%; }
 
     .facts-card { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     .chart-container { height: 220px; }

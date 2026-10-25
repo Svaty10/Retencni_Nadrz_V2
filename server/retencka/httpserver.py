@@ -32,6 +32,7 @@ HEADER_TIMEOUT = 15.0
 BODY_TIMEOUT = 20.0
 KEEPALIVE_TIMEOUT = 30.0
 MAX_CONNECTIONS = 64
+MAX_PER_IP_CONNECTIONS = 24
 _TOKEN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 
 
@@ -324,6 +325,7 @@ class Server:
     def __init__(self, app: Application):
         self.app = app
         self.connections = 0
+        self._ip_conns: dict[str, int] = {}
         self._server: Optional[asyncio.base_events.Server] = None
 
     async def start(self, host: str, port: int, backlog: int = 32) -> None:
@@ -336,12 +338,15 @@ class Server:
             await self._server.wait_closed()
 
     async def _client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        if self.connections >= MAX_CONNECTIONS:
+        peer = writer.get_extra_info("peername")
+        remote = peer[0] if isinstance(peer, tuple) else ""
+        ip_cnt = self._ip_conns.get(remote, 0)
+        if self.connections >= MAX_CONNECTIONS or (remote and ip_cnt >= MAX_PER_IP_CONNECTIONS):
             writer.close()
             return
         self.connections += 1
-        peer = writer.get_extra_info("peername")
-        remote = peer[0] if isinstance(peer, tuple) else ""
+        if remote:
+            self._ip_conns[remote] = ip_cnt + 1
         try:
             first = True
             while True:
@@ -355,6 +360,12 @@ class Server:
             log.exception("connection handler crashed")
         finally:
             self.connections -= 1
+            if remote:
+                left = self._ip_conns.get(remote, 1) - 1
+                if left > 0:
+                    self._ip_conns[remote] = left
+                else:
+                    self._ip_conns.pop(remote, None)
             try:
                 writer.close()
                 await asyncio.wait_for(writer.wait_closed(), 2)
@@ -395,7 +406,10 @@ class Server:
                     return await self._send_error(writer, 431)
                 if name.lower() in headers and name.lower() in ("content-length", "host"):
                     raise ValueError            # duplicated critical header
-                headers[name] = value.strip()
+                if name.lower() == "cookie" and "cookie" in headers:
+                    headers[name] = headers[name] + "; " + value.strip()
+                else:
+                    headers[name] = value.strip()
         except ValueError:
             return await self._send_error(writer, 400)
 

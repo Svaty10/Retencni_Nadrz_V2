@@ -1124,7 +1124,6 @@
         $('refillTitle').classList.toggle('hidden', !hasValve);
         $('refillActions').classList.toggle('hidden', !(ME.role === 'admin' && hasValve));
         $('refillResumeBtn').classList.toggle('hidden', !rf.auto_paused_until);
-        $('manualPctInput').max = rf.max_pct || 100;
         runRefillTimer();
 
         // výstrahy
@@ -1339,14 +1338,13 @@
             const rf = (lastState && lastState.refill) || {};
             const maxPct = rf.max_pct || 100;
             const cur = lastState ? lastState.water_level_percent : null;
-            const typed = parseFloat(String($('manualPctInput').value).replace(',', '.'));
             let msg = null;
             const r = await formDialog({
                 title: 'Dopustit z řadu',
                 body: [`Současná hladina: ${num(cur, 1, ' %')}${lastState && lastState.volume_liters != null ? ' (' + num(lastState.volume_liters, 0, ' L') + ')' : ''}.`,
                     'Ventil se otevře a po dosažení cílové hladiny se zase zavře.'],
                 fields: [{ name: 'target', type: 'number', label: 'Cílová hladina', unit: '%', min: 1, max: maxPct, step: 1,
-                    value: typed > 0 ? typed : Math.round(maxPct), hint: `Nejvýš lze dopustit na ${num(maxPct, 0, ' %')}.` }],
+                    value: '', hint: `Nejvýš lze dopustit na ${num(maxPct, 0, ' %')}.` }],
                 validate: (v) => {
                     const t = parseFloat(String(v.target).replace(',', '.'));
                     if (!(t > 0)) return { field: 'target', message: 'Zadejte platné procento cílové hladiny.' };
@@ -1361,7 +1359,6 @@
                 confirm: 'Dopustit'
             });
             if (!r) return;
-            $('manualPctInput').value = r.target;
             toast(msg || 'Dopouštění spuštěno.');
             pollState();
         });

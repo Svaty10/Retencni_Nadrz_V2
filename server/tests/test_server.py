@@ -650,6 +650,10 @@ class ServerTest(unittest.TestCase):
         many = "&".join(f"a{i}=1" for i in range(80))
         out = self.raw(f"GET /api/auth/mode?{many} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
         self.assertTrue(out.startswith(b"HTTP/1.1 400"), out[:40])
+        # multiple Cookie headers are merged (RFC 6265 §5.4)
+        h = self.login()
+        out = self.raw(f"GET /api/me HTTP/1.1\r\nHost: x\r\nCookie: other=1\r\nCookie: {h['Cookie']}\r\n\r\n".encode())
+        self.assertTrue(out.startswith(b"HTTP/1.1 200"), out[:40])
 
     def test_5_ha_token_non_ascii(self):
         out = self.raw("GET /api/v1/water/state HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer héslo\r\n\r\n".encode("latin-1"),

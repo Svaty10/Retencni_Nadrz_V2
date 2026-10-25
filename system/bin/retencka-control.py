@@ -214,7 +214,7 @@ def main() -> None:
         log("power-off requested from the hub")
         subprocess.run(["systemctl", "poweroff"], check=False)
         return
-    if (DATA / "control-reboot").exists():
+    if (DATA / "control-reboot").exists() or (DATA / "control-reboot").is_symlink():
         (DATA / "control-reboot").unlink(missing_ok=True)
         log("reboot requested from the hub")
         subprocess.run(["systemctl", "reboot"], check=False)

@@ -106,6 +106,26 @@ class PairingTest(Base):
         n.send(ctr=1025)
         self.assertEqual(self.core.db.scalar("SELECT COUNT(*) FROM measurements"), 2)
 
+    def test_huge_counter_jump_needs_confirmation(self):
+        self.core.start_pairing(0x1234, "Nádrž", "admin")
+        n = Node(self.core, 0x1234)
+        self.assertEqual(n.try_pair(), "paired")
+        n.send(ctr=1)
+        # single 1:2^32 MAC collision with a huge counter must not lock out the real sensor
+        n.send(ctr=0xFFFFFFFF)
+        self.assertEqual(self.core.db.scalar("SELECT COUNT(*) FROM measurements"), 1)
+        self.assertEqual(self.core._last_ctr[0x1234], 1)
+        n.send(ctr=2)
+        self.assertEqual(self.core.db.scalar("SELECT COUNT(*) FROM measurements"), 2)
+        self.assertEqual(self.core._last_ctr[0x1234], 2)
+        # real sensor returning after years offline resynchronizes on its second frame
+        n.send(ctr=500000)
+        n.send(ctr=500000)                           # duplicate of the same frame is not confirmation
+        self.assertEqual(self.core._last_ctr[0x1234], 2)
+        n.send(ctr=500001)
+        self.assertEqual(self.core._last_ctr[0x1234], 500001)
+        self.assertEqual(self.core.db.scalar("SELECT COUNT(*) FROM measurements"), 3)
+
     def test_pending_key_expires(self):
         self.core.start_pairing(0x1234, "Nádrž", "admin")
         n = Node(self.core, 0x1234)

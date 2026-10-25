@@ -53,6 +53,7 @@ ARCHIVE_SEEN_WRITE_S = 600        # node_key_archive.seen_at is refreshed at mos
 # (lost UNPAIR) meanwhile. The dropped key is archived, so even a forged confirmation
 # never strands the sensor (re-pair from the archive).
 UNPAIR_SETTLE_S = 20              # no paired request for this long after it -> key deleted
+CTR_MAX_STEP = 4096               # jump > 4x CTR_RESERVE needs a 2nd frame to rule out a 1:2^32 MAC hit
 STOP_RETRY_MARGIN_S = 60          # refill row closed this long after the planned end at latest
 LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
 BACKUP_KEEP = 7                   # nightly local backups kept
@@ -115,6 +116,7 @@ class Core:
         self._unpair_confirm: dict[int, float] = {}  # node_id -> unpaired request after UNPAIR
         self._unpair_rot: dict[int, int] = {}      # node_id -> next UNPAIR key candidate
         self._last_ctr: dict[int, int] = {}
+        self._jump_ctr: dict[int, int] = {}        # node_id -> unconfirmed large counter jump
         self._bad_cal_logged: set[int] = set()
         self._tasks: set[asyncio.Task] = set()     # fire-and-forget tasks (keep a reference)
 
@@ -710,6 +712,12 @@ class Core:
             if self.radio:
                 self.radio.replays += 1
             return                                  # replay
+        if last_ctr >= 0 and ctr - last_ctr > CTR_MAX_STEP:
+            cand = self._jump_ctr.get(nid)
+            if cand is None or not (0 < ctr - cand <= CTR_MAX_STEP):
+                self._jump_ctr[nid] = ctr
+                return                              # huge jump: wait for the next frame (rules out a 1:2^32 MAC hit)
+        self._jump_ctr.pop(nid, None)
         self._last_ctr[nid] = ctr
         self._save_ctr(nid, ctr)
         flags, vbat, temp, hum, probe, fw, diag, sag = fields
@@ -746,6 +754,7 @@ class Core:
         self.db.execute("DELETE FROM node_key_archive WHERE node_id=?", (nid,))
         self._reload_archive()
         self._last_ctr[nid] = -1                    # new key: the counter starts over
+        self._jump_ctr.pop(nid, None)
         self._save_ctr(nid, None)
         if nid in self.heard:
             self.heard[nid].pop("key_match", None)
@@ -835,6 +844,7 @@ class Core:
         self.last.pop(nid, None)
         self.filters.pop(nid, None)
         self._last_ctr.pop(nid, None)
+        self._jump_ctr.pop(nid, None)
         self.invalidate()
         self.audit(action, detail + "; naměřená data zůstávají", user, ip)
         log.info("Node %04X removed (%s)", nid, action)

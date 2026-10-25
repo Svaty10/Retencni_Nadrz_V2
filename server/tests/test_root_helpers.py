@@ -154,6 +154,20 @@ class ControlHelper(unittest.TestCase):
         ctl.WANT.mkdir()
         self.assertEqual(ctl.wanted(), {"mode": "off"})
 
+    def test_reboot_dangling_symlink_is_unlinked(self):
+        if not _symlinks_ok(self.tmp.name):
+            self.skipTest("symlinks not available")
+        os.symlink(os.path.join(self.tmp.name, "missing"), ctl.DATA / "control-reboot")
+        ran = []
+        orig = ctl.subprocess.run
+        ctl.subprocess.run = lambda argv, **kw: ran.append(argv)
+        try:
+            ctl.main()
+        finally:
+            ctl.subprocess.run = orig
+        self.assertEqual(ran, [["systemctl", "reboot"]])
+        self.assertFalse(os.path.lexists(ctl.DATA / "control-reboot"))
+
 
 if __name__ == "__main__":
     unittest.main()
