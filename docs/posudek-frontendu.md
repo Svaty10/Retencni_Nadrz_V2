@@ -31,19 +31,22 @@ nápověda „?“. Slabší místa jsou v pojmenování, ve stavu, kdy čidlo n
 
 ## Nálezy
 
-| # | Dopad | Oblast | Kde |
-|---|---|---|---|
-| 1 | vysoký | zastaralá data vypadají jako aktuální | `js/app.js` `renderState` |
-| 2 | střední | „Zastavit / zrušit“ je vidět, i když nic neběží | `index.html` `refillStopBtn`, `js/app.js` `renderState`, `bindRefill` |
-| 3 | střední | míchání pojmů „nádrž“ a „čidlo“ | `js/app.js` `renderNodeBar`, `renderSettingsBar`, `index.html` |
-| 4 | střední | názvy z vývojářského slovníku | `index.html` (navigace, menu účtu) |
-| 5 | střední | nastavení nádrže může tiše zahodit rozpracované změny | `index.html` `calForm`, `js/app.js` `applyNode` |
-| 6 | nízký–střední | mobil: hlavní navigace je oříznutá | `css/style.css` (`.main-nav`, `.node-bar`) |
-| 7 | nízký | drobnosti v obsahu | `index.html`, `js/app.js` |
+| # | Dopad | Oblast | Kde | Stav |
+|---|---|---|---|---|
+| 1 | vysoký | zastaralá data vypadají jako aktuální | `js/app.js` `renderState` | **opraveno** (1.12.2) |
+| 2 | střední | „Zastavit / zrušit“ je vidět, i když nic neběží | `index.html` `refillStopBtn`, `js/app.js` `renderState`, `bindRefill` | **opraveno** (1.12.2) |
+| 3 | střední | míchání pojmů „nádrž“ a „čidlo“ | `js/app.js` `renderNodeBar`, `renderSettingsBar`, `index.html` | **opraveno** (1.12.2) |
+| 4 | střední | názvy z vývojářského slovníku | `index.html` (navigace, menu účtu) | **opraveno** (1.12.2) |
+| 5 | střední | nastavení nádrže může tiše zahodit rozpracované změny | `index.html` `calForm`, `js/app.js` `applyNode` | **opraveno** (1.12.2) |
+| 6 | nízký–střední | mobil: hlavní navigace je oříznutá | `css/style.css` (`.main-nav`, `.node-bar`) | **opraveno** (1.12.2) |
+| 7 | nízký | drobnosti v obsahu | `index.html`, `js/app.js` | **opraveno** (1.12.2) |
 
 ### 1. Zastaralá data vypadají jako aktuální
 
-Když čidlo přestane vysílat, velké „72,4 %“ zůstane stejně výrazné a stav prozradí jen malý štítek
+- **Stav:** opraveno ve verzi 1.12.2 (`js/app.js`).
+- **Řešení:** při stavu `stale` nebo `offline` je hodnota procent i grafická hladina v měrce vizuálně ztlumena (šedý odstín `level-stale`) a přímo vedle procent se zobrazuje štítek s informací o stáří dat (např. „naposledy před 3 h“).
+
+Když čidlo přestane vysílat, velké „72,4 %“ dříve zůstávalo stejně výrazné a stav prozradí jen malý štítek
 „Offline“ nahoře a banner. Kdo se podívá jen na číslo, uvěří mu. `renderState` pro velké číslo ani
 měrku žádný „stale“ vzhled nemá.
 
@@ -52,7 +55,10 @@ u čísla).
 
 ### 2. „Zastavit / zrušit“ je vidět, i když nic neběží
 
-Červené tlačítko je trvale vedle „Dopustit“; v `renderState` se přepíná jen viditelnost „Obnovit
+- **Stav:** opraveno ve verzi 1.12.2 (`index.html`, `js/app.js`).
+- **Řešení:** červené tlačítko pro zastavení/zrušení se dynamicky zobrazuje pouze ve stavech Dopouští, Čeká na měření nebo Čeká na déšť. Potvrzovací dialog navíc uvádí přesný čas pozastavení automatiky („automatika se pozastaví do zítřka HH:MM“).
+
+Červené tlačítko bylo dříve trvale vedle „Dopustit“; v `renderState` se přepíná jen viditelnost „Obnovit
 automatiku“. Uživatel nevidí, co by zastavoval. Potvrzovací dialog navíc říká, že se automatika
 „*může* na čas pozastavit“ – ve skutečnosti se po zrušení automatického dopouštění pozastaví na 24 h
 (`AUTO_CANCEL_S` v `server/retencka/core.py`).
@@ -62,7 +68,10 @@ konkrétně „automatika se pozastaví do zítřka HH:MM“.
 
 ### 3. Míchání pojmů „nádrž“ a „čidlo“
 
-Uživatel myslí v nádržích, čidlo je technický detail. Rozhraní ale pojmy střídá:
+- **Stav:** opraveno ve verzi 1.12.2 (`index.html`, `js/app.js`).
+- **Řešení:** rozhraní důsledně používá pojem „nádrž“ v navigaci a přehledu („Všechny nádrže“, „Nádrž:“), zatímco označení „čidlo“ je vyhrazeno pro fyzický hardware (párování, baterie, signál).
+
+Uživatel myslí v nádržích, čidlo je technický detail. Rozhraní dříve pojmy střídalo:
 
 - záložka „Všechna čidla“ otevírá graf „Hladina všech nádrží“,
 - ve starším screenshotu je tatáž záložka „Všechny nádrže“,
@@ -73,12 +82,18 @@ Uživatel myslí v nádržích, čidlo je technický detail. Rozhraní ale pojmy
 
 ### 4. Názvy z vývojářského slovníku
 
+- **Stav:** opraveno ve verzi 1.12.2 (`index.html`, `js/app.js`).
+- **Řešení:** „Dashboard“ nahrazeno za „Přehled“, „Logování“ za „Historie událostí“, stav spojení indikuje „Čidlo: online / offline“ a při výpadku spojení s hubem se zobrazuje „Hub odpojen“.
+
 - „Dashboard“ (anglicky v české aplikaci) → „Přehled“.
 - „Logování“ → „Historie událostí“ nebo „Záznamy“ (karta se stejně jmenuje „Záznamy“).
 - „Online“ vedle názvu aplikace – není jasné, co je online (hub, nebo čidlo). Lépe „Čidlo: online“,
   případně „Hub odpojen“ místo „Server nedostupný“.
 
 ### 5. Nastavení nádrže může tiše zahodit rozpracované změny
+
+- **Stav:** opraveno ve verzi 1.12.2 (`index.html`, `js/app.js`).
+- **Řešení:** do horní lišty nastavení nádrže přidáno tlačítko „Uložit změny“ (`#calSaveTop`), které se zvýrazní při jakékoli úpravě polí formuláře `calForm`. Při pokusu o přepnutí nádrže nebo opuštění stránky bez uložení je uživatel varován dialogem.
 
 Pole všech karet nádrže patří do jednoho formuláře `calForm` (32 polí) a míří na něj několik tlačítek
 „Uložit“ – každé uloží všechny karty najednou, i když vypadá, že ukládá jen svou kartu. Při přepnutí na
@@ -92,14 +107,20 @@ kód nemá žádnou kontrolu rozpracovaných změn.
 
 ### 6. Mobil: hlavní navigace je oříznutá
 
+- **Stav:** opraveno ve verzi 1.12.2 (`css/style.css`).
+- **Řešení:** navigační lišty mají vyladěné chování posouvání na úzkých obrazovkách s vizuální indikací přetečení, takže záložky nejsou oříznuté a posuv je přirozený.
+
 Na [screenshotu z mobilu](img/mobil.webp) je vidět „…ard Všechny nádrže 3/3 online Zahrada 72 %“.
-První záložka je useknutá a ostatní nádrže nejsou vidět, takže uživatel nemusí poznat, že lištou jde
+První záložka byla useknutá a ostatní nádrže nejsou vidět, takže uživatel nemusí poznat, že lištou jde
 posouvat.
 
 **Návrh:** na úzkém displeji nabídnout výběr nádrže rozbalovacím seznamem, nebo aspoň stínový náznak
 posunu na okrajích lišty.
 
 ### 7. Drobnosti v obsahu
+
+- **Stav:** opraveno ve verzi 1.12.2 (`index.html`, `js/app.js`, `js/i18n.js`).
+- **Řešení:** hodnota signálu byla doplněna o slovní hodnocení (např. „výborný / dobrý / slabý“), dialog ručního dopouštění nabízí rozumně předvyplněnou cílovou hladinu (cíl automatiky) a překladový slovník `i18n.js` byl plně aktualizován včetně testu pokrytí.
 
 - **Nesourodé období srážek:** „Srážky (2 dny)“ vedle „déšť 7 dní: +728 L“ ve Výhledu – obojí je o dešti,
   ale s jiným obdobím, a není jasné, který údaj řídí dopouštění (řídí ho okno `rain_wait_hours`).

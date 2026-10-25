@@ -2,6 +2,7 @@
 broken calibration, thread-safe notifications, replay watermark."""
 import asyncio
 import os
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -12,8 +13,9 @@ from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from retencka import core as core_mod, crypto, model  # noqa: E402
+from retencka.__main__ import open_database  # noqa: E402
 from retencka.core import Core  # noqa: E402
-from retencka.db import Database  # noqa: E402
+from retencka.db import Database, SchemaTooNewError  # noqa: E402
 from retencka.settings import Settings, SettingsError, NODE_SCHEMA, coerce  # noqa: E402
 
 
@@ -137,6 +139,26 @@ class PairingTest(Base):
         self.core.unpair_tick()
         self.assertNotIn(0x1234, self.core._pending_keys)
         self.assertTrue(self.core.archive_info(0x1234)["archived"])   # kept for a later UNPAIR
+
+    def test_pending_max_prefers_strongest_rssi_and_reports_pub_count(self):
+        self.core.start_pairing(0x1234, "Nádrž", "admin")
+        rssis = [-95, -90, -85, -80, -60, -92]
+        pubs = []
+        for rssi in rssis:
+            priv = os.urandom(32)
+            pub = crypto.x25519_base(priv)
+            pubs.append(pub)
+            req = crypto.build_pair_req(0x1234, pub, False)
+            self.core.responder(req)
+            self.core._on_frame(req, float(rssi), 20)
+
+        pending = self.core._pending_keys[0x1234]
+        self.assertEqual(len(pending), core_mod.PENDING_MAX)
+        pending_pubs = {e.get("pub") for e in pending}
+        self.assertIn(pubs[4].hex(), pending_pubs)
+        self.assertTrue(any(e.get("rssi") == -60.0 for e in pending))
+        status = self.core.pairing_status()
+        self.assertGreaterEqual(status["requests"][0]["pub_count"], 2)
 
 
 class UnpairTest(Base):
@@ -271,6 +293,30 @@ class RefillStopRetryTest(RefillBase):
         self.core.refills[0x5555] = good
         self.run_(self.core.refill_tick())
         self.assertNotIn(0x5555, self.core.refills)
+
+    def test_uncertain_start_sends_preventive_stop_and_retries(self):
+        calls = []
+        stop_results = [(False, "timeout"), (True, "OK")]
+
+        async def fake_call(key, relay, action, seconds=0):
+            calls.append(action)
+            if action == "run":
+                return False, "timeout"
+            if action == "stop":
+                return stop_results.pop(0) if stop_results else (True, "OK")
+            return True, "OK"
+
+        self.core.hydrawise.call = fake_call
+        ok, msg = self.run_(self.core.refill_start(0x5555, 50, "manual", "a"))
+        self.assertFalse(ok)
+        self.assertEqual(calls, ["run", "stop"])
+        self.assertIn(0x5555, self.core.refills)
+        self.assertTrue(self.core.refills[0x5555].get("stop_retry"))
+        rid = self.core.refills[0x5555]["id"]
+        self.run_(self.core.refill_tick())
+        self.assertEqual(calls, ["run", "stop", "stop"])
+        self.assertNotIn(0x5555, self.core.refills)
+        self.assertIsNotNone(self.row(rid)["end_ts"])
 
 
 class RefillFaultTest(RefillBase):
@@ -471,6 +517,82 @@ class NotifyThreadTest(Base):
         self.core.notifier = lambda text, admin: got.append(text)
         self.core.notify("x")
         self.assertEqual(got, ["x"])
+
+
+class DatabaseRecoveryTest(Base):
+    def test_schema_too_new_raises_and_does_not_rename(self):
+        self.core.db.close_thread()
+        conn = sqlite3.connect(self.path)
+        try:
+            conn.execute("PRAGMA user_version = 999")
+        finally:
+            conn.close()
+
+        with self.assertRaises(SchemaTooNewError):
+            Database(self.path)
+        with self.assertRaises(SchemaTooNewError):
+            open_database(self.path)
+
+        corrupt_files = [f for f in os.listdir(self.tmp.name) if ".corrupt-" in f]
+        self.assertEqual(corrupt_files, [])
+        self.assertTrue(os.path.exists(self.path))
+
+    def test_nightly_backup_auto_restore(self):
+        self.core.nodes.add(0x1111, "Tank 1")
+        self.core.db.execute("INSERT INTO measurements(ts, node_id, seq, flags, volume_l) VALUES(1000, 0x1111, 1, 0, 500)")
+        backup_path = self.core.backup_local()
+        self.assertTrue(os.path.exists(backup_path))
+        self.core.db.close_thread()
+
+        with open(self.path, "wb") as f:
+            f.write(b"not sqlite")
+
+        def conn_with_cleanup(db_self):
+            c = getattr(db_self._local, "conn", None)
+            if c is None:
+                c = sqlite3.connect(db_self.path, timeout=10, isolation_level=None, check_same_thread=True)
+                try:
+                    c.row_factory = sqlite3.Row
+                    c.execute("PRAGMA journal_mode=WAL")
+                    c.execute("PRAGMA synchronous=NORMAL")
+                    c.execute("PRAGMA foreign_keys=ON")
+                    c.execute("PRAGMA busy_timeout=5000")
+                    c.execute("PRAGMA temp_store=MEMORY")
+                    c.execute("PRAGMA cache_size=-1024")
+                    db_self._local.conn = c
+                except Exception:
+                    c.close()
+                    raise
+            return c
+
+        with mock.patch.object(Database, "conn", conn_with_cleanup):
+            restored = open_database(self.path)
+            try:
+                self.assertEqual(restored.scalar("SELECT name FROM nodes WHERE node_id=?", (0x1111,)), "Tank 1")
+                self.assertEqual(restored.scalar("SELECT volume_l FROM measurements WHERE node_id=?", (0x1111,)), 500)
+            finally:
+                restored.close_thread()
+
+    def test_sensor_key_mirror_restores_node_and_secret(self):
+        self.core.start_pairing(0x1234, "Nádrž", "admin")
+        node = Node(self.core, 0x1234)
+        self.assertEqual(node.try_pair(), "paired")
+        node.send()
+        keys_path = f"{self.path}.keys"
+        self.assertTrue(os.path.exists(keys_path))
+        orig_keys = self.core.nodes.keys(0x1234)
+        self.assertIsNotNone(orig_keys)
+
+        self.core.db.execute("DELETE FROM nodes")
+        self.core.db.close_thread()
+
+        db2 = Database(self.path)
+        core2 = Core(db2, Settings(db2), self.tmp.name)
+        try:
+            self.assertIsNotNone(core2.nodes.get(0x1234))
+            self.assertEqual(core2.nodes.keys(0x1234), orig_keys)
+        finally:
+            db2.close_thread()
 
 
 if __name__ == "__main__":

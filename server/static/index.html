@@ -80,7 +80,7 @@
                 <button class="menu-item tab-btn admin-only hidden" data-tab="uzivatele" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-users"/></svg>Správa uživatelů</button>
                 <button class="menu-item tab-btn admin-only hidden" data-tab="logovani" type="button" role="menuitem">
-                    <svg class="ico" aria-hidden="true"><use href="#i-list"/></svg>Logování</button>
+                    <svg class="ico" aria-hidden="true"><use href="#i-list"/></svg>Historie událostí</button>
                 <div class="menu-sep admin-only hidden" role="separator"></div>
                 <button class="menu-item admin-only hidden" id="menuRestart" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-restart"/></svg>Restartovat aplikaci</button>
@@ -113,8 +113,8 @@
     </header>
 
     <nav class="main-nav" id="tabNav" aria-label="Hlavní navigace">
-        <button class="tab-btn nav-tab active" data-tab="dashboard" type="button">Dashboard</button>
-        <div id="nodeBar" class="node-bar hidden" role="tablist" aria-label="Čidla"></div>
+        <button class="tab-btn nav-tab active" data-tab="dashboard" type="button">Přehled</button>
+        <div id="nodeBar" class="node-bar hidden" role="tablist" aria-label="Nádrže"></div>
     </nav>
 
     <div id="banner" class="banner hidden" role="alert"></div>
@@ -122,9 +122,9 @@
     <!-- ======================================================= DASHBOARD -->
     <div id="dashboard" class="tab-content active">
         <div id="diskBanner" class="banner disk-banner hidden" role="alert"></div>
-        <!-- Přehled všech čidel (volba „Všechna čidla“ v liště čidel) -->
+        <!-- Přehled všech nádrží (volba „Všechny nádrže“ v liště nádrží) -->
         <div id="overview" class="hidden">
-            <p class="card-desc ov-desc">Všechna čidla najednou: hladina, objem, stav a baterie. Klepnutím na nádrž otevřete její detail.</p>
+            <p class="card-desc ov-desc">Všechny nádrže najednou: hladina, objem, stav a baterie. Klepnutím na nádrž otevřete její detail.</p>
             <div class="overview-grid" id="overviewGrid"></div>
             <section class="card chart-card span-all mt-20">
                 <div class="card-head">
@@ -144,6 +144,7 @@
                             <h2 class="card-label" id="tankTitle">Stav nádrže</h2>
                             <p class="card-desc">Aktuální hladina a objem vody v nádrži.</p>
                             <div class="level-big" id="txtPercent">– %</div>
+                            <div class="stale-badge hidden" id="txtStaleAge"></div>
                             <div class="level-litres" id="txtLiters">– L</div>
                             <dl class="tank-meta">
                                 <div><dt>Výška hladiny</dt><dd id="txtLevelCm">–</dd></div>
@@ -176,7 +177,7 @@
                         </div>
                         <div class="refill-actions admin-only hidden" id="refillActions">
                             <button class="btn btn-primary" id="refillStartBtn" type="button">Dopustit</button>
-                            <button class="btn btn-danger" id="refillStopBtn" type="button">Zastavit / zrušit</button>
+                            <button class="btn btn-danger hidden" id="refillStopBtn" type="button">Zastavit / zrušit</button>
                             <button class="btn btn-outline hidden" id="refillResumeBtn" type="button">Obnovit automatiku</button>
                         </div>
                     </div>
@@ -209,11 +210,11 @@
                         </dl>
                     </div>
                     <div class="fact-group" id="outlookBox">
-                        <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled</h3>
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled <button type="button" class="help-tip" data-help="outlook"></button></h3>
                         <p class="card-desc fact-desc">Na jak dlouho zásoba vystačí a co přinese déšť.</p>
                         <dl class="facts">
                             <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
-                            <div class="fact"><dt>Srážky (2 dny)</dt><dd id="txtRain">–</dd></div>
+                            <div class="fact"><dt>Srážky (48 h)</dt><dd id="txtRain">–</dd></div>
                         </dl>
                     </div>
                     <div class="fact-group" id="linkBox">
@@ -802,11 +803,11 @@
                 <div class="sub" id="delSection">
                     <h3>Smazat naměřená data</h3>
                     <p class="muted small">Smaže měření, hodinové souhrny a historii dopouštění ve zvoleném rozsahu.
-                        Nádrže, nastavení a záznamy (Logování) zůstanou.</p>
+                        Nádrže, nastavení a záznamy (Historie událostí) zůstanou.</p>
                     <div class="field-grid g2">
                         <div class="form-group">
-                            <label for="delNode">Čidlo</label>
-                            <select id="delNode" class="unified-select"><option value="">Všechna čidla</option></select>
+                            <label for="delNode">Nádrž</label>
+                            <select id="delNode" class="unified-select"><option value="">Všechny nádrže</option></select>
                         </div>
                         <div class="form-group">
                             <label for="delRange">Rozsah</label>
@@ -863,7 +864,7 @@
 
     <!-- ======================================================= LOGOVÁNÍ -->
     <div id="logovani" class="tab-content">
-        <div class="page-head"><h1>Logování</h1></div>
+        <div class="page-head"><h1>Historie událostí</h1></div>
         <div class="stack">
             <section class="card">
                 <h2>Záznamy</h2>

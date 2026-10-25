@@ -78,7 +78,7 @@ Odhad výdrže na hubu (`node_check_mAs`) počítá 1440 − počet vysílání 
 
 | Modul | Odpovědnost |
 |---|---|
-| `__main__.py` | start, otevření DB (poškozený soubor odsune), spuštění rádia a dvou HTTP listenerů, periodické úlohy, systemd `READY`/`WATCHDOG` |
+| `__main__.py` | start, otevření DB (při poškození automatická obnova z noční zálohy; zrcadlení klíčů do `<db>.keys`), spuštění rádia a dvou HTTP listenerů, periodické úlohy, systemd `READY`/`WATCHDOG` |
 | `radio.py` | `Receiver` – vlastní vlákno: konfigurace CC1101, příjem (GDO0 hrana přes gpiod, jinak polling), okamžitá odpověď na PAIR_REQ, samoopravy (kontrola registrů každých 30 s, reset po tichu) |
 | `crypto.py` | čistý Python: AES-128, AES-CMAC, X25519, formát rámců v3 |
 | `core.py` | `Core` – mozek: příjem rámců, párování, ukládání, živý stav, dopouštění, historie, údržba, zálohy |
@@ -181,6 +181,8 @@ stateDiagram-v2
   měření“) a spustí se s příštím platným měřením, nejdéle do 15 min, jinak propadne (záznam + upozornění).
 - Nepotvrzené zastavení ventilu se opakuje každých 30 s; 24h pozastavení kvůli poruše jen když dopouštění
   doběhlo do konce časovače a hladina (platná) nestoupla.
+- Pojistka při nejistém startu: pokud volání `run` na Hydrawise selže (např. timeout), hub neprodleně odešle
+  preventivní `stop` a při neúspěchu zařadí dopouštění do `stop_retry`, takže `refill_tick` opakuje zastavení ventilu.
 - Zrušení (`Core.refill_cancel`, tlačítko *Zastavit / zrušit*, Telegram `stop`) funguje kdykoli: čekající
   ruční požadavek se zahodí, běžící dopouštění zastaví; u automatiky (běžící i čekání na déšť) se navíc
   automatika té nádrže pozastaví na 24 h (uloženo v DB, přežije restart), jinak by ji spustilo hned další
@@ -202,6 +204,8 @@ stateDiagram-v2
 
 Grafy: SQL bucketing `(ts / bucket) * bucket`, bucket zvolený tak, aby vyšlo ≤ ~600 bodů;
 nad 45 dní se čte z `hourly`.
+
+Odolnost databáze: Při poškození SQLite databáze se při startu automaticky vyhledá a obnoví poslední validní noční záloha. Klíče spárovaných čidel jsou navíc trvale zrcadleny do atomického souboru `<db>.keys`, aby nedošlo ke ztrátě párování ani při úplné havárii databáze.
 
 ### 3.7 Periodické úlohy (`__main__.periodic`)
 
@@ -288,10 +292,10 @@ importovat beze změny.
 | `retencka-netwatch.service` | hlídá Wi-Fi, bez spojení spustí hotspot |
 | `retencka-portal.service` | captive portál pro zadání Wi-Fi (jen v režimu hotspotu) |
 | `retencka-alias.service` | mDNS alias `retencka.local` (jen první zařízení v síti) |
-| `retencka-update.timer/.path/.service` | denní / ruční aktualizace z GitHub Release, Ed25519 podpis, rollback |
+| `retencka-update.timer/.path/.service` | denní / ruční aktualizace z GitHub Release, Ed25519 podpis, snapshot databáze a rollback (kód, jednotky i DB) |
 | `retencka-control.path/.timer/.service` | akce s právy roota na žádost aplikace: restart zařízení, servisní přístup NetBird (24 h / trvale / vypnuto), úklid souborů HTTPS z verzí 1.7–1.9 |
 
-Read-only root (overlayfs), data na `/var/lib/retencka`, logy v RAM, HW watchdog.
+Read-only root (overlayfs), data na `/var/lib/retencka`, logy v RAM, HW watchdog. Před přepnutím verze provede updater konzistentní snapshot SQLite databáze; při neúspěšné aktualizaci nebo selhání kontroly zdraví vrátí kód, systemd jednotky i stav databáze zpět.
 
 ## 5. Zdroje na Pi Zero 2 W
 

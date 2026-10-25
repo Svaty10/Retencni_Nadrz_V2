@@ -36,7 +36,14 @@
         if (dbm === null || dbm === undefined || Number.isNaN(dbm)) return null;
         return Math.round(Math.min(100, Math.max(0, (dbm + 110) / 60 * 100)));
     }
-    function sigTxt(dbm) { return sigPct(dbm) == null ? '–' : `${sigPct(dbm)} % (${num(dbm, 0)} dBm)`; }
+    function sigWord(dbm) {
+        if (dbm == null || Number.isNaN(dbm)) return '';
+        if (dbm >= -75) return 'silný';
+        if (dbm >= -90) return 'dobrý';
+        if (dbm >= -100) return 'slabší';
+        return 'slabý';
+    }
+    function sigTxt(dbm) { return sigPct(dbm) == null ? '–' : `${sigWord(dbm)} · ${sigPct(dbm)} % (${num(dbm, 0)} dBm)`; }
 
     function pad(n) { return String(n).padStart(2, '0'); }
     function fmtDateTime(ms) {
@@ -356,7 +363,8 @@
         calpoints: 'Dvojice „napětí sondy – výška vody nad sondou“. Z nich hub počítá přímku, která mění napětí na hladinu. Body se doplňují tlačítkem Uložit výše; ručně je upravujte jen výjimečně.',
         recompute: 'Přepočítá už uložená měření podle aktuální kalibrace a vyhlazení. Hodí se po opravě kalibrace nebo výšky sondy; nová měření se počítají vždy správně.',
         battrim: 'Změřte napětí baterií voltmetrem a zadejte ho. Hub z toho spočítá korekci (násobek), aby údaj souhlasil. Korekce 1,0000 = bez úpravy.',
-        servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.'
+        servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.',
+        outlook: 'Odhad výdrže vychází z průměrné denní spotřeby za poslední týden. Srážky (48 h) ukazují úhrn předpovězený na nejbližší 2 dny; čekání automatického dopouštění na déšť se řídí oknem „Výhled deště“ v nastavení nádrže.'
     };
     let closeHelp = () => {};
     function bindHelpTips() {
@@ -522,7 +530,8 @@
     }
 
     // --------------------------------------------------------------- tabs
-    function showTab(id, btn) {
+    async function showTab(id, btn) {
+        if (id !== 'nastaveni' && $('nastaveni').classList.contains('active') && !(await confirmDiscardCalChanges())) return;
         closeHelp();
         document.querySelectorAll('.tab-content').forEach((el) => el.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach((el) => { el.classList.remove('active'); el.removeAttribute('aria-current'); });
@@ -1111,7 +1120,17 @@
     function renderState(s) {
         const pill = $('statusPill');
         pill.className = 'status-pill ' + s.status;
-        pill.textContent = { online: 'Online', stale: 'Zpožděná data', offline: 'Offline' }[s.status] || s.status;
+        pill.textContent = { online: 'Čidlo: online', stale: 'Čidlo: zpožděná data', offline: 'Čidlo: offline' }[s.status] || s.status;
+
+        const isStale = s.status !== 'online';
+        const tankCard = document.querySelector('#nodeDash .tank-card');
+        if (tankCard) tankCard.classList.toggle('is-stale', isStale);
+        const staleEl = $('txtStaleAge');
+        if (staleEl) {
+            staleEl.classList.toggle('hidden', !isStale);
+            staleEl.textContent = !s.timestamp ? 'bez dat'
+                : `${s.status === 'offline' ? 'offline' : 'zpožděná data'} · naposledy ${fmtAgo(s.last_seen_seconds_ago)}`;
+        }
 
         const pct = s.water_level_percent;
         $('waterLevel').style.height = (pct == null ? 0 : Math.max(0, Math.min(100, pct))) + '%';
@@ -1136,10 +1155,14 @@
         $('txtRain').textContent = num(s.expected_rain_mm, 1, ' mm');
         const o = s.outlook || {};
         $('txtOutlook').textContent = o.days_left == null ? '–' : (o.days_left > 365 ? 'vystačí > rok' : `vystačí ~${num(o.days_left, 0)} dní`);
-        $('txtOutlookSub').textContent = [
+        const outlookDetail = [
             o.use_per_day_l != null ? `spotřeba ~${num(o.use_per_day_l, 0)} L/den` : 'málo dat o spotřebě',
             o.inflow_7d_l ? `déšť 7 dní: +${num(o.inflow_7d_l, 0)} L → ~${num(o.pct_after_rain, 0)} %` : ''
         ].filter(Boolean).join(' · ');
+        $('txtOutlookSub').textContent = o.inflow_7d_l
+            ? `s předpovězeným deštěm déle (~${num(o.pct_after_rain, 0)} %)`
+            : (o.use_per_day_l != null ? `spotřeba ~${num(o.use_per_day_l, 0)} L/den` : 'málo dat o spotřebě');
+        $('txtOutlookSub').title = outlookDetail;
 
         const n = s.node || {};
         $('txtRssi').textContent = sigTxt(n.rssi);
@@ -1164,6 +1187,9 @@
         $('refillBox').classList.toggle('hidden', !hasValve && !zc);
         $('refillTitle').classList.toggle('hidden', !hasValve);
         $('refillActions').classList.toggle('hidden', !(ME.role === 'admin' && hasValve));
+        const canStop = !!(rf.active || rf.waiting_for_data || rf.waiting_for_rain);
+        $('refillStopBtn').classList.toggle('hidden', !canStop);
+        $('refillStopBtn').textContent = rf.active ? 'Zastavit dopouštění' : 'Zrušit čekání';
         $('refillResumeBtn').classList.toggle('hidden', !rf.auto_paused_until);
         runRefillTimer();
 
@@ -1224,7 +1250,7 @@
         g.textContent = '';
         nodes.forEach((n) => {
             const c = document.createElement('div');
-            c.className = 'card ov-card';
+            c.className = 'card ov-card' + (n.status !== 'online' ? ' is-stale' : '');
             const pct = n.level_pct == null ? 0 : Math.max(0, Math.min(100, n.level_pct));
             const b = n.battery || {};
             const st = { online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status;
@@ -1264,7 +1290,7 @@
             all.setAttribute('role', 'tab');
             all.setAttribute('aria-selected', allActive ? 'true' : 'false');
             const online = nodes.filter((n) => n.status === 'online').length;
-            all.innerHTML = `Všechna čidla <span class="pct">${online}/${nodes.length} online</span>`;
+            all.innerHTML = `Všechny nádrže <span class="pct">${online}/${nodes.length} online</span>`;
             all.addEventListener('click', () => {
                 if (!$('dashboard').classList.contains('active')) showTab('dashboard', document.querySelector('.tab-btn[data-tab="dashboard"]'));
                 setViewAll(true); renderNodeBar(nodes); renderOverview(nodes); loadAllCharts();
@@ -1280,7 +1306,8 @@
             b.setAttribute('role', 'tab');
             b.setAttribute('aria-selected', n.id === CURRENT_NODE && !allActive ? 'true' : 'false');
             b.innerHTML = `<span class="dot ${esc(n.status)}"></span>${esc(n.name)} <span class="pct">${num(n.level_pct, 0, ' %')}</span>`;
-            b.addEventListener('click', () => {
+            b.addEventListener('click', async () => {
+                if ($('nastaveni').classList.contains('active') && n.id !== CURRENT_NODE && !(await confirmDiscardCalChanges())) return;
                 const wasAll = VIEW_ALL;
                 setViewAll(false);
                 selectNode(n.id, wasAll);
@@ -1291,18 +1318,35 @@
         });
     }
 
-    // Nastavení: záložky „Obecné“ (celý systém) | „Všechna čidla“ (čidla + výchozí hodnoty)
-    // | jedna záložka na nádrž. Poslední volba se pamatuje v rámci relace.
+    // Nastavení: záložky „Obecné“ (celý systém) | jedna záložka na nádrž.
+    // Poslední volba se pamatuje v rámci relace.
     let SET_SCOPE = 'general';
     try { SET_SCOPE = sessionStorage.getItem('setScope') || 'general'; } catch (e) { /* ignore */ }
     if (!['general', 'tank'].includes(SET_SCOPE)) SET_SCOPE = 'general';
 
+    let calDirty = false;
+    function setCalDirty(dirty) {
+        calDirty = !!dirty;
+        const btn = $('calSaveTop');
+        if (btn) btn.classList.toggle('hidden', !calDirty || SET_SCOPE !== 'tank');
+    }
+    async function confirmDiscardCalChanges() {
+        if (!calDirty || SET_SCOPE !== 'tank') return true;
+        const ok = await confirmDialog({
+            title: 'Máte neuložené změny',
+            body: ['V nastavení nádrže jsou neuložené změny. Chcete odejít a změny zahodit?'],
+            confirm: 'Zahodit změny', cancel: 'Zůstat', danger: true
+        });
+        if (ok) setCalDirty(false);
+        return ok;
+    }
+
     function setSettingsScope(scope) {
         SET_SCOPE = (scope === 'tank' && !CURRENT_NODE) ? 'general' : (scope === 'all' ? 'general' : scope);
-        try { sessionStorage.setItem('setScope', SET_SCOPE); } catch (e) { /* ignore */ }
+        try { sessionStorage.getItem('setScope', SET_SCOPE); } catch (e) { /* ignore */ }
         ['general', 'tank'].forEach((k) => document.body.classList.toggle('set-' + k, SET_SCOPE === k));
         if (lastState) renderSettingsBar(lastState.nodes || []);
-        if (SET_SCOPE === 'tank') applyNode(currentNodeCfg());
+        if (SET_SCOPE === 'tank') applyNode(currentNodeCfg()); else setCalDirty(false);
         layoutTries = 0;
         layoutSettingsColumns();
         scheduleSettingsLayout();
@@ -1328,10 +1372,14 @@
             b.addEventListener('click', fn);
             bar.appendChild(b);
         };
-        tab('Obecné', SET_SCOPE === 'general', () => setSettingsScope('general'), 'all');
+        tab('Obecné', SET_SCOPE === 'general', async () => {
+            if (SET_SCOPE === 'tank' && !(await confirmDiscardCalChanges())) return;
+            setSettingsScope('general');
+        }, 'all');
 
         nodes.forEach((n) => {
-            tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, SET_SCOPE === 'tank' && n.id === CURRENT_NODE, () => {
+            tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, SET_SCOPE === 'tank' && n.id === CURRENT_NODE, async () => {
+                if (SET_SCOPE === 'tank' && n.id !== CURRENT_NODE && !(await confirmDiscardCalChanges())) return;
                 if (n.id !== CURRENT_NODE) selectNode(n.id);
                 setSettingsScope('tank');
             });
@@ -1360,7 +1408,7 @@
                 const ns = s.nodes || [], on = ns.filter((n) => n.status === 'online').length;
                 const pill = $('statusPill');
                 pill.className = 'status-pill ' + (on === ns.length ? 'online' : on ? 'stale' : 'offline');
-                pill.textContent = `Online ${on}/${ns.length}`;
+                pill.textContent = `Čidla online: ${on}/${ns.length}`;
             }
             if (s.timestamp !== lastTs) {
                 if (lastTs !== null && $('dashboard').classList.contains('active')) loadAllCharts(true);
@@ -1369,7 +1417,7 @@
         } catch (e) {
             const pill = $('statusPill');
             pill.className = 'status-pill offline';
-            pill.textContent = 'Server nedostupný';
+            pill.textContent = 'Hub odpojen';
         }
     }
 
@@ -1378,14 +1426,17 @@
         $('refillStartBtn').addEventListener('click', async () => {
             const rf = (lastState && lastState.refill) || {};
             const maxPct = rf.max_pct || 100;
+            const autoTarget = rf.auto_target_pct || 30;
             const cur = lastState ? lastState.water_level_percent : null;
+            const suggested = Math.min(maxPct, Math.round(cur != null && autoTarget <= cur ? Math.min(maxPct, Math.ceil(cur + 10)) : autoTarget));
             let msg = null;
             const r = await formDialog({
                 title: 'Dopustit z řadu',
                 body: [`Současná hladina: ${num(cur, 1, ' %')}${lastState && lastState.volume_liters != null ? ' (' + num(lastState.volume_liters, 0, ' L') + ')' : ''}.`,
                     'Ventil se otevře a po dosažení cílové hladiny se zase zavře.'],
                 fields: [{ name: 'target', type: 'number', label: 'Cílová hladina', unit: '%', min: 1, max: maxPct, step: 1,
-                    value: '', hint: `Nejvýš lze dopustit na ${num(maxPct, 0, ' %')}.` }],
+                    value: suggested > (cur || 0) ? String(suggested) : '',
+                    hint: `Cíl automatiky: ${num(autoTarget, 0, ' %')} · nejvýš lze dopustit na ${num(maxPct, 0, ' %')}.` }],
                 validate: (v) => {
                     const t = parseFloat(String(v.target).replace(',', '.'));
                     if (!(t > 0)) return { field: 'target', message: 'Zadejte platné procento cílové hladiny.' };
@@ -1407,11 +1458,18 @@
             action(() => api('POST', '/api/refill/resume?node=' + CURRENT_NODE, {}), (r) => r.message).then(pollState);
         });
         $('refillStopBtn').addEventListener('click', async () => {
+            const rf = (lastState && lastState.refill) || {};
+            const pausesAuto = (rf.active && rf.mode === 'auto') || !!rf.waiting_for_rain;
+            const until = new Date(Date.now() + 86400e3);
+            const hhmm = `${pad(until.getHours())}:${pad(until.getMinutes())}`;
+            const body = [rf.active ? 'Ventil se zavře a probíhající dopouštění skončí.' : 'Čekání na dopouštění se zruší.'];
+            if (pausesAuto) {
+                body.push(`Automatika se pozastaví do zítřka ${hhmm}; dříve ji zapnete tlačítkem „Obnovit automatiku“.`);
+            }
             const ok = await confirmDialog({
-                title: 'Zastavit dopouštění?',
-                body: ['Ventil se zavře a probíhající dopouštění (nebo čekání) skončí.',
-                    'Automatické dopouštění se může na čas pozastavit; vrátíte ho tlačítkem „Obnovit automatiku“.'],
-                confirm: 'Zastavit dopouštění', danger: true
+                title: rf.active ? 'Zastavit dopouštění?' : 'Zrušit čekající dopouštění?',
+                body,
+                confirm: rf.active ? 'Zastavit dopouštění' : 'Zrušit čekání', danger: true
             });
             if (!ok) return;
             action(() => api('POST', '/api/refill/stop?node=' + CURRENT_NODE, {}), (r) => r.message).then(pollState);
@@ -1522,6 +1580,7 @@
         $('batTrim').textContent = num(n.battery_trim, 4);
         $('deadbandInfo').textContent = `±${num(n.deadband_cm, 1)} cm (≈ ${num(n.deadband_l, 0)} L)`;
         $('realFlowHint').textContent = n.real_flow_rate_lpm ? `naměřeno ${num(n.real_flow_rate_lpm, 1)} L/min` : 'z řadu';
+        setCalDirty(false);
     }
 
     function applySettings(s) {
@@ -1654,7 +1713,16 @@
             });
             nav.appendChild(b);
         });
-        nav.classList.toggle('hidden', cards.length < 2);
+        if (SET_SCOPE === 'tank') {
+            const save = document.createElement('button');
+            save.type = 'submit';
+            save.setAttribute('form', 'calForm');
+            save.id = 'calSaveTop';
+            save.className = 'btn btn-primary btn-sm set-save' + (calDirty ? '' : ' hidden');
+            save.textContent = 'Uložit změny';
+            nav.appendChild(save);
+        }
+        nav.classList.toggle('hidden', cards.length < 2 && !(SET_SCOPE === 'tank' && calDirty));
     }
 
     // Poloha: hledání obce (geocoding přes hub), poloha zařízení (prohlížeč ji dá jen zabezpečené stránce), ruční souřadnice (pokročilé)
@@ -1781,13 +1849,13 @@
         zoneHint(relay, false);
     }
 
-    // Smazat naměřená data: čidlo / všechna, rozsah od–do nebo vše; nejdřív počet (dry run)
+    // Smazat naměřená data: nádrž / všechny, rozsah od–do nebo vše; nejdřív počet (dry run)
     function fillDeleteNodes() {
         const sel = $('delNode');
         const cur = sel.value;
         sel.textContent = '';
         const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
-        add('', 'Všechna čidla');
+        add('', 'Všechny nádrže');
         ((nodesCache && nodesCache.nodes) || []).forEach((n) => add(n.id, `${n.name} (${n.id})`));
         sel.value = Array.from(sel.options).some((o) => o.value === cur) ? cur : '';
     }
@@ -1809,15 +1877,15 @@
             }
             let dry;
             try { dry = await api('POST', '/api/data/delete', body); } catch (e) { toast(e.message, true); return; }
-            const who = node ? $('delNode').selectedOptions[0].textContent : 'všechna čidla';
+            const who = node ? $('delNode').selectedOptions[0].textContent : 'všechny nádrže';
             if (!dry.total) { toast(`Ve zvoleném rozsahu (${who}, ${rangeTxt}) nejsou žádná data.`); return; }
             const link = document.createElement('p');
             link.innerHTML = 'Doporučujeme nejdřív <a href="/api/backup/download" download>stáhnout zálohu</a>.';
             const ok = await confirmDialog({
                 title: 'Smazat naměřená data?',
-                body: [`Čidlo: ${who} · rozsah: ${rangeTxt}`,
+                body: [`Nádrž: ${who} · rozsah: ${rangeTxt}`,
                     `Smaže se ${num(dry.counts.measurements, 0)} měření, ${num(dry.counts.hourly, 0)} hodinových souhrnů a ${num(dry.counts.refills, 0)} záznamů o dopouštění (historie dopouštění v rozsahu jde také pryč).`,
-                    'Nádrže, nastavení a záznamy v Logování zůstanou. Smazání nejde vrátit.', link],
+                    'Nádrže, nastavení a záznamy v Historii událostí zůstanou. Smazání nejde vrátit.', link],
                 confirm: `Smazat ${num(dry.total, 0)} záznamů`, danger: true
             });
             if (!ok) return;
@@ -1947,7 +2015,7 @@
         renderBackups(bk);
         if (tg) renderTelegramAdmin(tg);
         renderServis(sv);
-        if (nodes) { nodesCache = nodes; renderNodes(nodes); applyNode(currentNodeCfg()); fillDeleteNodes(); }
+        if (nodes) { nodesCache = nodes; renderNodes(nodes); if (!calDirty) applyNode(currentNodeCfg()); fillDeleteNodes(); }
         if (st) applySettings(st.settings);
         if (ha) renderHa(ha);
         if (sys) renderSystem(sys);
@@ -2005,9 +2073,22 @@
             data.cal_points = pts;
             action(() => api('POST', '/api/node?' + nq(), data)).then((r) => {
                 if (!r) return;
+                setCalDirty(false);
                 toast(r.recalc_suggested ? 'Uloženo. Pro starší data použijte „Přepočítat historii“.' : 'Uloženo.');
                 loadSettingsTab(); pollState(); histCache.clear(); flowsCache.clear();
             });
+        });
+        const onCalFieldEdit = (e) => {
+            const t = e.target;
+            if (!t) return;
+            if (t.getAttribute('form') === 'calForm' || t.closest('#calPoints') || t.id === 'zoneSelect') {
+                setCalDirty(true);
+            }
+        };
+        $('nastaveni').addEventListener('input', onCalFieldEdit);
+        $('nastaveni').addEventListener('change', onCalFieldEdit);
+        window.addEventListener('beforeunload', (e) => {
+            if (calDirty) { e.preventDefault(); e.returnValue = ''; }
         });
         let resizeT = null;
         // only a width change can change the columns; mobile browsers fire resize on every
@@ -2284,7 +2365,8 @@
                 : (q.node_paired && !q.known) ? 'odebrané čidlo (klíč v archivu)'
                 : q.known ? (q.node_paired ? 'výměna baterie' : 'čidlo ztratilo klíč')
                 : 'nové';
-            tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${sigTxt(q.rssi)}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}</td><td class="td-actions"></td>`;
+            const multiKey = q.pub_count > 1 ? ` <span class="bad-text" title="Zaznamenáno více různých veřejných klíčů pro toto ID">· pozor: ${esc(q.pub_count)} klíče!</span>` : '';
+            tr.innerHTML = `<td><code>${esc(q.id)}</code></td><td>${sigTxt(q.rssi)}</td><td>${fmtAgo(q.age_s)}</td><td>${esc(state)}${multiKey}</td><td class="td-actions"></td>`;
             if (!q.target && !foreign) {
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'btn btn-primary btn-sm';
@@ -2306,8 +2388,9 @@
         ((d.pairing && d.pairing.pending) || []).filter((p) => !pr.some((q) => q.id === p.id)).forEach((p) => {
             // PAIR_ACK sent, the first data did not arrive yet: accepted for up to 24 h
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td><code>${esc(p.id)}</code> ${esc(p.name || '')}</td><td>–</td><td>–</td>
-                <td>čekám na první data (${Math.max(1, Math.ceil(p.expires_in / 3600))} h)</td><td class="td-actions"></td>`;
+            const multiKey = p.pub_count > 1 ? ` <span class="bad-text">· pozor: ${esc(p.pub_count)} klíče!</span>` : '';
+            tr.innerHTML = `<td><code>${esc(p.id)}</code> ${esc(p.name || '')}</td><td>${sigTxt(p.rssi)}</td><td>–</td>
+                <td>čekám na první data (${Math.max(1, Math.ceil(p.expires_in / 3600))} h)${multiKey}</td><td class="td-actions"></td>`;
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = 'Zrušit';
             b.addEventListener('click', () => action(() => api('POST', '/api/pairing/cancel', { node_id: p.id })).then(refreshNodes));
@@ -2316,8 +2399,9 @@
         });
         targets.filter((t) => !pr.some((q) => q.id === t.id)).forEach((t) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td><code>${esc(t.id)}</code> ${esc(t.name || '')}</td><td>–</td><td>–</td>
-                <td>čekám (${Math.ceil(t.expires_in / 60)} min)</td><td class="td-actions"></td>`;
+            const multiKey = t.pub_count > 1 ? ` <span class="bad-text">· pozor: ${esc(t.pub_count)} klíče!</span>` : '';
+            tr.innerHTML = `<td><code>${esc(t.id)}</code> ${esc(t.name || '')}</td><td>${sigTxt(t.rssi)}</td><td>–</td>
+                <td>čekám (${Math.ceil(t.expires_in / 60)} min)${multiKey}</td><td class="td-actions"></td>`;
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'btn btn-outline btn-sm'; b.textContent = 'Zrušit';
             b.addEventListener('click', () => action(() => api('POST', '/api/pairing/cancel', { node_id: t.id })).then(refreshNodes));

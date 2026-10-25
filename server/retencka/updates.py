@@ -23,7 +23,7 @@ REQUEST = "update-request"
 PREFS = "update-prefs.json"
 STATUS = "update-status.json"
 CHANNELS = ("stable", "beta")
-VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,20})?$")
+VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,20})?\Z")
 # states in which the updater is working; an install must not be requested again
 BUSY = ("checking", "downloading", "verifying", "installing", "restarting")
 STALE_S = 20 * 60          # a "busy" status older than this is a crashed / killed run

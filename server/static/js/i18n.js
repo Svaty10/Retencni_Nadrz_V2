@@ -37,7 +37,8 @@
         "calpoints": "Pairs of “probe voltage – water height above probe”. The hub calculates a linear calibration converting voltage to water level. Added via Save button above; edit manually only exceptionally.",
         "recompute": "Recalculates stored measurements according to current calibration and smoothing. Useful after correcting calibration or probe offset; new measurements are always processed correctly.",
         "battrim": "Measure battery voltage with a multimeter and enter it here. The hub computes a correction multiplier so readings match. Correction 1.0000 = no trim.",
-        "servis": "Access automatically turns off after 24 hours; “Permanently” stays active until disabled. A technician can connect via encrypted NetBird network only when enabled."
+        "servis": "Access automatically turns off after 24 hours; “Permanently” stays active until disabled. A technician can connect via encrypted NetBird network only when enabled.",
+        "outlook": "Duration estimate is based on average daily consumption over the past week. Rain (48 h) shows forecast precipitation for the next 2 days; automatic refill rain delay uses the “Rain outlook” window in tank settings."
 };
 
     const ACTIONS_EN = {
@@ -900,7 +901,30 @@
         "Čidlo neexistuje.": "Sensor does not exist.",
         "Čidlo nenalezeno": "Sensor not found",
         "Čidlo nečeká na odpárování.": "Sensor is not awaiting unpairing.",
-        "Žádost se nepodařilo uložit.": "Failed to save request."
+        "Žádost se nepodařilo uložit.": "Failed to save request.",
+        "Historie událostí": "Event history",
+        "Nádrže": "Tanks",
+        "Všechny nádrže": "All tanks",
+        "všechny nádrže": "all tanks",
+        "Všechny nádrže najednou: hladina, objem, stav a baterie. Klepnutím na nádrž otevřete její detail.": "All tanks at once: level, volume, status, and battery. Tap a tank to open details.",
+        "Nádrže, nastavení a záznamy (Historie událostí) zůstanou.": "Tanks, settings, and event history records remain.",
+        "Nádrže, nastavení a záznamy v Historii událostí zůstanou. Smazání nejde vrátit.": "Tanks, settings, and event history records remain. Deletion cannot be undone.",
+        "Srážky (48 h)": "Rain (48 h)",
+        "Čidlo: online": "Sensor: online",
+        "Čidlo: zpožděná data": "Sensor: delayed data",
+        "Čidlo: offline": "Sensor: offline",
+        "Hub odpojen": "Hub disconnected",
+        "bez dat": "no data",
+        "Zrušit čekání": "Cancel waiting",
+        "Zrušit čekající dopouštění?": "Cancel pending refill?",
+        "Ventil se zavře a probíhající dopouštění skončí.": "The valve will close and active refilling will stop.",
+        "Čekání na dopouštění se zruší.": "Waiting for refilling will be cancelled.",
+        "Uložit změny": "Save changes",
+        "Máte neuložené změny": "Unsaved changes",
+        "V nastavení nádrže jsou neuložené změny. Chcete odejít a změny zahodit?": "There are unsaved changes in tank settings. Leave and discard changes?",
+        "Zahodit změny": "Discard changes",
+        "Zůstat": "Stay",
+        "Zaznamenáno více různých veřejných klíčů pro toto ID": "Multiple different public keys seen for this ID"
 };
 
     const PATTERNS = [
@@ -967,7 +991,15 @@
         [/^Nepodařilo se připojit:\s*(.+)$/, 'Failed to connect: $1'],
         [/^Dopouštění\s+(\d{1,2}:\d{2}–\d{1,2}:\d{2})(.*)$/, 'Refilling $1$2'],
         [/^Přítok z deště\s+(\d{1,2}:\d{2}–\d{1,2}:\d{2})(.*)$/, 'Rain inflow $1$2'],
-        [/^(neděle|pondělí|úterý|středa|čtvrtek|pátek|sobota)\s+(\d+\.\s*\d+\.\s*\d{4})$/, (m, d, rest) => ({'neděle':'Sunday','pondělí':'Monday','úterý':'Tuesday','středa':'Wednesday','čtvrtek':'Thursday','pátek':'Friday','sobota':'Saturday'}[d] || d) + ' ' + rest]
+        [/^(neděle|pondělí|úterý|středa|čtvrtek|pátek|sobota)\s+(\d+\.\s*\d+\.\s*\d{4})$/, (m, d, rest) => ({'neděle':'Sunday','pondělí':'Monday','úterý':'Tuesday','středa':'Wednesday','čtvrtek':'Thursday','pátek':'Friday','sobota':'Saturday'}[d] || d) + ' ' + rest],
+        [/^(offline|zpožděná data)\s*·\s*naposledy\s+(.+)$/, (m, st, ago) => (st === 'offline' ? 'offline' : 'delayed data') + ' · last seen ' + translateToEn(ago)],
+        [/^s předpovězeným deštěm déle\s*\((.+)\)$/, 'longer with forecast rain ($1)'],
+        [/^(silný|dobrý|slabší|slabý)\s*·\s*(.+)$/, (m, w, rest) => ({'silný': 'strong', 'dobrý': 'good', 'slabší': 'fair', 'slabý': 'weak'}[w] || w) + ' · ' + rest],
+        [/^Čidla online:\s*(\d+\s*\/\s*\d+)$/, 'Sensors online: $1'],
+        [/^Cíl automatiky:\s*([^·]+)·\s*nejvýš lze dopustit na\s*(.+)$/, 'Auto target: $1· maximum refill level is $2'],
+        [/^Automatika se pozastaví do zítřka\s+(\d{1,2}:\d{2});\s*dříve ji zapnete tlačítkem „Obnovit automatiku“\.?$/, 'Automation will pause until tomorrow $1; resume earlier with “Resume automation”.'],
+        [/^Nádrž:\s*(.+)$/, (m, rest) => 'Tank: ' + rest.replace('· rozsah:', '· range:').replace('všechny nádrže', 'all tanks')],
+        [/^·\s*pozor:\s*(\d+)\s*klíče!$/, '· warning: $1 keys!']
     ];
 
     function translateToEn(str) {

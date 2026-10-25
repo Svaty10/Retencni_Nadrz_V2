@@ -13,19 +13,22 @@ Environment (systemd EnvironmentFile=/etc/default/retencka):
 from __future__ import annotations
 
 import asyncio
+import gzip
 import logging
 import os
 import secrets
+import shutil
 import signal
 import socket
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Optional
 
 from . import __version__, reset
 from .core import Core
-from .db import Database
+from .db import Database, SchemaTooNewError
 from .radio import Receiver
 from .settings import Settings
 from .telegram import TelegramBot
@@ -64,22 +67,57 @@ def ensure_setup_code(data_dir: str) -> None:
     log.info("Setup code file: %s", path)
 
 
+def _try_restore_latest_backup(path: str) -> Optional[Database]:
+    backup_dir = os.path.join(os.path.dirname(os.path.abspath(path)), "backup")
+    if not os.path.isdir(backup_dir):
+        return None
+    candidates = sorted(
+        (f for f in os.listdir(backup_dir) if f.startswith("retencka-") and f.endswith(".db.gz")),
+        reverse=True,
+    )
+    for name in candidates:
+        gz_path = os.path.join(backup_dir, name)
+        try:
+            with gzip.open(gz_path, "rb") as fi, open(path, "wb") as fo:
+                shutil.copyfileobj(fi, fo, 65536)
+            db = Database(path)
+            if db.integrity_ok():
+                log.warning("Restored corrupted database from nightly backup %s", name)
+                return db
+            db.close_thread()
+        except Exception as e:
+            log.warning("Could not restore nightly backup %s: %s", name, e)
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                if os.path.exists(path + suffix):
+                    os.remove(path + suffix)
+            except OSError:
+                pass
+    return None
+
+
 def open_database(path: str) -> Database:
-    """Open the DB; a corrupted file is moved aside so the device keeps working."""
+    """Open the DB; a corrupted file is moved aside and restored from the newest
+    nightly backup (if available) so the device keeps working."""
     try:
         db = Database(path)
         if db.integrity_ok():
             return db
         db.close_thread()
         raise RuntimeError("integrity check failed")
+    except SchemaTooNewError:
+        raise
     except Exception as e:
         if not os.path.exists(path):
             raise
         bad = f"{path}.corrupt-{int(time.time())}"
-        log.error("Database unusable (%s) – moving to %s and starting fresh", e, bad)
+        log.error("Database unusable (%s) – moving to %s", e, bad)
         for suffix in ("", "-wal", "-shm"):
             if os.path.exists(path + suffix):
                 os.replace(path + suffix, bad + suffix)
+        restored = _try_restore_latest_backup(path)
+        if restored is not None:
+            return restored
         return Database(path)
 
 

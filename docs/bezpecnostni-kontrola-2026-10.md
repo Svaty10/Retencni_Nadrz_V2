@@ -18,26 +18,29 @@ závody se nehlásí.
 
 | # | Závažnost | Kde | Problém | Stav |
 |---|---|---|---|---|
-| 1 | **vysoká** | root pomocníci (`system/bin/`) | kompromitovaná aplikace může získat práva roota – detaily v soukromém advisory `GHSA-pc46-j66c-c3w2` | **neopraveno** |
+| 1 | **vysoká** | root pomocníci (`system/bin/`) | kompromitovaná aplikace může získat práva roota – detaily v soukromém advisory `GHSA-pc46-j66c-c3w2` | **opraveno** (`1.12.2`) |
 
 ### 1. Eskalace z aplikace na roota v root pomocnících
 
 - **Kategorie:** eskalace oprávnění
 - **Jistota:** 9/10
-- **Stav:** neopraveno. Podrobnosti, postup útoku a oprava jsou v soukromém GitHub Security Advisory
-  `GHSA-pc46-j66c-c3w2` (vidí ho jen správci repozitáře). Detaily se zveřejní po vydání opravené verze,
-  v souladu s [SECURITY.md](../.github/SECURITY.md).
+- **Stav:** opraveno ve verzi 1.12.2 (`GHSA-pc46-j66c-c3w2`). Root pomocníci (`retencka-control.py`,
+  `retencka-update.py`, `retencka-identity.sh`) nastavují práva a vlastníka souborů výhradně přes
+  otevřený deskriptor (`os.fchmod`, `os.fchown`, `install -d -m 750 -o retencka -g retencka`), nikdy
+  přes cestu v adresáři `data/` vlastněném aplikací; před atomickým nahrazením se podstrčený adresář
+  smaže (`rmtree`) a systemd služby dostaly sandboxing (`ProtectSystem=strict`, `NoNewPrivileges=yes`,
+  `PrivateTmp=yes`). Testováno v `test_root_helpers`.
 - **Předpoklad útoku:** kompromitovaná aplikace (útočník d) – sama o sobě nezpřístupňuje hub zvenčí.
 
 ## Pod prahem – ke zvážení jako zpevnění
 
-| Oblast | Kde | Popis | Doporučení |
-|---|---|---|---|
-| `X-Forwarded-Host` z tunelu | `server/retencka/web.py:216` | kontrola `Origin` mu věří u spojení z loopbacku, tedy i u provozu přes Cloudflare tunel; povinný CSRF token ale zůstává | porovnávat jen s `Host` |
-| Cookie bez `Secure` | `server/retencka/web.py:270` | `rt_sid` je bez `Secure` i za HTTPS tunelem (vědomá volba kvůli HTTP v LAN) | nastavit `Secure`, když požadavek přišel přes tunel |
-| Regexy s `$` | `server/retencka/updates.py:26`, `server/retencka/httpserver.py:36` | `$` projde i s koncovým `\n`; dnes nezneužitelné | `re.fullmatch` nebo `\Z` |
-| Převzetí čidla v okně „znovu spárovat“ | `server/retencka/core.py` (`responder`, `_commit_pairing`) | útočník v rádiovém dosahu může během 15 min odpovědět dřív než skutečné čidlo a pak dodávat hladinu (= ovládat ventil); spadá pod přijaté riziko „párování bez autentizace“, ale tento směr není v [bezpecnost.md](bezpecnost.md) popsán | doplnit do dokumentace; v UI ukázat RSSI a počet různých veřejných klíčů pro dané ID |
-| `PENDING_MAX = 4` | `server/retencka/core.py:46` | podvržené žádosti o párování mohou vytlačit skutečný čekající klíč (jen DoS párování); komentář v kódu tvrdí opak | opravit komentář, případně preferovat klíč s nejsilnějším RSSI |
+| Oblast | Kde | Popis | Doporučení | Stav / řešení |
+|---|---|---|---|---|
+| `X-Forwarded-Host` z tunelu | `server/retencka/web.py:216` | kontrola `Origin` mu věří u spojení z loopbacku, tedy i u provozu přes Cloudflare tunel; povinný CSRF token ale zůstává | porovnávat jen s `Host` | **opraveno:** hlavička `X-Forwarded-Host` se ignoruje, `Origin` se porovnává výhradně proti `request.host` |
+| Cookie bez `Secure` | `server/retencka/web.py:270` | `rt_sid` je bez `Secure` i za HTTPS tunelem (vědomá volba kvůli HTTP v LAN) | nastavit `Secure`, když požadavek přišel přes tunel | **opraveno:** pomocná funkce `_via_https_tunnel()` detekuje `X-Forwarded-Proto: https` z loopbacku a nastaví příznak `Secure` |
+| Regexy s `$` | `server/retencka/updates.py:26`, `server/retencka/httpserver.py:36` | `$` projde i s koncovým `\n`; dnes nezneužitelné | `re.fullmatch` nebo `\Z` | **opraveno:** `VERSION_RE` i `_TOKEN` ukončeny striktním `\Z` |
+| Převzetí čidla v okně „znovu spárovat“ | `server/retencka/core.py` (`responder`, `_commit_pairing`) | útočník v rádiovém dosahu může během 15 min odpovědět dřív než skutečné čidlo a pak dodávat hladinu (= ovládat ventil); spadá pod přijaté riziko „párování bez autentizace“, ale tento směr není v [bezpecnost.md](bezpecnost.md) popsán | doplnit do dokumentace; v UI ukázat RSSI a počet různých veřejných klíčů pro dané ID | **opraveno:** zdokumentováno v `docs/bezpecnost.md`; v UI zobrazeno RSSI, počet klíčů (`pub_count`) a varování při více klíčích pro stejné ID |
+| `PENDING_MAX = 4` | `server/retencka/core.py:46` | podvržené žádosti o párování mohou vytlačit skutečný čekající klíč (jen DoS párování); komentář v kódu tvrdí opak | opravit komentář, případně preferovat klíč s nejsilnějším RSSI | **opraveno:** komentář v `core.py` opraven a při zaplnění fronty se preferuje kandidát s nejsilnějším RSSI |
 
 ## Zkontrolováno bez nálezu
 

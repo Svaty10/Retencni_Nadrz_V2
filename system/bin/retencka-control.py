@@ -35,6 +35,11 @@ import time
 from pathlib import Path
 from typing import Optional
 
+try:
+    import pwd
+except ImportError:  # pragma: no cover – Windows test runs
+    pwd = None  # type: ignore[assignment]
+
 
 DATA = Path("/var/lib/retencka/data")
 WANT = DATA / "servis.json"
@@ -42,8 +47,8 @@ STATUS = DATA / "servis-status.json"
 NB_REQUEST = DATA / "control-netbird-install"
 NB_STATUS = DATA / "netbird-install.json"
 NB_SCRIPT = Path(__file__).resolve().parent / "retencka-netbird-install.sh"
-NB_KEY_RE = re.compile(r"^[A-Za-z0-9-]{20,80}$")
-NB_URL_RE = re.compile(r"^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?/?$")
+NB_KEY_RE = re.compile(r"^[A-Za-z0-9-]{20,80}\Z")
+NB_URL_RE = re.compile(r"^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?/?\Z")
 SERVIS_24H_S = 24 * 3600
 OLD_TLS_DIRS = (Path("/var/lib/retencka/tls-ca"), DATA / "tls")
 
@@ -57,17 +62,24 @@ def run(*cmd: str, timeout: int = 60) -> subprocess.CompletedProcess:
 
 
 def write_json(path: Path, data: dict) -> None:
-    """Atomic; random temp name created exclusively (a symlink planted by the app in the
-    data directory is replaced, never written through)."""
+    """Atomic; random temp name created exclusively, ownership and mode set via the
+    open file descriptor (never by path in the app-owned data directory), and a
+    symlink or directory planted at the target is replaced without following it."""
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".")
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(json.dumps(data))
-        try:
-            shutil.chown(tmp, "retencka", "retencka")
-        except (LookupError, OSError):
-            pass
-        os.chmod(tmp, 0o644)
+            f.flush()
+            if hasattr(os, "fchmod"):
+                os.fchmod(f.fileno(), 0o644)
+            if pwd is not None and hasattr(os, "fchown"):
+                try:
+                    pw = pwd.getpwnam("retencka")
+                    os.fchown(f.fileno(), pw.pw_uid, pw.pw_gid)
+                except (KeyError, OSError):
+                    pass
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
         os.replace(tmp, path)
     except BaseException:
         try:

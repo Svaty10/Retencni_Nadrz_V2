@@ -33,10 +33,12 @@ symlinks, size-limited and validated strictly, and it never chooses URLs or path
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import shutil
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -47,6 +49,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Optional
+
+try:
+    import pwd
+except ImportError:  # pragma: no cover – Windows test runs
+    pwd = None  # type: ignore[assignment]
 
 APP = Path("/var/lib/retencka/app")
 RELEASES = APP / "releases"
@@ -63,7 +70,7 @@ MAX_NOTE = 8000            # characters of release notes per version
 MAX_NOTES = 20             # versions in one status
 KEEP = 3
 CHANNELS = ("stable", "beta")
-VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,20})?$")
+VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,20})?\Z")
 
 
 def env(name: str, default: str) -> str:
@@ -188,13 +195,24 @@ def load_prefs() -> dict:
 
 
 def write_atomic(path: Path, text: str) -> None:
-    """Replace `path` atomically. The temp name is random and created exclusively, and
-    rename() replaces a planted symlink instead of writing through it."""
+    """Replace `path` atomically. The temp name is random and created exclusively, mode and
+    owner are set via the open file descriptor (never by path in the app's data directory),
+    and rename() replaces a planted symlink instead of writing through it."""
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
-        os.chmod(tmp, 0o644)
+            f.flush()
+            if hasattr(os, "fchmod"):
+                os.fchmod(f.fileno(), 0o644)
+            if pwd is not None and hasattr(os, "fchown"):
+                try:
+                    pw = pwd.getpwnam("retencka")
+                    os.fchown(f.fileno(), pw.pw_uid, pw.pw_gid)
+                except (KeyError, OSError):
+                    pass
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -451,6 +469,68 @@ def load_bad() -> set:
         return set()
 
 
+def snapshot_db(db_path: Path, snap_path: Path) -> bool:
+    """Create a consistent SQLite backup in root-owned `snap_path` before switching
+    to a new version, so a failed update can roll back schema migrations too."""
+    snap_path.unlink(missing_ok=True)
+    try:
+        fd = os.open(db_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return False
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
+            return False
+    finally:
+        os.close(fd)
+    try:
+        with contextlib.closing(sqlite3.connect(str(db_path), timeout=30.0)) as src, \
+                contextlib.closing(sqlite3.connect(str(snap_path))) as dst:
+            src.backup(dst)
+        return True
+    except Exception as e:
+        print(f"db snapshot failed: {e}", flush=True)
+        snap_path.unlink(missing_ok=True)
+        return False
+
+
+def restore_db(snap_path: Path, db_path: Path) -> None:
+    """Restore the pre-update SQLite snapshot into `db_path` without following
+    symlinks or calling path-based chown/chmod in the app's data directory."""
+    if not snap_path.is_file():
+        return
+    fd, tmp = tempfile.mkstemp(dir=str(db_path.parent), prefix="." + db_path.name + ".")
+    try:
+        with os.fdopen(fd, "wb") as dst, open(snap_path, "rb") as src:
+            shutil.copyfileobj(src, dst)
+            dst.flush()
+            if hasattr(os, "fchmod"):
+                os.fchmod(dst.fileno(), 0o640)
+            if pwd is not None and hasattr(os, "fchown"):
+                try:
+                    pw = pwd.getpwnam("retencka")
+                    os.fchown(dst.fileno(), pw.pw_uid, pw.pw_gid)
+                except (KeyError, OSError):
+                    pass
+        for suf in ("-wal", "-shm"):
+            aux = Path(str(db_path) + suf)
+            if aux.is_dir() and not aux.is_symlink():
+                shutil.rmtree(aux)
+            else:
+                aux.unlink(missing_ok=True)
+        if db_path.is_dir() and not db_path.is_symlink():
+            shutil.rmtree(db_path)
+        os.replace(tmp, db_path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    finally:
+        snap_path.unlink(missing_ok=True)
+
+
 def install(rel: dict, cur: str, bad: set, st: Status) -> int:
     ver = rel["version"]
     RELEASES.mkdir(parents=True, exist_ok=True)
@@ -490,6 +570,9 @@ def install(rel: dict, cur: str, bad: set, st: Status) -> int:
             return 1
 
     previous = CURRENT.resolve()
+    db_path = DATA / "retencka.db"
+    db_snap = APP / ".db-pre-update.sqlite"
+    has_db_snap = snapshot_db(db_path, db_snap)
     st("restarting", "Restartuji aplikaci…")
     switch(RELEASES / ver)
     units_backup: dict = {}
@@ -499,6 +582,7 @@ def install(rel: dict, cur: str, bad: set, st: Status) -> int:
         print(f"unit sync failed: {e}", flush=True)
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
     if healthy(ver):
+        db_snap.unlink(missing_ok=True)
         st("done", f"Aktualizováno {cur} → {ver}", current=ver)
         keep = sorted((p for p in RELEASES.iterdir() if p.is_dir()), key=lambda p: vtuple(p.name))[-KEEP:]
         for p in RELEASES.iterdir():
@@ -506,8 +590,15 @@ def install(rel: dict, cur: str, bad: set, st: Status) -> int:
                 shutil.rmtree(p, ignore_errors=True)
         return 0
 
+    if has_db_snap:
+        subprocess.run(["systemctl", "stop", "retencka.service"], check=False)
     switch(previous)
     restore_units(units_backup)
+    if has_db_snap:
+        try:
+            restore_db(db_snap, db_path)
+        except OSError as e:
+            print(f"db restore failed: {e}", flush=True)
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
     bad.add(ver)
     try:
