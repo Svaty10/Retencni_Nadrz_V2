@@ -11,6 +11,7 @@
     } catch (e) { /* ignore */ }
 
     const HELP_EN = {
+        "shape": "Tank shape determines how volume is calculated from water height. For a horizontal cylinder, volume and percentage follow its circular cross-section.",
         "notify": "When the water level drops below this value, the bot sends a message to connected Telegram chats. 0 = notification disabled.",
         "battery_type": "Remaining capacity and battery life are calculated from voltage based on battery type. Lithium cells maintain voltage almost until depleted, alkaline drops gradually.",
         "capacity": "Actual capacity of the battery pack in mAh (from datasheet). Only affects battery life estimation, not level measurement.",
@@ -739,6 +740,13 @@
         "Válec na výšku (svislý)": "Vertical cylinder",
         "Válec na šířku (ležatý)": "Horizontal cylinder",
         "Kvádr": "Rectangular prism",
+        "Vytížení procesoru": "CPU usage",
+        "Operační paměť (RAM)": "Memory (RAM)",
+        "Tvar nádrže": "Tank shape",
+        "Podle plochy dna (atypická / čtvercová)": "By bottom area (atypical / square)",
+        "Válec naležato": "Horizontal cylinder",
+        "Válec nastojato": "Vertical cylinder",
+        "Kvádr (délka × šířka)": "Rectangular (length × width)",
         "Průměr nádrže": "Tank diameter",
         "Výška nádrže": "Tank height",
         "Šířka nádrže": "Tank width",

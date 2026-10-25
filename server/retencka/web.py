@@ -35,7 +35,8 @@ COOKIE_PLAIN = "rt_sid"
 MAX_BODY = 64 * 1024
 
 FIELD_LABELS = {
-    "name": "název", "max_depth_cm": "hloubka nádrže", "tank_area_m2": "plocha dna",
+    "name": "název", "tank_shape": "tvar nádrže", "max_depth_cm": "hloubka nádrže", "tank_area_m2": "plocha dna",
+    "tank_diameter_cm": "průměr nádrže", "tank_length_cm": "délka nádrže", "tank_width_cm": "šířka nádrže",
     "catchment_area_m2": "plocha střechy", "runoff_coef": "odtokový součinitel",
     "sensor_offset_cm": "výška sondy", "cal_points": "kalibrační body", "probe_accuracy_pct": "přesnost sondy",
     "probe_range_cm": "rozsah sondy", "battery_trim": "korekce baterie", "battery_type": "typ baterie", "refill_provider": "ventil",
@@ -592,6 +593,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         out = core.nodes.public(n["node_id"])
         out["deadband_cm"] = round(model.deadband_mm(n) / 10.0, 2)
         out["deadband_l"] = round(model.deadband_l(n))
+        out["effective_max_depth_cm"] = model.tank_height_cm(n)
         return out
 
     @need("admin")
@@ -706,6 +708,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         if "flow_rate_lpm" in changed:
             core.nodes.update(nid, {"real_flow_rate_lpm": None}, allow_internal=True)
         recalc = bool(set(changed) & {"cal_points", "sensor_offset_cm", "max_depth_cm", "tank_area_m2",
+                                      "tank_shape", "tank_diameter_cm", "tank_length_cm", "tank_width_cm",
                                       "probe_accuracy_pct", "probe_range_cm"})
         return jresp({"ok": True, "changed": changed, "recalc_suggested": recalc, "node": node_public(node)})
 
@@ -1003,10 +1006,120 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                    request["session"]["username"], request["ip"])
         return jresp({"ok": True, "token": settings.get("ha_token")})
 
+    _cpu_prev: list[Optional[tuple[float, float]]] = [None]
+
+    def _read_cpu_raw() -> Optional[tuple[float, float]]:
+        try:
+            with open("/proc/stat") as f:
+                line = f.readline()
+            if line.startswith("cpu "):
+                parts = [float(x) for x in line.split()[1:]]
+                if len(parts) >= 4:
+                    idle = parts[3] + (parts[4] if len(parts) > 4 else 0.0)
+                    total = sum(parts)
+                    return idle, total
+        except Exception:
+            pass
+        try:
+            import ctypes
+            class FILETIME(ctypes.Structure):
+                _fields_ = [("dwLowDateTime", ctypes.c_ulong), ("dwHighDateTime", ctypes.c_ulong)]
+            idle, kern, user = FILETIME(), FILETIME(), FILETIME()
+            if ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kern), ctypes.byref(user)):
+                i = (idle.dwHighDateTime << 32) | idle.dwLowDateTime
+                k = (kern.dwHighDateTime << 32) | kern.dwLowDateTime
+                u = (user.dwHighDateTime << 32) | user.dwLowDateTime
+                return float(i), float(k + u)
+        except Exception:
+            pass
+        return None
+
+    async def get_cpu_pct() -> Optional[float]:
+        s = _read_cpu_raw()
+        if s is None:
+            try:
+                load = os.getloadavg()[0]
+                cores = os.cpu_count() or 1
+                return round(max(0.0, min(100.0, (load / cores) * 100.0)), 1)
+            except Exception:
+                return None
+        prev = _cpu_prev[0]
+        if prev is None or (s[1] - prev[1]) <= 0:
+            await asyncio.sleep(0.05)
+            s2 = _read_cpu_raw()
+            if s2 is None:
+                return None
+            idle_delta = s2[0] - s[0]
+            total_delta = s2[1] - s[1]
+            _cpu_prev[0] = s2
+        else:
+            idle_delta = s[0] - prev[0]
+            total_delta = s[1] - prev[1]
+            _cpu_prev[0] = s
+        if total_delta <= 0:
+            try:
+                load = os.getloadavg()[0]
+                cores = os.cpu_count() or 1
+                return round(max(0.0, min(100.0, (load / cores) * 100.0)), 1)
+            except Exception:
+                return 0.0
+        busy_delta = max(0.0, total_delta - idle_delta)
+        return round(max(0.0, min(100.0, (busy_delta / total_delta) * 100.0)), 1)
+
+    def get_ram_info() -> tuple[Optional[int], Optional[int], Optional[float]]:
+        try:
+            mem: dict[str, int] = {}
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    parts = line.split(":")
+                    if len(parts) == 2:
+                        k = parts[0].strip()
+                        if k in ("MemTotal", "MemAvailable"):
+                            mem[k] = int(parts[1].split()[0])
+            if "MemTotal" in mem and "MemAvailable" in mem:
+                tot_kb = mem["MemTotal"]
+                avail_kb = mem["MemAvailable"]
+                used_kb = max(0, tot_kb - avail_kb)
+                return int(round(used_kb / 1024)), int(round(tot_kb / 1024)), round((used_kb / tot_kb) * 100.0, 1)
+        except Exception:
+            pass
+        try:
+            import ctypes
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("sllAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                tot_b = stat.ullTotalPhys
+                avail_b = stat.ullAvailPhys
+                used_b = max(0, tot_b - avail_b)
+                return int(round(used_b / (1024 * 1024))), int(round(tot_b / (1024 * 1024))), round((used_b / tot_b) * 100.0, 1)
+        except Exception:
+            pass
+        return None, None, None
+
     @need("admin")
     async def api_system(request):
         info: dict[str, Any] = {"version": __version__, "uptime_s": int(time.time() - core.started),
                                 "hostnames": core.hostnames()}
+        cpu = await get_cpu_pct()
+        if cpu is not None:
+            info["cpu_pct"] = cpu
+        ram_used, ram_total, ram_pct = get_ram_info()
+        if ram_used is not None:
+            info["ram_used_mb"] = ram_used
+            info["ram_total_mb"] = ram_total
+            info["ram_pct"] = ram_pct
         try:
             with open("/proc/self/status") as f:
                 for line in f:

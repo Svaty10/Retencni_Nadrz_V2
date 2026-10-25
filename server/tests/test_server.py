@@ -412,6 +412,16 @@ class ServerTest(unittest.TestCase):
             self.assertEqual(json.load(f), {"auto": False, "channel": "beta"})
         st, js, _ = self.req("GET", "/api/system", headers=h)
         self.assertEqual(js["update_prefs"], {"auto": False, "channel": "beta"})
+        self.assertIn("cpu_pct", js)
+        self.assertIn("ram_used_mb", js)
+        self.assertIn("ram_total_mb", js)
+        self.assertIn("ram_pct", js)
+        if js["cpu_pct"] is not None:
+            self.assertGreaterEqual(js["cpu_pct"], 0.0)
+            self.assertLessEqual(js["cpu_pct"], 100.0)
+        if js["ram_pct"] is not None:
+            self.assertGreaterEqual(js["ram_pct"], 0.0)
+            self.assertLessEqual(js["ram_pct"], 100.0)
         for p in (req_file, status_file, os.path.join(d, "update-prefs.json")):
             os.remove(p)
 

@@ -6,6 +6,7 @@ No I/O here – everything is unit-testable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Optional, Sequence
 
 FLAG_BAT_ERR = 0x01
@@ -100,25 +101,67 @@ class Level:
     max_volume_l: float
 
 
+def tank_height_cm(s: dict) -> float:
+    if s.get("tank_shape") == "cyl_h":
+        return max(0.0, float(s.get("tank_diameter_cm") or 0.0))
+    return max(0.0, float(s.get("max_depth_cm") or 0.0))
+
+
+def _volume_and_max_l(level_cm: float, s: dict) -> tuple[float, float]:
+    shape = s.get("tank_shape") or "area"
+    if shape == "cyl_h":
+        d = float(s.get("tank_diameter_cm") or 0.0)
+        length = float(s.get("tank_length_cm") or 0.0)
+        if d <= 0.0 or length <= 0.0:
+            return 0.0, 0.0
+        r = d / 2.0
+        h = max(0.0, min(d, level_cm))
+        u = max(-1.0, min(1.0, (r - h) / r)) if r > 0 else 1.0
+        seg_cm2 = (r * r * math.acos(u) - (r - h) * math.sqrt(max(0.0, 2.0 * r * h - h * h))) if r > 0 else 0.0
+        max_cm2 = math.pi * r * r
+        return seg_cm2 * length / 1000.0, max_cm2 * length / 1000.0
+    if shape == "cyl_v":
+        d = float(s.get("tank_diameter_cm") or 0.0)
+        max_d = float(s.get("max_depth_cm") or 0.0)
+        if d <= 0.0 or max_d <= 0.0:
+            return 0.0, 0.0
+        h = max(0.0, min(max_d, level_cm))
+        area_m2 = math.pi * ((d / 100.0) / 2.0) ** 2
+        return area_m2 * h * 10.0, area_m2 * max_d * 10.0
+    if shape == "rect":
+        length = float(s.get("tank_length_cm") or 0.0)
+        width = float(s.get("tank_width_cm") or 0.0)
+        max_d = float(s.get("max_depth_cm") or 0.0)
+        if length <= 0.0 or width <= 0.0 or max_d <= 0.0:
+            return 0.0, 0.0
+        h = max(0.0, min(max_d, level_cm))
+        area_m2 = (length / 100.0) * (width / 100.0)
+        return area_m2 * h * 10.0, area_m2 * max_d * 10.0
+    max_d = float(s.get("max_depth_cm") or 0.0)
+    area_m2 = float(s.get("tank_area_m2") or 0.0)
+    if max_d <= 0.0 or area_m2 <= 0.0:
+        return 0.0, 0.0
+    h = max(0.0, min(max_d, level_cm))
+    return area_m2 * h * 10.0, area_m2 * max_d * 10.0
+
+
 def compute_level(probe_100uv: float, s: dict) -> Level:
     mv = probe_100uv / 10.0
     col = column_cm(mv, s["cal_points"])
-    max_d = float(s["max_depth_cm"])
+    max_d = tank_height_cm(s)
     level = max(0.0, min(max_d, col + float(s["sensor_offset_cm"])))
-    area = float(s["tank_area_m2"])
-    vol = area * level / 100.0 * 1000.0
-    max_vol = area * max_d / 100.0 * 1000.0
-    pct = level / max_d * 100.0 if max_d > 0 else 0.0
+    vol, max_vol = _volume_and_max_l(level, s)
+    pct = vol / max_vol * 100.0 if max_vol > 0 else 0.0
     return Level(col, level, pct, vol, max_vol)
 
 
 def level_from_mm(level_mm: float, s: dict) -> Level:
     """Level object from an already computed (filtered) height above the bottom."""
-    max_d = float(s["max_depth_cm"])
+    max_d = tank_height_cm(s)
     level = max(0.0, min(max_d, level_mm / 10.0))
-    area = float(s["tank_area_m2"])
-    return Level(level - float(s["sensor_offset_cm"]), level, level / max_d * 100.0 if max_d else 0.0,
-                 area * level * 10.0, area * max_d * 10.0)
+    vol, max_vol = _volume_and_max_l(level, s)
+    pct = vol / max_vol * 100.0 if max_vol > 0 else 0.0
+    return Level(level - float(s["sensor_offset_cm"]), level, pct, vol, max_vol)
 
 
 def deadband_mm(s: dict) -> float:
@@ -127,7 +170,22 @@ def deadband_mm(s: dict) -> float:
 
 
 def deadband_l(s: dict) -> float:
-    return deadband_mm(s) / 10.0 * float(s["tank_area_m2"]) * 10.0      # mm -> cm -> L
+    shape = s.get("tank_shape") or "area"
+    if shape == "cyl_h":
+        d = float(s.get("tank_diameter_cm") or 0.0)
+        length = float(s.get("tank_length_cm") or 0.0)
+        eff_area_m2 = (d / 100.0) * (length / 100.0)
+    elif shape == "cyl_v":
+        d = float(s.get("tank_diameter_cm") or 0.0)
+        eff_area_m2 = math.pi * ((d / 100.0) / 2.0) ** 2
+    elif shape == "rect":
+        length = float(s.get("tank_length_cm") or 0.0)
+        width = float(s.get("tank_width_cm") or 0.0)
+        eff_area_m2 = (length / 100.0) * (width / 100.0)
+    else:
+        eff_area_m2 = float(s.get("tank_area_m2") or 0.0)
+    eff_area_m2 = max(0.0, eff_area_m2)
+    return deadband_mm(s) / 10.0 * eff_area_m2 * 10.0
 
 
 class LevelFilter:
@@ -163,7 +221,7 @@ class LevelFilter:
 
 
 def max_volume_l(s: dict) -> float:
-    return float(s["tank_area_m2"]) * float(s["max_depth_cm"]) / 100.0 * 1000.0
+    return _volume_and_max_l(tank_height_cm(s), s)[1]
 
 
 # ------------------------------------------------------------------------- battery

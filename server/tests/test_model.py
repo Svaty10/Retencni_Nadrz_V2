@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 import unittest
@@ -115,6 +116,93 @@ class InflowTest(unittest.TestCase):
     def test_noise_is_not_rain(self):
         ser = [(i * 300, 1000 + (5 if i % 2 else -5), 0) for i in range(50)]
         self.assertEqual(model.inflow_intervals(ser, 20.0), [])
+
+
+class TankShapeTest(unittest.TestCase):
+    def test_cyl_h_volume_and_percent(self):
+        # horizontal cylinder: diameter 200 cm (radius 100 cm), length 300 cm
+        s = {"tank_shape": "cyl_h", "tank_diameter_cm": 200.0, "tank_length_cm": 300.0,
+             "max_depth_cm": 92.0, "sensor_offset_cm": 0.0, "cal_points": [[0, 0], [1000, 100]],
+             "probe_accuracy_pct": 0.5, "probe_range_cm": 200.0}
+        self.assertEqual(model.tank_height_cm(s), 200.0)
+        max_vol = math.pi * (100.0 ** 2) * 300.0 / 1000.0
+        self.assertAlmostEqual(model.max_volume_l(s), max_vol)
+
+        # empty
+        lv0 = model.level_from_mm(0, s)
+        self.assertAlmostEqual(lv0.volume_l, 0.0)
+        self.assertAlmostEqual(lv0.percent, 0.0)
+
+        # half-full (100 cm height = 50% volume)
+        lv_mid = model.level_from_mm(1000, s)
+        self.assertAlmostEqual(lv_mid.level_cm, 100.0)
+        self.assertAlmostEqual(lv_mid.volume_l, max_vol / 2.0)
+        self.assertAlmostEqual(lv_mid.percent, 50.0)
+
+        # quarter height (50 cm height) -> non-linear volume (< 25% due to curvature)
+        lv_q = model.level_from_mm(500, s)
+        self.assertAlmostEqual(lv_q.level_cm, 50.0)
+        self.assertLess(lv_q.percent, 25.0)
+        self.assertAlmostEqual(lv_q.percent, (lv_q.volume_l / max_vol) * 100.0)
+
+        # full (200 cm)
+        lv_full = model.level_from_mm(2000, s)
+        self.assertAlmostEqual(lv_full.volume_l, max_vol)
+        self.assertAlmostEqual(lv_full.percent, 100.0)
+
+        # deadband at mid-height: surface area = 2.0 m * 3.0 m = 6.0 m2; deadband_mm = 10 mm -> 60 L
+        self.assertAlmostEqual(model.deadband_l(s), 60.0)
+
+    def test_cyl_v_volume_and_percent(self):
+        # vertical cylinder: diameter 200 cm (radius 1.0 m), max_depth 150 cm
+        s = {"tank_shape": "cyl_v", "tank_diameter_cm": 200.0, "max_depth_cm": 150.0,
+             "sensor_offset_cm": 0.0, "cal_points": [[0, 0], [1000, 100]],
+             "probe_accuracy_pct": 0.5, "probe_range_cm": 200.0}
+        self.assertEqual(model.tank_height_cm(s), 150.0)
+        area_m2 = math.pi * (1.0 ** 2)
+        max_vol = area_m2 * 150.0 * 10.0
+        self.assertAlmostEqual(model.max_volume_l(s), max_vol)
+
+        lv = model.level_from_mm(750, s)    # 75 cm = 50%
+        self.assertAlmostEqual(lv.volume_l, max_vol / 2.0)
+        self.assertAlmostEqual(lv.percent, 50.0)
+        self.assertAlmostEqual(model.deadband_l(s), 1.0 * area_m2 * 10.0)
+
+    def test_rect_volume_and_percent(self):
+        # rectangular: length 300 cm, width 200 cm, max_depth 150 cm
+        s = {"tank_shape": "rect", "tank_length_cm": 300.0, "tank_width_cm": 200.0,
+             "max_depth_cm": 150.0, "sensor_offset_cm": 0.0, "cal_points": [[0, 0], [1000, 100]],
+             "probe_accuracy_pct": 0.5, "probe_range_cm": 200.0}
+        self.assertEqual(model.tank_height_cm(s), 150.0)
+        area_m2 = 3.0 * 2.0
+        max_vol = area_m2 * 150.0 * 10.0
+        self.assertAlmostEqual(model.max_volume_l(s), 9000.0)
+
+        lv = model.level_from_mm(500, s)    # 50 cm = 1/3 height & volume
+        self.assertAlmostEqual(lv.volume_l, 3000.0)
+        self.assertAlmostEqual(lv.percent, 100.0 / 3.0)
+        self.assertAlmostEqual(model.deadband_l(s), 60.0)
+
+    def test_zero_dimensions(self):
+        s = {"tank_shape": "area", "tank_area_m2": 0.0, "max_depth_cm": 0.0,
+             "sensor_offset_cm": 0.0, "cal_points": [[0, 0], [1000, 100]],
+             "probe_accuracy_pct": 0.5, "probe_range_cm": 200.0}
+        self.assertEqual(model.tank_height_cm(s), 0.0)
+        self.assertEqual(model.max_volume_l(s), 0.0)
+        lv = model.compute_level(5000, s)
+        self.assertEqual(lv.volume_l, 0.0)
+        self.assertEqual(lv.percent, 0.0)
+        self.assertEqual(model.deadband_l(s), 0.0)
+
+        s_cyl = {"tank_shape": "cyl_h", "tank_diameter_cm": 0.0, "tank_length_cm": 0.0,
+                 "sensor_offset_cm": 0.0, "cal_points": [[0, 0], [1000, 100]],
+                 "probe_accuracy_pct": 0.5, "probe_range_cm": 200.0}
+        self.assertEqual(model.tank_height_cm(s_cyl), 0.0)
+        self.assertEqual(model.max_volume_l(s_cyl), 0.0)
+        lv_cyl = model.compute_level(5000, s_cyl)
+        self.assertEqual(lv_cyl.volume_l, 0.0)
+        self.assertEqual(lv_cyl.percent, 0.0)
+        self.assertEqual(model.deadband_l(s_cyl), 0.0)
 
 
 if __name__ == "__main__":

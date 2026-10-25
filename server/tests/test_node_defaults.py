@@ -36,11 +36,11 @@ class NodeDefaults(unittest.TestCase):
         self.assertEqual(self.nodes.update(0xA, {"notify_low_pct": 40}), ["notify_low_pct"])
         self.assertIn("notify_low_pct", self.nodes.public(0xA)["overrides"])
         # a shared default change reaches B, never A's override
-        self.assertEqual(self.nodes.set_defaults({"notify_low_pct": 25, "battery_type": "alkaline"}),
+        self.assertEqual(self.nodes.set_defaults({"notify_low_pct": 25, "battery_type": "lifes2"}),
                          ["battery_type", "notify_low_pct"])
         self.assertEqual(self.nodes.get(0xA)["notify_low_pct"], 40)
         self.assertEqual(self.nodes.get(0xB)["notify_low_pct"], 25)
-        self.assertEqual(self.nodes.get(0xA)["battery_type"], "alkaline")
+        self.assertEqual(self.nodes.get(0xA)["battery_type"], "lifes2")
         # survives a reload from the DB (another process / restart)
         again = Nodes(self.db)
         self.assertEqual((again.get(0xA)["notify_low_pct"], again.get(0xB)["notify_low_pct"]), (40, 25))
@@ -67,8 +67,10 @@ class NodeDefaults(unittest.TestCase):
             self.nodes.set_defaults({"refill_threshold_pct": 40})       # B: target 30 <= 40
 
     def test_migration_of_old_full_config(self):
-        # a 1.1.x node config (battery capacity was global then)
-        full = {k: v[0] for k, v in NODE_SCHEMA.items() if not k.startswith("battery_capacity")}
+        # a 1.1.x node config (battery capacity was global then; new tank shapes did not exist)
+        full = {k: v[0] for k, v in NODE_SCHEMA.items()
+                if not k.startswith("battery_capacity")
+                and k not in ("tank_shape", "tank_diameter_cm", "tank_length_cm", "tank_width_cm")}
         full.update(notify_low_pct=33.0, rain_wait_enabled=False, tank_area_m2=4.2)
         c = sqlite3.connect(self.path)
         c.execute("INSERT INTO nodes(node_id, name, config, created, sort) VALUES(?,?,?,?,?)",
@@ -83,11 +85,11 @@ class NodeDefaults(unittest.TestCase):
         db = Database(self.path)                                         # applies v9 (and v10)
         self.assertEqual(db.scalar("PRAGMA user_version"), len(MIGRATIONS))
         stored = json.loads(db.scalar("SELECT config FROM nodes WHERE node_id=?", (0xC,)))
-        self.assertEqual({k for k in stored if k in INHERITABLE}, {"notify_low_pct", "rain_wait_enabled"})
+        self.assertEqual({k for k in stored if k in INHERITABLE}, {"battery_type", "flow_rate_lpm", "notify_low_pct", "rain_wait_enabled"})
         n = Nodes(db).get(0xC)
         for k, v in full.items():                                       # no effective value changed
             self.assertEqual(n[k], v, k)
-        self.assertEqual(n["_overrides"], ["notify_low_pct", "rain_wait_enabled"])
+        self.assertEqual(sorted(n["_overrides"]), ["battery_type", "flow_rate_lpm", "notify_low_pct", "rain_wait_enabled"])
         db.close_thread()
 
     def test_strip_for_old_backups(self):

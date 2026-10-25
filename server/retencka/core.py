@@ -1061,7 +1061,7 @@ class Core:
             "water_level_percent": None if lv is None else round(lv.percent, 1),
             "volume_liters": None if lv is None else round(lv.volume_l),
             "max_liters": round(model.max_volume_l(node)),
-            "max_depth_cm": node["max_depth_cm"],
+            "max_depth_cm": model.tank_height_cm(node),
             "column_cm": None if lv is None else round(lv.column_cm, 1),
             "raw_level_cm": None if last.get("level_raw_mm") is None else round(last["level_raw_mm"] / 10.0, 1),
             "probe_mv": None if last.get("probe_100uv") is None else last["probe_100uv"] / 10.0,
@@ -1224,7 +1224,7 @@ class Core:
         need_l = target_pct / 100.0 * lv.max_volume_l - lv.volume_l
         if need_l <= max(50.0, model.deadband_l(node)):
             return False, "Hladina je už na cíli nebo těsně pod ním."
-        flow = float(node.get("real_flow_rate_lpm") or node["flow_rate_lpm"])
+        flow = float(node.get("real_flow_rate_lpm") or node.get("flow_rate_lpm") or 20.0)
         seconds = int(min(need_l / flow * 60 * 1.10, int(node["max_refill_minutes"]) * 60))
         ok, msg = await prov[0](seconds)
         if not ok:
@@ -1541,7 +1541,6 @@ class Core:
                 (bucket, bucket, nid, t_from, t_to))
             scale_t = scale_h = 0.01
             scale_r = 0.5
-        max_mm = float(node["max_depth_cm"]) * 10.0
         trim = float(node["battery_trim"])
         kind = node.get("battery_type") or "lifes2"
         out = {"bucket_s": bucket, "t": [], "level_pct": [], "level_cm": [], "volume_l": [], "probe_mv": [],
@@ -1560,7 +1559,7 @@ class Core:
                         out[k].append(None)
             prev_t = r["t"]
             out["t"].append(r["t"] * 1000)
-            out["level_pct"].append(r1(r["l"], 100.0 / max_mm, 1) if max_mm else None)
+            out["level_pct"].append(round(model.level_from_mm(r["l"], node).percent, 1) if r["l"] is not None else None)
             out["level_cm"].append(r1(r["l"], 0.1, 1))
             out["volume_l"].append(r1(r["v"], 1.0, 0))
             out["temp"].append(r1(r["te"], scale_t, 2))
