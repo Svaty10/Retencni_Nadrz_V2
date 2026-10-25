@@ -55,13 +55,17 @@
         <div class="brand">
             <svg class="ico brand-mark" aria-hidden="true"><use href="#i-drop"/></svg>
             <span class="brand-name">Retenční nádrž</span>
-            <span class="status-pill" id="statusPill" role="status">Načítám…</span>
         </div>
+        <nav class="main-nav" id="tabNav" aria-label="Hlavní navigace">
+            <button class="tab-btn nav-tab active" data-tab="dashboard" type="button">Přehled</button>
+            <button class="tab-btn nav-tab admin-only hidden" data-tab="nastaveni" type="button">Nastavení<span class="badge-dot hidden" id="menuUpdDot" title="K dispozici je aktualizace"></span></button>
+            <button class="tab-btn nav-tab admin-only hidden" data-tab="logovani" type="button">Historie událostí</button>
+        </nav>
+        <span class="status-pill" id="statusPill" role="status">Načítám…</span>
         <div class="account">
             <button class="account-btn" id="accountBtn" type="button" aria-haspopup="menu" aria-expanded="false"
                     aria-controls="accountMenu" aria-label="Účet a nastavení">
                 <span class="avatar" id="avatarInitial" aria-hidden="true">?</span>
-                <span class="badge-dot hidden" id="avatarDot" title="K dispozici je aktualizace"></span>
                 <svg class="ico ico-sm" aria-hidden="true"><use href="#i-chevron"/></svg>
             </button>
             <div class="menu hidden" id="accountMenu" role="menu" aria-labelledby="accountBtn">
@@ -75,12 +79,8 @@
                 <div class="menu-sep" role="separator"></div>
                 <button class="menu-item tab-btn" data-tab="heslo" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>Můj účet</button>
-                <button class="menu-item tab-btn admin-only hidden" data-tab="nastaveni" type="button" role="menuitem">
-                    <svg class="ico" aria-hidden="true"><use href="#i-sliders"/></svg>Nastavení<span class="badge-dot hidden" id="menuUpdDot" title="K dispozici je aktualizace"></span></button>
                 <button class="menu-item tab-btn admin-only hidden" data-tab="uzivatele" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-users"/></svg>Správa uživatelů</button>
-                <button class="menu-item tab-btn admin-only hidden" data-tab="logovani" type="button" role="menuitem">
-                    <svg class="ico" aria-hidden="true"><use href="#i-list"/></svg>Historie událostí</button>
                 <div class="menu-sep admin-only hidden" role="separator"></div>
                 <button class="menu-item admin-only hidden" id="menuRestart" type="button" role="menuitem">
                     <svg class="ico" aria-hidden="true"><use href="#i-restart"/></svg>Restartovat aplikaci</button>
@@ -112,10 +112,7 @@
         </div>
     </header>
 
-    <nav class="main-nav" id="tabNav" aria-label="Hlavní navigace">
-        <button class="tab-btn nav-tab active" data-tab="dashboard" type="button">Přehled</button>
-        <div id="nodeBar" class="node-bar hidden" role="tablist" aria-label="Nádrže"></div>
-    </nav>
+    <div id="nodeBar" class="node-bar hidden" role="tablist" aria-label="Nádrže"></div>
 
     <div id="banner" class="banner hidden" role="alert"></div>
 
@@ -124,7 +121,6 @@
         <div id="diskBanner" class="banner disk-banner hidden" role="alert"></div>
         <!-- Přehled všech nádrží (volba „Všechny nádrže“ v liště nádrží) -->
         <div id="overview" class="hidden">
-            <p class="card-desc ov-desc">Všechny nádrže najednou: hladina, objem, stav a baterie. Klepnutím na nádrž otevřete její detail.</p>
             <div class="overview-grid" id="overviewGrid"></div>
             <section class="card chart-card span-all mt-20">
                 <div class="card-head">
@@ -141,10 +137,9 @@
                 <section class="card tank-card" aria-labelledby="tankTitle">
                     <div class="tank-main">
                         <div class="tank-figures">
-                            <h2 class="card-label" id="tankTitle">Stav nádrže</h2>
-                            <p class="card-desc">Aktuální hladina a objem vody v nádrži.</p>
+                            <h2 class="tank-name" id="tankTitle"><span translate="no" id="txtTankName">Nádrž</span></h2>
+                            <p class="tank-status" id="txtTankStatus"><span class="dot"></span><span>–</span></p>
                             <div class="level-big" id="txtPercent">– %</div>
-                            <div class="stale-badge hidden" id="txtStaleAge"></div>
                             <div class="level-litres" id="txtLiters">– L</div>
                             <dl class="tank-meta">
                                 <div><dt>Výška hladiny</dt><dd id="txtLevelCm">–</dd></div>
@@ -184,44 +179,33 @@
                 </section>
 
                 <!-- Doplňkové hodnoty ve skupinách -->
-                <section class="card facts-card" aria-label="Přehled">
-                    <div class="fact-group">
-                        <h3><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg>Klima v šachtě</h3>
-                        <p class="card-desc fact-desc">Teplota a vlhkost u čidla.</p>
-                        <dl class="facts">
-                            <div class="fact"><dt>Teplota</dt><dd id="txtTemp">–</dd></div>
-                            <div class="fact"><dt>Vlhkost</dt><dd id="txtHum">–</dd></div>
-                        </dl>
-                    </div>
-                    <div class="fact-group" id="batBox">
-                        <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie</h3>
-                        <p class="card-desc fact-desc">Stav baterií v čidle a odhad výdrže.</p>
-                        <dl class="facts">
-                            <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
-                            <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
-                        </dl>
-                    </div>
-                    <div class="fact-group">
-                        <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Spotřeba</h3>
-                        <p class="card-desc fact-desc">Kolik vody z nádrže odešlo.</p>
-                        <dl class="facts">
-                            <div class="fact"><dt>Dnes</dt><dd id="txtConsToday">–</dd></div>
-                            <div class="fact"><dt>Za 7 dní</dt><dd id="txtCons7d">–</dd></div>
-                        </dl>
-                    </div>
+                <section class="card facts-card" aria-label="Podrobnosti nádrže">
                     <div class="fact-group" id="outlookBox">
                         <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled <button type="button" class="help-tip" data-help="outlook"></button></h3>
-                        <p class="card-desc fact-desc">Na jak dlouho zásoba vystačí a co přinese déšť.</p>
                         <dl class="facts">
                             <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
                             <div class="fact"><dt>Srážky (48 h)</dt><dd id="txtRain">–</dd></div>
                         </dl>
                     </div>
-                    <div class="fact-group" id="linkBox">
-                        <h3><svg class="ico" aria-hidden="true"><use href="#i-signal"/></svg>Signál čidla</h3>
-                        <p class="card-desc fact-desc">Kvalita rádiového spojení čidla s hubem.</p>
+                    <div class="fact-group">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Spotřeba</h3>
                         <dl class="facts">
-                            <div class="fact"><dt>Síla</dt><dd><span id="txtRssi">–</span><small id="txtLoss">–</small></dd></div>
+                            <div class="fact"><dt>Dnes</dt><dd id="txtConsToday">–</dd></div>
+                            <div class="fact"><dt>Za 7 dní</dt><dd id="txtCons7d">–</dd></div>
+                        </dl>
+                    </div>
+                    <div class="fact-group" id="batBox">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie čidla</h3>
+                        <dl class="facts">
+                            <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
+                            <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
+                        </dl>
+                    </div>
+                    <div class="fact-group" id="linkBox">
+                        <h3><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg>Čidlo v šachtě</h3>
+                        <dl class="facts">
+                            <div class="fact"><dt>Teplota a vlhkost</dt><dd><span class="plain" id="txtTemp">–</span>, <span class="plain" id="txtHum">–</span></dd></div>
+                            <div class="fact"><dt>Signál</dt><dd><span id="txtRssi">–</span><small id="txtLoss">–</small></dd></div>
                         </dl>
                     </div>
                 </section>
@@ -287,16 +271,17 @@
         <div class="page-head">
             <h1>Nastavení</h1>
             <label class="toggle settings-mode">
-                <span class="toggle-text">Pokročilé <span class="muted small">(zobrazeno: <span id="advLabel">základní nastavení</span>)</span></span>
+                <span class="toggle-text">Zobrazit pokročilá nastavení</span>
                 <span class="switch"><input type="checkbox" id="advToggle"><span class="slider"></span></span>
             </label>
         </div>
+        <div class="set-layout">
         <nav class="set-nav" id="setNav" aria-label="Části nastavení"></nav>
         <div class="stack" id="setStack">
             <!-- pole nádrže jsou v kartách níže, k formuláři je váže atribut form="calForm" -->
             <form id="calForm" class="hidden-form"></form>
 
-            <section class="card col-card span-cols scope-general" id="allNodes" data-nav="Čidla" data-order="0">
+            <section class="card col-card span-cols scope-general" id="allNodes" data-nav="Čidla" data-group="Čidla a poloha" data-order="0">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-antenna"/></svg></span>
                     <div><h2>Čidla</h2><p class="card-desc">Seznam čidel, přidání a párování nového čidla, čidla v dosahu.</p></div>
@@ -340,14 +325,14 @@
                 </div>
             </section>
 
-            <section class="hidden" id="allDefaults" style="display:none !important;">
+            <section class="hidden" id="allDefaults">
                 <form id="defForm" class="hidden"></form>
             </section>
 
             <!-- sloupce karet (rozděluje app.js podle výšky, spodky zarovnané) -->
             <div class="set-cols" id="setCols"></div>
             <div class="hidden" id="setPark">
-            <section class="card col-card scope-tank" id="tkTank" data-nav="Nádrž">
+            <section class="card col-card scope-tank" id="tkTank" data-nav="Nádrž" data-group="Nádrž a měření">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-drop"/></svg></span>
                     <div><h2>Nádrž – <span id="calNodeName" translate="no">–</span></h2><p class="card-desc">Název, rozměry nádrže a střechy; aktuální hodnoty z čidla.</p></div>
@@ -411,10 +396,9 @@
                     </div>
                 </div>
                 </div>
-                <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit</button></div>
             </section>
 
-            <section class="card col-card scope-tank" id="tkCal" data-nav="Kalibrace">
+            <section class="card col-card scope-tank" id="tkCal" data-nav="Kalibrace" data-group="Nádrž a měření">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-ruler"/></svg></span>
                     <div><h2>Kalibrace</h2><p class="card-desc">Převod napětí sondy na výšku hladiny; stačí dvě měření.</p></div>
@@ -425,7 +409,7 @@
                         <input type="number" step="0.1" id="calActualCm" placeholder="Skutečná hladina" aria-label="Skutečná hladina (cm)">
                         <span class="unit">cm</span>
                     </div>
-                    <button class="btn btn-primary" id="calAddBtn" type="button">Uložit</button>
+                    <button class="btn btn-primary" id="calAddBtn" type="button">Přidat bod</button>
                 </div>
                 <div class="sub adv">
                     <h3>Kalibrační body <button type="button" class="help-tip" data-help="calpoints"></button></h3>
@@ -435,7 +419,6 @@
                             <tbody id="calPoints"></tbody>
                         </table>
                     </div>
-                    <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit body</button></div>
                 </div>
                 <div class="sub adv">
                     <h3>Přepočet historie <button type="button" class="help-tip" data-help="recompute"></button></h3>
@@ -446,7 +429,7 @@
                 </div>
             </section>
 
-            <section class="card col-card scope-tank adv" id="tkProbe" data-nav="Sonda">
+            <section class="card col-card scope-tank adv" id="tkProbe" data-nav="Sonda" data-group="Nádrž a měření">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-signal"/></svg></span>
                     <div><h2>Sonda</h2><p class="card-desc">Umístění a přesnost tlakové sondy; z přesnosti se počítá vyhlazení šumu.</p></div>
@@ -471,10 +454,9 @@
                         <div class="readonly-val" id="deadbandInfo">–</div>
                     </div>
                 </div>
-                <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit</button></div>
             </section>
 
-            <section class="card col-card scope-tank" id="tkBat" data-nav="Baterie">
+            <section class="card col-card scope-tank" id="tkBat" data-nav="Baterie" data-group="Čidlo">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-battery"/></svg></span>
                     <div><h2>Baterie</h2><p class="card-desc">Typ a kapacita baterie čidla (odhad výdrže), korekce měření napětí.</p></div>
@@ -498,7 +480,6 @@
                         <div class="input-unit"><input type="number" step="1" name="battery_capacity_alk_mah" form="calForm"><span class="unit">mAh</span></div>
                     </div>
                 </div>
-                <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit</button></div>
                 <div class="sub adv">
                     <h3>Kalibrace měření baterie <button type="button" class="help-tip" data-help="battrim"></button></h3>
                     <div class="inline-actions">
@@ -506,27 +487,13 @@
                             <input type="number" step="0.001" id="batActualV" placeholder="Změřené napětí" aria-label="Změřené napětí (V)">
                             <span class="unit">V</span>
                         </div>
-                        <button class="btn btn-primary" id="batCalBtn" type="button">Uložit</button>
+                        <button class="btn btn-outline" id="batCalBtn" type="button">Opravit měření</button>
                     </div>
                     <p class="muted small mt-15">Korekce: <strong id="batTrim">–</strong></p>
                 </div>
             </section>
 
-            <section class="card col-card scope-tank" id="tkNotify" data-nav="Upozornění">
-                <div class="card-title">
-                    <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-alert"/></svg></span>
-                    <div><h2>Upozornění</h2><p class="card-desc">Zpráva do Telegramu, když hladina klesne pod hranici.</p></div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span> <button type="button" class="help-tip" data-help="notify"></button></label>
-                        <div class="input-unit"><input type="number" step="1" min="0" max="100" name="notify_low_pct" form="calForm"><span class="unit">%</span></div>
-                    </div>
-                </div>
-                <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit</button></div>
-            </section>
-
-            <section class="card col-card scope-tank" id="tkRefill" data-nav="Dopouštění">
+            <section class="card col-card scope-tank" id="tkRefill" data-nav="Dopouštění" data-group="Automatika">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-rain"/></svg></span>
                     <div><h2>Dopouštění</h2><p class="card-desc">Ventil Hunter Hydrawise, zóna a pravidla automatického dopouštění z řadu.</p></div>
@@ -622,10 +589,22 @@
                     </div>
                     </div>
                 </div>
-                <div class="form-actions"><button type="submit" form="calForm" class="btn btn-primary">Uložit</button></div>
             </section>
 
-            <section class="card col-card scope-general" id="genPlace" data-nav="Poloha">
+            <section class="card col-card scope-tank" id="tkNotify" data-nav="Upozornění" data-group="Automatika">
+                <div class="card-title">
+                    <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-alert"/></svg></span>
+                    <div><h2>Upozornění</h2><p class="card-desc">Zpráva do Telegramu, když hladina klesne pod hranici.</p></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span> <button type="button" class="help-tip" data-help="notify"></button></label>
+                        <div class="input-unit"><input type="number" step="1" min="0" max="100" name="notify_low_pct" form="calForm"><span class="unit">%</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card col-card scope-general" id="genPlace" data-nav="Poloha" data-group="Čidla a poloha">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-pin"/></svg></span>
                     <div><h2>Poloha</h2><p class="card-desc">Místo pro předpověď počasí a čekání na déšť.</p></div>
@@ -656,10 +635,10 @@
                 </form>
             </section>
 
-            <section class="card col-card scope-general" id="genKeys" data-nav="Hunter Hydrawise">
+            <section class="card col-card scope-general" id="genKeys" data-nav="Hunter Hydrawise" data-group="Propojení">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-key"/></svg></span>
-                    <div><h2>API klíče a integrace – Hunter Hydrawise</h2><p class="card-desc">Klíč účtu Hydrawise pro ovládání ventilů; nádrž může mít v Dopouštění vlastní.</p></div>
+                    <div><h2>Hunter Hydrawise</h2><p class="card-desc">Klíč účtu Hydrawise pro ovládání ventilů; nádrž může mít v Dopouštění vlastní.</p></div>
                 </div>
                 <form id="hwForm" class="config-form settings-form">
                     <div class="form-row">
@@ -676,7 +655,7 @@
                 </form>
             </section>
 
-            <section class="card col-card scope-general" id="genTg" data-nav="Telegram a servis">
+            <section class="card col-card scope-general" id="genTg" data-nav="Telegram a servis" data-group="Propojení">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-users"/></svg></span>
                     <div><h2>Telegram a vzdálený servis</h2><p class="card-desc">Upozornění a ovládání z telefonu; vzdálený přístup servisního technika.</p></div>
@@ -746,7 +725,7 @@
                 </div>
             </section>
 
-            <section class="card col-card scope-general" id="genHa" data-nav="Home Assistant">
+            <section class="card col-card scope-general" id="genHa" data-nav="Home Assistant" data-group="Propojení">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-list"/></svg></span>
                     <div><h2>Home Assistant</h2><p class="card-desc">Token a hotová konfigurace pro integraci do Home Assistantu.</p></div>
@@ -764,7 +743,7 @@
                 </details>
             </section>
 
-            <section class="card col-card scope-general" id="genData" data-nav="Záloha a data">
+            <section class="card col-card scope-general" id="genData" data-nav="Záloha a data" data-group="Data a systém">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-archive"/></svg></span>
                     <div><h2>Záloha a data</h2><p class="card-desc">Stažení a nahrání zálohy, automatické zálohy, jak dlouho držet podrobná data.</p></div>
@@ -825,7 +804,7 @@
                 </div>
             </section>
 
-            <section class="card col-card scope-general" id="genSys" data-nav="Systém">
+            <section class="card col-card scope-general" id="genSys" data-nav="Systém" data-group="Data a systém">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-clock"/></svg></span>
                     <div><h2>Systém</h2><p class="card-desc">Verze, adresa v síti, stav zařízení a aktualizace.</p></div>
@@ -860,6 +839,7 @@
 
             </div>
         </div>
+        </div>
     </div>
 
     <!-- ======================================================= LOGOVÁNÍ -->
@@ -867,7 +847,6 @@
         <div class="page-head"><h1>Historie událostí</h1></div>
         <div class="stack">
             <section class="card">
-                <h2>Záznamy</h2>
                 <div class="log-chips" id="logChips" role="group" aria-label="Kategorie">
                     <button type="button" class="chip active" data-cat="">Vše</button>
                     <button type="button" class="chip" data-cat="refill">Dopouštění</button>
@@ -1029,6 +1008,15 @@
         <span class="spinner"></span>
         <h2 id="waitTitle">Čekám na zařízení…</h2>
         <p class="muted" id="waitText"></p>
+    </div>
+</div>
+
+<!-- Neuložené změny nádrže: jedno uložení pro všechny karty nádrže (formulář calForm) -->
+<div class="save-bar hidden" id="calBar" role="region" aria-label="Neuložené změny">
+    <p class="save-bar-text">Neuložené změny nádrže <strong id="calBarName" translate="no"></strong></p>
+    <div class="save-bar-actions">
+        <button type="button" class="btn btn-outline" id="calDiscard">Zahodit</button>
+        <button type="submit" form="calForm" class="btn btn-primary">Uložit změny</button>
     </div>
 </div>
 

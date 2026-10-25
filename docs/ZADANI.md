@@ -254,12 +254,16 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   `unit_of_measurement`, `availability` z pole `status`.
 
 ### 2.8 Dashboard
-- Střídmý vzhled: světlý i tmavý režim podle systému, jedna akcentová barva, systémové písmo, SVG ikony
-  (žádné emoji, gradienty ani záře); rozložení využívá celou šířku (až 1920 px, na mobilu 1 sloupec).
-  Nahoře jen Dashboard a přepínání nádrží; *Můj účet / Nastavení / Správa uživatelů / Logování / Odhlásit*
-  v menu pod ikonou účtu vpravo nahoře.
-- Lišta čidel: **Všechna čidla** (přehled – karta s mini nádrží, %, litry, stav, baterie, dopouštění pro každé
-  čidlo + společný graf hladin) nebo konkrétní nádrž. Tečka = stav (zelená online, žlutá zpožděná, červená offline).
+- Střídmý vzhled: světlý i tmavý režim (podle systému nebo volby v menu), jedna akcentová barva (vodní modř),
+  systémové písmo, čísla v písmu Bahnschrift / DIN ze systému (nic se nestahuje), SVG ikony (žádné emoji,
+  gradienty ani záře); rozložení využívá celou šířku (na mobilu 1 sloupec). Jediný výrazný prvek je
+  měrka nádrže s vodočetnou latí.
+- Tmavý pruh hlavičky: název, sekce **Přehled / Nastavení / Historie událostí** (poslední dvě jen admin),
+  stav čidel celého hubu („Čidla online: 2/3“) a menu účtu (*Můj účet / Správa uživatelů / motiv / jazyk / Odhlásit*).
+- Pod hlavičkou řádek nádrží: **Všechny nádrže** (přehled – karta s mini nádrží, %, litry, stav, baterie,
+  dopouštění pro každou nádrž + společný graf hladin) nebo konkrétní nádrž; v Nastavení *Obecné* + nádrže.
+  Tečka = stav (zelená online, žlutá zpožděná, červená offline). Stav jednoho čidla ukazuje karta nádrže
+  pod jejím názvem.
 - Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):
   **dopouštění** zeleně (jako ve staré verzi) (přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo
   dopouštění nad mrtvé pásmo, začátek = poslední vzorek před stoupáním, konec = poslední stoupající vzorek,
@@ -271,8 +275,10 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - **Záznamy (log):** kategorie (dopouštění, čidla, nastavení, přihlášení, uživatelé, systém, problémy), filtr
   kdo (uživatelé / automatika / konkrétní uživatel), hledání v textu, rozsah dat; seskupení po dnech,
   barevné odlišení závažnosti, „Načíst starší“.
-- Nastavení i logy **jen pro admina** (záložky skryté, API vrací 403). Nastavení má přepínač
-  **Základní / Pokročilé** (pokročilé: offset a kalibrační body sondy, přesnost, limity a průtok dopouštění,
+- Nastavení i logy **jen pro admina** (záložky skryté, API vrací 403). Nastavení je jeden sloupec karet
+  rozdělený do pojmenovaných sekcí s rozcestníkem vlevo (na mobilu vodorovná lišta), který zvýrazní
+  právě viditelnou kartu. Změny nádrže se ukládají jedním tlačítkem v dolní liště *Uložit změny*
+  (objeví se po úpravě, nabízí i *Zahodit*). Přepínač *Zobrazit pokročilá nastavení* (pokročilé: offset a kalibrační body sondy, přesnost, limity a průtok dopouštění,
   přepočet historie, kalibrace baterie, retence, slyšená čidla a statistiky rádia).
 - Párování s průvodcem (1 vložit baterii → 2 potvrdit ID → 3 první data → 4 hotovo).
 - U grafů s historií (hladina, spotřeba, dopouštění, klima, baterie) volba 24 h / 7 d / 30 d / 1 rok

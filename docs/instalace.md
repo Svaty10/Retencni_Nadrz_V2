@@ -52,8 +52,8 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
 3. Vybrat domácí síť, zadat heslo → zařízení se připojí, hotspot zmizí.
 4. Telefon zpět na domácí Wi-Fi → `http://retencka.local` (nebo `http://retencka-xxxx.local`).
 5. První přihlášení: jméno **admin** + **heslo ze štítku** → vytvořit vlastní účet (jiné jméno i heslo);
-   výchozí přístup se tím zruší. *Nastavení*, *Správa uživatelů*, *Logování* i *Můj účet* jsou v menu
-   pod ikonou účtu vpravo nahoře.
+   výchozí přístup se tím zruší. *Přehled*, *Nastavení* a *Historie událostí* jsou v hlavní liště nahoře,
+   *Můj účet* a *Správa uživatelů* v menu pod ikonou účtu vpravo nahoře.
    V témže menu je **Motiv** (Auto / Světlý / Tmavý) – pamatuje si ho každý účet zvlášť, na všech zařízeních.
 
    *Nastavení* má záložky **Obecné** (celý systém: poloha, Hunter Hydrawise, Telegram a vzdálený servis,
@@ -113,7 +113,7 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
   nebo ztrátě zařízení: *Nastavení → Obecné → Záloha a data → Stáhnout zálohu* a soubor uložit do PC / cloudu
   (občas, např. po přidání čidla).
 - **Málo místa na kartě** (pod 300 MB): hub maže nejstarší podrobná měření (hodinové průměry zůstávají),
-  zapíše to do Logování, pošle zprávu do Telegramu a administrátorovi ukáže varování na přehledu.
+  zapíše to do Historie událostí, pošle zprávu do Telegramu a administrátorovi ukáže varování na přehledu.
 - **Obnova (např. nová karta):** nainstalovat podle bodu 2, přihlásit se, *Nastavení → Obecné → Záloha a data → Nahrát zálohu*
   (zaškrtnout „včetně nastavení a uživatelů“). Data se přidají k současným, duplicity se přeskočí – import
   lze bezpečně opakovat. Vrátí se měření, čidla i s klíči (hned pokračují), nastavení, token HA a uživatelé.
@@ -122,8 +122,8 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 - **Smazat naměřená data** (např. po zkušební montáži): *Nastavení → Obecné → Záloha a data → Smazat
   naměřená data* – vybrat nádrž nebo všechna čidla a rozsah *od – do* (nebo *vše*). Hub nejdřív ukáže,
   kolik měření, hodinových souhrnů a záznamů o dopouštění smaže (historie dopouštění v rozsahu jde také
-  pryč) a nabídne stažení zálohy. Nádrže, nastavení a záznamy v *Logování* zůstanou; smazání se zapíše
-  do Logování. Nejde vrátit – jen nahráním zálohy.
+  pryč) a nabídne stažení zálohy. Nádrže, nastavení a záznamy v *Historii událostí* zůstanou; smazání se zapíše
+  do Historie událostí. Nejde vrátit – jen nahráním zálohy.
 
 ### Obnova továrního nastavení
 *Nastavení → Obecné → Systém → Obnovit tovární nastavení…* (jen administrátor). Dialog nejdřív nabídne
@@ -136,7 +136,7 @@ Ze zálohy jde vše vrátit (*Nahrát zálohu* s „včetně nastavení a uživa
 ### Restart a vypnutí
 V menu účtu (vpravo nahoře, jen administrátor): **Restartovat aplikaci** (asi 10–30 s, měření se neztratí),
 **Restartovat zařízení** (1–2 min) a **Vypnout zařízení** (znovu ho zapnete odpojením a připojením
-napájení). Každá akce se nejdřív potvrdí a zapíše do Logování; po restartu stránka ukáže „Čekám na
+napájení). Každá akce se nejdřív potvrdí a zapíše do Historie událostí; po restartu stránka ukáže „Čekám na
 zařízení…“ a sama se znovu připojí. Před odpojením napájení je šetrnější zařízení vypnout (karta SD).
 Totéž v Telegramu: `restart`, `reboot`, `vypnout`.
 
@@ -169,7 +169,7 @@ i se systemd jednotkami.
    „Aktualizováno na X“ s tlačítkem *Načíst znovu*. Při chybě nebo návratu dál běží předchozí verze.
    Nainstaluje se jen přesně ta verze, která byla nabídnuta, a jen pokud je stále nejnovější.
 
-Když je k dispozici nová verze, svítí tečka u ikony účtu a u položky *Nastavení*; v kartě *Systém*
+Když je k dispozici nová verze, svítí tečka u záložky *Nastavení* v hlavní liště; v kartě *Systém*
 je řádek „K dispozici verze X“ s tlačítkem do dialogu.
 
 **Automaticky v noci:** 1× denně (03:30 + náhodné zpoždění, a 15 min po startu) se hub podívá na

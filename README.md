@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.13.1-2b6cb0)
+![verze](https://img.shields.io/badge/verze-1.14.0-1b5e8a)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -11,7 +11,7 @@ teplotu a vlhkost a posílá je šifrovaně rádiem (433 MHz) na Raspberry Pi. P
 na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopouštění přes Hunter Hydrawise.
 
 <p align="center">
-  <img src="docs/img/dashboard.webp" alt="Dashboard jedné nádrže" width="820">
+  <img src="docs/img/dashboard.webp" alt="Přehled jedné nádrže" width="820">
 </p>
 
 ```mermaid
@@ -53,14 +53,17 @@ flowchart LR
   jeden ventil ovládá vždy jen jedna nádrž (nikdy se nedopouští 2×). Nádrž bez ventilu nic z toho
   neukazuje – ovládání, stav ani graf dopouštění se objeví až po nastavení ventilu.
 - Dopouštění jde kdykoli zrušit – před startem i za chodu, ruční i automatické; bez čerstvých dat ventil nepustí.
-- Přihlášení s rolemi (admin / uživatel); menu účtu vpravo nahoře (Můj účet, Nastavení, Správa uživatelů,
-  Logování). Admin mění role a nastavuje nová hesla ostatním (vždy zůstane aspoň jeden admin).
-  Kompaktní log s filtry (i výsledky aktualizací), nastavení **základní / pokročilé** s nápovědou „?“ u polí, jen pro admina.
+- Přihlášení s rolemi (admin / uživatel); hlavní lišta **Přehled / Nastavení / Historie událostí**
+  (Nastavení a Historie jen pro admina), menu účtu vpravo nahoře (Můj účet, Správa uživatelů, motiv, jazyk).
+  Admin mění role a nastavuje nová hesla ostatním (vždy zůstane aspoň jeden admin).
+  Kompaktní log s filtry (i výsledky aktualizací), nastavení **základní / pokročilé** s nápovědou „?“ u polí.
 - Akce (ruční dopouštění, přidání čidla, hesla, mazání) přes dialogy s potvrzením; **obnova továrního
   nastavení** s nabídkou zálohy a dvojím potvrzením; denní zálohy na kartu a varování při málo místě.
-- Nastavení podle nádrží: společné **výchozí hodnoty** pro všechny nádrže a u každé nádrže vlastní
-  hodnoty, které změna výchozích nepřepíše. Telegram bot i vzdálený servis (NetBird) se nastaví z webu.
-- Střídmý vzhled, světlý i tmavý režim podle systému; využívá celou šířku monitoru a je plně funkční na mobilu.
+- Nastavení rozdělené do sekcí s rozcestníkem: **Obecné** (čidla a poloha, propojení, data a systém)
+  a karta každé nádrže (nádrž a měření, čidlo, automatika); změny nádrže se ukládají jedním tlačítkem
+  v liště **Uložit změny**, která se objeví po úpravě. Telegram bot i vzdálený servis (NetBird) se nastaví z webu.
+- Klidný „vodohospodářský“ vzhled s výraznou měrkou nádrže (vodočetná lať), světlý i tmavý režim
+  podle systému nebo volby v menu; využívá celou šířku monitoru a je plně funkční na mobilu.
 - Home Assistant přes REST (YAML se vygeneruje sám), CSV export.
 - Záloha i obnova přes web (nahraná data se sloučí bez duplicit), noční zálohy. Data se nemažou (~10 MB na čidlo a rok).
 - Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem
@@ -77,7 +80,7 @@ flowchart LR
 </p>
 <p align="center">
   <img src="docs/img/nastaveni.webp" alt="Nastavení nádrže" width="395">
-  <img src="docs/img/log.webp" alt="Záznamy s filtry" width="395">
+  <img src="docs/img/log.webp" alt="Historie událostí s filtry" width="395">
 </p>
 
 ## Rychlý start
