@@ -330,6 +330,7 @@
     // Jeden popover pro všechny: hover / focus (klávesnice) ho ukáže, klepnutí / klik připne,
     // druhé klepnutí, Esc nebo klik mimo ho zavře. Zůstává uvnitř okna (i na telefonu).
     const HELP = {
+        shape: 'Tvar nádrže určuje výpočet objemu z výšky hladiny. U ležatého válce se objem i procenta počítají podle kruhového průřezu (ve spodní a horní části přibývá objem pomaleji než uprostřed).',
         notify: 'Když hladina klesne pod tuto hodnotu, pošle bot zprávu do propojených chatů v Telegramu. 0 = upozornění je vypnuté.',
         battery_type: 'Podle typu baterií se z napětí počítá zbývající kapacita a výdrž. Lithiové drží napětí téměř až do vybití, alkalické klesá postupně.',
         capacity: 'Skutečná kapacita sady baterií v mAh (z jejich datasheetu). Ovlivní jen odhad výdrže, ne měření hladiny.',
@@ -924,8 +925,7 @@
                             title: timeTooltip.callbacks.title,
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
-                                const mv = d.probe_mv && d.probe_mv[i] != null ? ` · ${tr('sonda')} ${num(d.probe_mv[i], 1, ' mV')}` : '';
-                                return `${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}${mv}`;
+                                return `${num(d.level_pct[i], 1, ' %')} · ${num(d.level_cm[i], 1, ' cm')} · ${num(d.volume_l[i], 0, ' L')}`;
                             },
                             footer: (items) => items.length ? bandsAt(d.bands, items[0].parsed.x) : []
                         }
@@ -1295,12 +1295,12 @@
     // | jedna záložka na nádrž. Poslední volba se pamatuje v rámci relace.
     let SET_SCOPE = 'general';
     try { SET_SCOPE = sessionStorage.getItem('setScope') || 'general'; } catch (e) { /* ignore */ }
-    if (!['general', 'all', 'tank'].includes(SET_SCOPE)) SET_SCOPE = 'general';
+    if (!['general', 'tank'].includes(SET_SCOPE)) SET_SCOPE = 'general';
 
     function setSettingsScope(scope) {
-        SET_SCOPE = scope === 'tank' && !CURRENT_NODE ? 'all' : scope;
+        SET_SCOPE = (scope === 'tank' && !CURRENT_NODE) ? 'general' : (scope === 'all' ? 'general' : scope);
         try { sessionStorage.setItem('setScope', SET_SCOPE); } catch (e) { /* ignore */ }
-        ['general', 'all', 'tank'].forEach((k) => document.body.classList.toggle('set-' + k, SET_SCOPE === k));
+        ['general', 'tank'].forEach((k) => document.body.classList.toggle('set-' + k, SET_SCOPE === k));
         if (lastState) renderSettingsBar(lastState.nodes || []);
         if (SET_SCOPE === 'tank') applyNode(currentNodeCfg());
         layoutTries = 0;
@@ -1329,7 +1329,7 @@
             bar.appendChild(b);
         };
         tab('Obecné', SET_SCOPE === 'general', () => setSettingsScope('general'), 'all');
-        tab('Všechna čidla', SET_SCOPE === 'all', () => setSettingsScope('all'), 'all');
+
         nodes.forEach((n) => {
             tab(`<span class="dot ${esc(n.status)}"></span>${esc(n.name)}`, SET_SCOPE === 'tank' && n.id === CURRENT_NODE, () => {
                 if (n.id !== CURRENT_NODE) selectNode(n.id);
@@ -1420,23 +1420,45 @@
 
     // ------------------------------------------------------------- settings
     let nodesCache = null;     // poslední odpověď /api/nodes
+    let tgConfigured = false, hwConfigured = false;
 
     function fillForm(form, s) {
+        const isCalForm = form && form.id === 'calForm';
+        const BLANK_ZERO = new Set(['max_depth_cm', 'tank_area_m2', 'tank_diameter_cm', 'tank_length_cm', 'tank_width_cm', 'catchment_area_m2', 'flow_rate_lpm']);
         Array.from(form.elements).forEach((el) => {
             if (!el.name || !(el.name in s)) return;
             if (el.type === 'checkbox') el.checked = s[el.name] === true || s[el.name] === 'true';   // přepínač
             else if (el.tagName === 'SELECT') setSelect(el, s[el.name] == null ? '' : String(s[el.name]));
             else if (el.type === 'password') { el.value = ''; el.placeholder = s[el.name] || 'nenastaveno'; }
-            else el.value = s[el.name] == null ? '' : s[el.name];
+            else {
+                let v = s[el.name];
+                if (isCalForm && BLANK_ZERO.has(el.name) && (v === 0 || v === 0.0 || v === '0' || v === '0.0')) v = '';
+                el.value = v == null ? '' : v;
+            }
         });
     }
     function formData(form) {
+        const isCalForm = form && form.id === 'calForm';
+        const NUMERIC_CAL = new Set(['max_depth_cm', 'tank_area_m2', 'tank_diameter_cm', 'tank_length_cm', 'tank_width_cm', 'catchment_area_m2', 'flow_rate_lpm']);
+        const OPTIONAL_CAL = new Set(['catchment_area_m2', 'flow_rate_lpm']);
         const out = {};
         Array.from(form.elements).forEach((el) => {
             if (!el.name || el.disabled) return;
             if (el.type === 'password' && el.value === '') return;   // klíč beze změny
             if (el.type === 'checkbox') { out[el.name] = el.checked; return; }        // true / false jako dřív
-            out[el.name] = el.tagName === 'SELECT' ? (el.value === 'true' ? true : el.value === 'false' ? false : el.value) : el.value;
+            if (el.tagName === 'SELECT') {
+                out[el.name] = el.value === 'true' ? true : el.value === 'false' ? false : el.value;
+                return;
+            }
+            if (isCalForm && NUMERIC_CAL.has(el.name) && el.value === '') {
+                const group = el.closest('.form-group');
+                const isHidden = group ? group.classList.contains('hidden') : false;
+                if (isHidden || OPTIONAL_CAL.has(el.name)) {
+                    out[el.name] = 0;
+                    return;
+                }
+            }
+            out[el.name] = el.value;
         });
         return out;
     }
@@ -1468,37 +1490,22 @@
     }
     function renderInheritTags(form, n) {
         document.querySelectorAll('#nastaveni .scope-tank .inh, #' + form.id + ' .inh').forEach((t) => t.remove());
-        const inherited = new Set(n.inherited || []), own = new Set(n.overrides || []);
-        Array.from(form.elements).forEach((el) => {
-            if (!el.name || !(inherited.has(el.name) || own.has(el.name))) return;
-            const box = fieldBox(el);
-            if (!box) return;
-            const wrap = document.createElement('span');
-            wrap.className = 'inh';
-            const tag = document.createElement('span');
-            tag.className = 'inh-tag' + (own.has(el.name) ? ' own' : '');
-            tag.textContent = own.has(el.name) ? 'vlastní' : 'výchozí';
-            tag.title = own.has(el.name) ? 'Vlastní hodnota této nádrže' : 'Zděděno z výchozího nastavení nádrží';
-            wrap.appendChild(tag);
-            if (own.has(el.name)) {
-                const r = document.createElement('button');
-                r.type = 'button';
-                r.className = 'inh-reset';
-                r.innerHTML = ico('restart', 'ico-sm') + 'výchozí';
-                r.title = 'Zrušit vlastní hodnotu a použít výchozí';
-                r.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    action(() => api('POST', '/api/node?' + nq(), { reset: [el.name] }), 'Použita výchozí hodnota.')
-                        .then((res) => { if (res) { loadSettingsTab(); pollState(); } });
-                });
-                wrap.appendChild(r);
-            } else {
-                const mark = () => { tag.textContent = 'vlastní'; tag.classList.add('own', 'pending'); tag.title = 'Po uložení bude vlastní hodnotou této nádrže'; };
-                el.addEventListener('input', mark, { once: true });
-                el.addEventListener('change', mark, { once: true });
-            }
-            box.appendChild(wrap);
+        return;
+    }
+
+    function syncTankShape(scopeRoot) {
+        if (!scopeRoot) return;
+        const sel = scopeRoot.querySelector('select[name="tank_shape"]');
+        if (!sel) return;
+        const shape = sel.value || 'area';
+        scopeRoot.querySelectorAll('.form-group[data-shapes]').forEach((group) => {
+            const show = group.dataset.shapes.split(',').includes(shape);
+            group.classList.toggle('hidden', !show);
+            group.querySelectorAll('input').forEach((input) => {
+                input.required = show && scopeRoot.id === 'tkTank';
+            });
         });
+        layoutSettingsColumns();
     }
 
     function applyNode(n) {
@@ -1507,6 +1514,9 @@
         $('calNodeId').value = n.id;
         fillForm($('calForm'), n);
         renderInheritTags($('calForm'), n);
+        syncTankShape($('tkTank'));
+        if ($('tkNotify')) $('tkNotify').classList.toggle('hidden', !tgConfigured);
+        if ($('tkRefill')) $('tkRefill').classList.toggle('hidden', !hwConfigured && !(n && (n.hydrawise_api_key || n.refill_provider === 'hydrawise')));
         renderZoneInfo(n);
         renderCalPoints(n.cal_points);
         $('batTrim').textContent = num(n.battery_trim, 4);
@@ -1551,7 +1561,7 @@
         layoutPending = false;
         const all = Array.from(document.querySelectorAll('#nastaveni .col-card'))
             .sort((a, b) => (+a.dataset.order) - (+b.dataset.order));
-        const mine = all.filter((c) => c.classList.contains('scope-' + SET_SCOPE));
+        const mine = all.filter((c) => c.classList.contains('scope-' + SET_SCOPE) && !c.classList.contains('hidden'));
         all.forEach((c) => { if (!mine.includes(c) && c.parentNode !== park) park.appendChild(c); });
         const n = window.innerWidth >= 1700 ? 3 : window.innerWidth >= 1280 ? 2 : 1;
         let cols = Array.from(host.children);
@@ -1898,6 +1908,7 @@
 
     async function loadTelegramMine() {
         const t = await api('GET', '/api/telegram/mine').catch(() => null);
+        if ($('tgMineCard')) $('tgMineCard').classList.toggle('hidden', !(t && t.configured));
         if (!t) return;
         $('tgMineInfo').textContent = t.connected ? `Upozornění a ovládání nádrží z telefonu (bot @${t.bot}).`
             : t.configured ? `Telegram bot není připojený${t.error ? ' – ' + t.error : ''}.`
@@ -1930,7 +1941,9 @@
             api('GET', '/api/servis').catch(() => null),
             api('GET', '/api/node-defaults').catch(() => null)
         ]);
-        if (defs) fillForm($('defForm'), defs.defaults);
+        if (tg) tgConfigured = !!tg.configured;
+        if (st && st.settings) hwConfigured = !!st.settings.hydrawise_api_key;
+        if (defs && $('defForm')) fillForm($('defForm'), defs.defaults);
         renderBackups(bk);
         if (tg) renderTelegramAdmin(tg);
         renderServis(sv);
@@ -1938,7 +1951,7 @@
         if (st) applySettings(st.settings);
         if (ha) renderHa(ha);
         if (sys) renderSystem(sys);
-        if (!CURRENT_NODE && SET_SCOPE === 'tank') setSettingsScope('all');
+        if (!CURRENT_NODE && SET_SCOPE === 'tank') setSettingsScope('general');
         layoutSettingsColumns();
     }
 
@@ -2029,6 +2042,13 @@
                 if (r.changed.includes('telegram_token')) setTimeout(loadSettingsTab, 4000);   // bot se připojuje
             });
         }));
+        document.querySelectorAll('#nastaveni select[name="tank_shape"]').forEach((sel) => {
+            sel.addEventListener('change', () => {
+                const root = sel.closest('#allDefaults, #tkTank');
+                if (root) syncTankShape(root);
+            });
+        });
+        syncTankShape($('tkTank'));
         bindPlaceAndHydrawise();
         bindDataDelete();
         $('tgChangeBtn').addEventListener('click', () => {
@@ -2411,6 +2431,8 @@
             <dt>Verze</dt><dd>${esc(d.version)}</dd>
             <dt>Adresa v síti</dt><dd>${(d.hostnames || []).map((h) => 'http://' + esc(h)).join('<br>')}</dd>
             <dt>Běží</dt><dd>${fmtDuration(d.uptime_s)}</dd>
+            <dt>Vytížení procesoru</dt><dd>${d.cpu_pct != null ? num(d.cpu_pct, 1, ' %') : '–'}</dd>
+            <dt>Operační paměť (RAM)</dt><dd>${d.ram_total_mb ? `${num(d.ram_used_mb, 0, ' MB')} / ${num(d.ram_total_mb, 0, ' MB')} (${num(d.ram_pct, 0, ' %')})` : (d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–')}</dd>
             <dt>Paměť procesu</dt><dd>${d.rss_kb ? num(d.rss_kb / 1024, 1, ' MB') : '–'}</dd>
             <dt>Databáze / volné místo</dt><dd>${num(d.db_mb, 1, ' MB')} / ${num(d.disk_free_mb, 0, ' MB')}</dd>`;
         const dw = $('sysDiskWarn');
@@ -3024,6 +3046,7 @@
         if (ME.role === 'admin') { bindSettings(); bindUpdates(); }
         bindUsers();
         bindTelegram();
+        loadTelegramMine();
 
         setViewAll(VIEW_ALL);
         await pollState();

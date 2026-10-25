@@ -295,7 +295,7 @@
             <!-- pole nádrže jsou v kartách níže, k formuláři je váže atribut form="calForm" -->
             <form id="calForm" class="hidden-form"></form>
 
-            <section class="card span-cols scope-all" id="allSensors" data-nav="Čidla">
+            <section class="card col-card span-cols scope-general" id="allNodes" data-nav="Čidla" data-order="0">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-antenna"/></svg></span>
                     <div><h2>Čidla</h2><p class="card-desc">Seznam čidel, přidání a párování nového čidla, čidla v dosahu.</p></div>
@@ -339,99 +339,8 @@
                 </div>
             </section>
 
-            <section class="card span-cols scope-all" id="defCard" data-nav="Výchozí nastavení">
-                <div class="card-title">
-                    <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-sliders"/></svg></span>
-                    <div><h2>Výchozí nastavení nádrží</h2><p class="card-desc">Platí pro všechny nádrže bez vlastní hodnoty; vlastní hodnotu nastavíte v záložce nádrže a změna výchozí ji nepřepíše.</p></div>
-                </div>
-                <form id="defForm" class="config-form flow-form">
-                    <h3>Upozornění a baterie</h3>
-                    <div class="form-row">
-                    <div class="form-group">
-                        <label>Upozornit v Telegramu pod <span class="muted">(0 = ne)</span> <button type="button" class="help-tip" data-help="notify"></button></label>
-                        <div class="input-unit"><input type="number" step="1" min="0" max="100" name="notify_low_pct" ><span class="unit">%</span></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Baterie v čidle (3× AA) <button type="button" class="help-tip" data-help="battery_type"></button></label>
-                        <select name="battery_type" class="unified-select" >
-                            <option value="lifes2">Lithiové Li-FeS2 (Energizer Ultimate Lithium)</option>
-                            <option value="alkaline">Alkalické</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row adv">
-                    <div class="form-group">
-                        <label>Kapacita lithiové baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="battery_capacity_mah" ><span class="unit">mAh</span></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Kapacita alkalické baterie <button type="button" class="help-tip" data-help="capacity"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="battery_capacity_alk_mah" ><span class="unit">mAh</span></div>
-                    </div>
-                </div>
-                <div class="form-row adv">
-                    <div class="form-group">
-                        <label>Odtokový součinitel střechy <button type="button" class="help-tip" data-help="runoff"></button></label>
-                        <input type="number" step="0.05" min="0.05" max="1" name="runoff_coef" class="unified-input">
-                    </div>
-                    <div class="form-group">
-                        <label>Přesnost sondy <button type="button" class="help-tip" data-help="accuracy"></button></label>
-                        <div class="input-unit"><input type="number" step="0.01" name="probe_accuracy_pct" ><span class="unit">% rozsahu</span></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Rozsah sondy <button type="button" class="help-tip" data-help="range"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="probe_range_cm" ><span class="unit">cm</span></div>
-                    </div>
-                </div>
-                    <h3>Dopouštění</h3>
-                    <div class="form-row toggles">
-                        <label class="toggle">
-                            <span class="toggle-text">Čekat na předpovězený déšť <button type="button" class="help-tip" data-help="rainwait"></button></span>
-                            <span class="switch"><input type="checkbox" name="rain_wait_enabled"><span class="slider"></span></span>
-                        </label>
-                    </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Dopouštět pod <button type="button" class="help-tip" data-help="threshold"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="refill_threshold_pct" ><span class="unit">%</span></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Dopustit na <button type="button" class="help-tip" data-help="target"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="auto_refill_target_pct" ><span class="unit">%</span></div>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Nečekat na déšť pod prahem o víc než <button type="button" class="help-tip" data-help="rainbelow"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="rain_wait_max_below_pct" ><span class="unit">%</span></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Přestat čekat po poklesu o <button type="button" class="help-tip" data-help="raindrop"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="rain_wait_max_drop_pct" ><span class="unit">%</span></div>
-                    </div>
-                </div>
-                <div class="form-row adv">
-                    <div class="form-group">
-                        <label>Výhled deště <button type="button" class="help-tip" data-help="rainhours"></button></label>
-                        <div class="input-unit"><input type="number" step="1" min="1" max="72" name="rain_wait_hours" ><span class="unit">h</span></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Nejvýš dopustit na <button type="button" class="help-tip" data-help="maxpct"></button></label>
-                        <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct" ><span class="unit">%</span></div>
-                    </div>
-                </div>
-                <div class="form-row adv">
-                    <div class="form-group">
-                        <label>Průtok <button type="button" class="help-tip" data-help="flow"></button></label>
-                        <div class="input-unit"><input type="number" step="0.1" name="flow_rate_lpm" ><span class="unit">L/min</span></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Nejdelší dopouštění <button type="button" class="help-tip" data-help="maxminutes"></button></label>
-                        <div class="input-unit"><input type="number" step="1" name="max_refill_minutes" ><span class="unit">min</span></div>
-                    </div>
-                </div>
-                    <div class="form-actions"><button type="submit" class="btn btn-primary">Uložit výchozí nastavení</button></div>
-                </form>
+            <section class="hidden" id="allDefaults" style="display:none !important;">
+                <form id="defForm" class="hidden"></form>
             </section>
 
             <!-- sloupce karet (rozděluje app.js podle výšky, spodky zarovnané) -->
@@ -461,15 +370,36 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Hloubka nádrže</label>
-                        <div class="input-unit"><input type="number" step="0.1" required name="max_depth_cm" form="calForm"><span class="unit">cm</span></div>
+                        <label>Tvar nádrže <button type="button" class="help-tip" data-help="shape"></button></label>
+                        <select name="tank_shape" class="unified-select" form="calForm">
+                            <option value="area">Podle plochy dna (atypická / čtvercová)</option>
+                            <option value="cyl_h">Válec naležato</option>
+                            <option value="cyl_v">Válec nastojato</option>
+                            <option value="rect">Kvádr (délka × šířka)</option>
+                        </select>
                     </div>
-                    <div class="form-group">
-                        <label>Plocha dna</label>
-                        <div class="input-unit"><input type="number" step="0.01" required name="tank_area_m2" form="calForm"><span class="unit">m²</span></div>
+                    <div class="form-group" data-shapes="area,cyl_v,rect">
+                        <label>Hloubka nádrže</label>
+                        <div class="input-unit"><input type="number" step="0.1" name="max_depth_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
+                    <div class="form-group" data-shapes="cyl_h,cyl_v">
+                        <label>Průměr nádrže</label>
+                        <div class="input-unit"><input type="number" step="0.1" name="tank_diameter_cm" form="calForm"><span class="unit">cm</span></div>
                     </div>
                 </div>
                 <div class="form-row">
+                    <div class="form-group" data-shapes="area">
+                        <label>Plocha dna</label>
+                        <div class="input-unit"><input type="number" step="0.01" name="tank_area_m2" form="calForm"><span class="unit">m²</span></div>
+                    </div>
+                    <div class="form-group" data-shapes="cyl_h,rect">
+                        <label>Délka nádrže</label>
+                        <div class="input-unit"><input type="number" step="0.1" name="tank_length_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
+                    <div class="form-group" data-shapes="rect">
+                        <label>Šířka nádrže</label>
+                        <div class="input-unit"><input type="number" step="0.1" name="tank_width_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
                     <div class="form-group">
                         <label>Plocha střechy</label>
                         <div class="input-unit"><input type="number" step="1" name="catchment_area_m2" form="calForm"><span class="unit">m²</span></div>
@@ -658,26 +588,26 @@
                         <p class="field-hint">cílová hladina</p>
                     </div>
                     <div class="form-group">
+                        <label>Nejvýš dopustit na <button type="button" class="help-tip" data-help="maxpct"></button></label>
+                        <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct" form="calForm"><span class="unit">%</span></div>
+                        <p class="field-hint">horní limit</p>
+                    </div>
+                    <div class="form-group">
                         <label>Max. pod prahem <button type="button" class="help-tip" data-help="rainbelow"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_below_pct" form="calForm"><span class="unit">%</span></div>
                         <p class="field-hint">víc pod prahem se na déšť nečeká</p>
                     </div>
+                    </div>
+                    <div class="field-grid rule-grid adv">
                     <div class="form-group">
                         <label>Max. pokles <button type="button" class="help-tip" data-help="raindrop"></button></label>
                         <div class="input-unit"><input type="number" step="1" name="rain_wait_max_drop_pct" form="calForm"><span class="unit">%</span></div>
                         <p class="field-hint">pak se přestane čekat na déšť</p>
                     </div>
-                    </div>
-                    <div class="field-grid rule-grid adv">
                     <div class="form-group">
                         <label>Výhled deště <button type="button" class="help-tip" data-help="rainhours"></button></label>
                         <div class="input-unit"><input type="number" step="1" min="1" max="72" name="rain_wait_hours" form="calForm"><span class="unit">h</span></div>
                         <p class="field-hint">jak daleko dopředu</p>
-                    </div>
-                    <div class="form-group">
-                        <label>Nejvýš dopustit na <button type="button" class="help-tip" data-help="maxpct"></button></label>
-                        <div class="input-unit"><input type="number" step="1" min="0" max="100" name="max_refill_pct" form="calForm"><span class="unit">%</span></div>
-                        <p class="field-hint">horní limit</p>
                     </div>
                     <div class="form-group">
                         <label>Průtok <button type="button" class="help-tip" data-help="flow"></button></label>
@@ -1010,7 +940,7 @@
     <div id="heslo" class="tab-content">
         <div class="page-head"><h1>Můj účet</h1></div>
         <div class="stack narrow">
-            <section class="card">
+            <section class="card hidden" id="tgMineCard">
                 <h2>Telegram</h2>
                 <p class="muted" id="tgMineInfo">Upozornění a ovládání nádrží z telefonu.</p>
                 <div id="tgLinkBox" class="hidden">

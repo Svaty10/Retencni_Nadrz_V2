@@ -13,6 +13,19 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 ### Opraveno
 - **Dokumentace:** odznak verze v `README.md` odpovídá aktuální verzi (1.12.1); `docs/architektura.md` uvádí migrace databáze v1–v13 (motiv a jazyk u účtu v tabulce `users`) a mezi soubory webu `js/i18n.js` a `js/theme.js`.
 
+## [1.13.0] - 2026-10-25
+
+### Přidáno
+- **Volba tvaru nádrže (`tank_shape`):** podpora pro plochu dna (`area`), ležatý válec (`cyl_h`), stojatý válec (`cyl_v`) a kvádr (`rect`). U ležatého válce se objem i procento hladiny počítají přesně podle kruhového průřezu (v horní a spodní části přibývá objem pomaleji než uprostřed). Formulář dynamicky zobrazuje pouze relevantní rozměry pro zvolený tvar.
+- **Informace o systému v Nastavení:** na kartě *Systém* (`GET /api/system`) se nově zobrazuje vytížení procesoru (`cpu_pct` v %) a využití operační paměti (`ram_used_mb`, `ram_total_mb`, `ram_pct` v MB a %).
+
+### Změněno
+- **Plná šířka rozhraní na širokoúhlých monitorech:** zrušeno omezení maximální šířky `.app-container` (`max-width: none;`), rozhraní plně využívá plochu 1440p i větších monitorů.
+- **Odstranění sdílené karty „Výchozí nastavení“ a záložky „Všechna čidla“ v Nastavení:** konfigurace parametrů probíhá přímo na kartě každé jednotlivé nádrže; čidla byla přesunuta do *Nastavení → Obecné*. Odstraněna předvyplněná fiktivní výchozí čísla (plocha střechy, průtok, rozměry nádrže), zatímco výchozí parametry baterie (výchozí typ *Alkalické AA*, kapacity mAh) a sondy (přesnost 0,5 %, rozsah 200 cm, výška nad dnem 1 cm) zůstávají automaticky předvyplněné.
+- **Podmíněné zobrazení karet integrací:** karta *Telegram* v *Můj účet* i karta *Upozornění* u nádrže se zobrazují pouze při nakonfigurovaném Telegram botu; karta *Dopouštění* u nádrže se skrývá, pokud není zadán API klíč Hydrawise na úrovni hubu ani nádrže.
+- **Horní limit dopouštění („Nejvýš dopustit na“) v základním nastavení:** pole `max_refill_pct` bylo přesunuto z pokročilých voleb přímo mezi základní viditelná pravidla dopouštění každé nádrže.
+- Z popisku (tooltipu) grafu **Hladina v čase** byl odebrán údaj o napětí sondy (`sonda XXX mV`); zobrazuje se pouze procento, výška hladiny v cm a objem v litrech.
+
 ## [1.12.1] - 2026-10-25
 
 ### Opraveno

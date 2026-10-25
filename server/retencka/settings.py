@@ -40,19 +40,23 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
 
 # Per-node configuration (tank + probe of that node)
 NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
-    "tank_area_m2":       (10.9, "float", 0.01, 1000.0),
-    "max_depth_cm":       (92.0, "float", 5.0, 2000.0),
+    "tank_shape":         ("area", "choice:area,cyl_h,cyl_v,rect", None, None),
+    "tank_area_m2":       (0.0, "float", 0.0, 1000.0),
+    "max_depth_cm":       (0.0, "float", 0.0, 2000.0),
+    "tank_diameter_cm":   (0.0, "float", 0.0, 2000.0),
+    "tank_length_cm":     (0.0, "float", 0.0, 5000.0),
+    "tank_width_cm":      (0.0, "float", 0.0, 5000.0),
     "sensor_offset_cm":   (1.0, "float", -100.0, 500.0),
     # [[probe_mV, water column above the sensor in cm], ...] – 2 points are enough
     "cal_points":         ([[120.0, 12.0], [1240.0, 92.0]], "points", None, None),
     # probe datasheet accuracy, e.g. 0.5 % of a 200 cm range = ±1 cm -> dead band
     "probe_accuracy_pct": (0.5, "float", 0.0, 10.0),
     "probe_range_cm":     (200.0, "float", 10.0, 10000.0),
-    "catchment_area_m2":  (140.0, "float", 0.0, 100000.0),
+    "catchment_area_m2":  (0.0, "float", 0.0, 100000.0),
     "notify_low_pct":     (15.0, "float", 0.0, 100.0),     # Telegram warning below this level (0 = off)
     "runoff_coef":        (0.8, "float", 0.05, 1.0),       # share of roof rain reaching the tank
     "battery_trim":       (1.0, "float", 0.8, 1.2),
-    "battery_type":       ("lifes2", "choice:lifes2,alkaline", None, None),   # discharge curve + capacity
+    "battery_type":       ("alkaline", "choice:lifes2,alkaline", None, None),   # discharge curve + capacity
     "battery_capacity_mah":     (3000.0, "float", 100.0, 100000.0),   # 3x AA Li-FeS2
     "battery_capacity_alk_mah": (2500.0, "float", 100.0, 100000.0),   # 3x AA alkaline
     # refilling of THIS tank – provider "none" | "hydrawise" (more can be added later)
@@ -68,7 +72,7 @@ NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "rain_wait_hours":         (24, "int", 1, 72),       # forecast horizon / longest wait
     "rain_wait_max_below_pct": (10.0, "float", 0.0, 100.0),  # never wait this far below the threshold
     "rain_wait_max_drop_pct":  (5.0, "float", 0.0, 100.0),   # stop waiting after this drop
-    "flow_rate_lpm":          (41.6, "float", 0.5, 1000.0),
+    "flow_rate_lpm":          (0.0, "float", 0.0, 1000.0),
     "max_refill_minutes":     (120, "int", 1, 1440),
     "real_flow_rate_lpm":     (None, "json", None, None),   # measured, internal
 }
