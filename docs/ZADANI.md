@@ -295,7 +295,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Nádrž: tvar **Kvádr** (plocha dna × hloubka), **Válec nastojato** (průměr × hloubka), **Válec naležato** (průměr × délka);
   plocha střechy i odtokový součinitel (výchozí 0,8) jsou vidět bez pokročilých. Zóna a pravidla dopouštění
   (automatika, čekání na déšť, prahy) se ukážou jen s nastaveným ventilem. Mazání dat má výchozí rozsah *Vše*.
-- Baterie: typ (alkalické / lithiové) a jedno pole *Kapacita baterie* pro zvolený typ (výchozí 2500 / 3000 mAh, každý typ si pamatuje svou hodnotu).
+- Baterie: typ (alkalické / lithiové) a jedno pole *Kapacita baterie* pro zvolený typ v pokročilých, ve stejném řádku vedle typu (výchozí 2500 / 3000 mAh, každý typ si pamatuje svou hodnotu).
 - Párování s průvodcem (1 vložit baterii → 2 potvrdit ID → 3 první data → 4 hotovo).
 - U grafů s historií (hladina, spotřeba, dopouštění, klima, baterie) volba 24 h / 7 d / 30 d / 1 rok
   **+ vlastní rozsah od–do** (date pickery). Předpověď počasí má pevný výhled 7 dní.
