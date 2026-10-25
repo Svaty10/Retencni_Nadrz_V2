@@ -1,3 +1,3 @@
 """Retenční nádrž – receiver, storage and web server for Raspberry Pi Zero 2 W."""
 
-__version__ = "1.14.5"
+__version__ = "1.14.6"
