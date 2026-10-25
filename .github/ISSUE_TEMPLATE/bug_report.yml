@@ -1,0 +1,40 @@
+name: Bug Report
+description: Report a bug in the sensor firmware, Raspberry Pi hub server, or Web UI
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the system is affected?
+      options:
+        - Web UI (server/static)
+        - Hub Backend / Radio / Refill (server/retencka)
+        - System Scripts / OTA Updater / Wi-Fi Portal (system)
+        - Sensor Node Firmware (uzel)
+        - Home Assistant Integration (:8081 API)
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Hub version (shown in Settings -> System) and firmware version if applicable
+      placeholder: "v1.11.0 / FW 11"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the unexpected behavior, steps to reproduce, and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Diagnostics
+      description: Paste relevant lines from `journalctl -u retencka` or the Web UI Audit Log (remove any sensitive tokens).
+      render: shell

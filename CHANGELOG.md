@@ -19,6 +19,9 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
   - *Captive portál a root pomocník:* odmítnutí SSID začínajícího `-` (ochrana před předáním přepínače do `nmcli`) a sjednocení kontroly `is_symlink()` u `control-reboot`.
   - *HTTP server:* přidán limit současných spojení na jednu IP (`MAX_PER_IP_CONNECTIONS = 24`) a slučování vícenásobných hlaviček `Cookie` podle RFC 6265.
 
+### Přidáno
+- **GitHub Community Standards (`.github/`):** doplněna bezpečnostní politika (`SECURITY.md`), pokyny pro přispěvatele (`CONTRIBUTING.md`), kodex chování (`CODE_OF_CONDUCT.md`), prohlášení o přístupnosti (`ACCESSIBILITY.md`) a šablony pro Issues (`ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`) a Pull Requesty (`pull_request_template.md`).
+
 ## [1.10.0] - 2026-10-24
 
 ### Odstraněno

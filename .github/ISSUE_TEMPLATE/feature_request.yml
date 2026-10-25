@@ -1,0 +1,31 @@
+name: Feature Request
+description: Suggest an improvement or new feature for Retenční nádrž V2
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web UI & Charts
+        - Hub Backend & Automation (Refill / Weather / Telegram / HA)
+        - Sensor Node Firmware & Power Budget
+        - System / Installation / Networking
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: What real-world scenario or limitation does this request address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: How should the feature work across the UI, backend, and/or hardware?
+    validations:
+      required: true

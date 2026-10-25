@@ -227,6 +227,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'auto'
     """,
+    # --- v13: UI language per user ('cs' or 'en')
+    """
+    ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'cs'
+    """,
 ]
 
 

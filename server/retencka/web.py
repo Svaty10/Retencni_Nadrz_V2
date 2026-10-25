@@ -422,9 +422,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need()
     async def api_me(request):
         s = request["session"]
-        theme = db.scalar("SELECT theme FROM users WHERE username=?", (s["username"],), "auto") or "auto"
+        row = db.one("SELECT theme, lang FROM users WHERE username=?", (s["username"],))
+        theme = (row["theme"] if row and row["theme"] else "auto") or "auto"
+        lang = (row["lang"] if row and row["lang"] else "cs") or "cs"
         return jresp({"username": s["username"], "role": s["role"], "csrf": s["csrf"],
-                      "version": __version__, "hostnames": core.hostnames(), "theme": theme})
+                      "version": __version__, "hostnames": core.hostnames(), "theme": theme, "lang": lang})
 
     @need()
     async def api_me_theme(request):
@@ -435,6 +437,16 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jerr("Motiv musí být auto, light nebo dark.")
         db.execute("UPDATE users SET theme=? WHERE username=?", (theme, request["session"]["username"]))
         return jresp({"ok": True, "theme": theme})
+
+    @need()
+    async def api_me_lang(request):
+        """UI language of the signed-in user ('cs' or 'en', stored with the account)."""
+        data = await read_json(request)
+        lang = data.get("lang")
+        if lang not in ("cs", "en"):
+            return jerr("Jazyk musí být cs nebo en.")
+        db.execute("UPDATE users SET lang=? WHERE username=?", (lang, request["session"]["username"]))
+        return jresp({"ok": True, "lang": lang})
 
     @need()
     async def api_me_password(request):
@@ -1303,6 +1315,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/auth/setup", api_setup)
     r.add_get("/api/me", api_me)
     r.add_post("/api/me/theme", api_me_theme)
+    r.add_post("/api/me/lang", api_me_lang)
     r.add_post("/api/me/password", api_me_password)
     r.add_get("/api/state", api_state)
     r.add_get("/api/history", api_history)
