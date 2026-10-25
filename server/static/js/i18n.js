@@ -759,7 +759,7 @@
         "Databáze / volné místo na kartě": "Database / free space on the card",
         "Operační paměť (RAM)": "Memory (RAM)",
         "Tvar nádrže": "Tank shape",
-        "Podle plochy dna (atypická / čtvercová)": "By bottom area (atypical / square)",
+        "Kvádr (plocha dna × hloubka)": "Rectangular (bottom area × depth)",
         "Válec naležato": "Horizontal cylinder",
         "Válec nastojato": "Vertical cylinder",
         "Kvádr (délka × šířka)": "Rectangular (length × width)",

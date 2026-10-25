@@ -120,7 +120,7 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 - Data se nemažou (8GB karta vystačí na desítky let); retenci lze nastavit v *Záloha a data →
   Uchovávání dat*.
 - **Smazat naměřená data** (např. po zkušební montáži): *Nastavení → Obecné → Záloha a data → Smazat
-  naměřená data* – vybrat nádrž nebo všechna čidla a rozsah *od – do* (nebo *vše*). Hub nejdřív ukáže,
+  naměřená data* – vybrat nádrž nebo všechna čidla a rozsah *vše* (výchozí) nebo *od – do*. Hub nejdřív ukáže,
   kolik měření, hodinových souhrnů a záznamů o dopouštění smaže (historie dopouštění v rozsahu jde také
   pryč) a nabídne stažení zálohy. Nádrže, nastavení a záznamy v *Historii událostí* zůstanou; smazání se zapíše
   do Historie událostí. Nejde vrátit – jen nahráním zálohy.
