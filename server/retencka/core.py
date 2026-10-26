@@ -1097,8 +1097,8 @@ class Core:
         # energy model from the global settings, battery capacity of this tank (inheritable)
         energy = {**self.settings.all(), "battery_capacity_mah": node["battery_capacity_mah"],
                   "battery_capacity_alk_mah": node["battery_capacity_alk_mah"]}
-        quick = (last.get("fw") or 0) >= model.QUICK_CHECK_FW
-        days = model.battery_days_left(pct, cpd, energy, heats, kind, quick) if cpd else None
+        slots = model.quick_check_slots(last.get("fw"))
+        days = model.battery_days_left(pct, cpd, energy, heats, kind, slots) if cpd else None
         low = pct < model.BATTERY_LOW_PCT or bool(last["flags"] & model.FLAG_BAT_LOW)
         sag = last.get("vbat_sag_mv")
         # the node switches itself off below the cut-off (at rest or under TX load)

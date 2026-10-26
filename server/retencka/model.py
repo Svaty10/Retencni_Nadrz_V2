@@ -246,8 +246,16 @@ BATTERY_CURVES = {"lifes2": _LIFES2_CELL, "alkaline": _ALKALINE_CELL}
 BATTERY_SELF_DISCHARGE = {"lifes2": 0.02, "alkaline": 0.03}   # share of capacity per year
 BATTERY_LOW_PCT = 5.0
 BATTERY_CUTOFF_MV = 3000          # node switches itself off below this (uzel/include/config.h)
-QUICK_CHECK_FW = 11               # firmware from which the node checks the probe every minute
-QUICK_CHECKS_SLOTS = 1440         # one wake-up per minute: a full cycle or a quick check
+QUICK_CHECK_FW = 11               # firmware from which the node checks the probe between transmissions
+
+
+def quick_check_slots(fw: Optional[int]) -> int:
+    """Wake-ups per day of a node in the normal mode (a full cycle or a quick probe
+    check each): fw 11 every 60 s, fw >= 12 every 150 s, older firmware none."""
+    fw = fw or 0
+    if fw < QUICK_CHECK_FW:
+        return 0
+    return 1440 if fw == QUICK_CHECK_FW else 576
 
 
 def battery_percent(vbat_v: float, cells: int = 3, kind: str = "lifes2") -> float:
@@ -265,12 +273,12 @@ def battery_percent(vbat_v: float, cells: int = 3, kind: str = "lifes2") -> floa
 
 def battery_days_left(percent: float, cycles_per_day: float, s: dict,
                       heats_per_day: float = 0.0, kind: str = "lifes2",
-                      quick_checks: bool = False) -> Optional[float]:
+                      check_slots: int = 0) -> Optional[float]:
     """Remaining runtime from an energy model (voltage trends of Li-FeS2 are useless).
     Uses the real measurement rate and the real heater use of the last days.
-    quick_checks: the node (fw >= QUICK_CHECK_FW) wakes every minute, each minute
-    without a transmission is a probe-only check."""
-    checks = max(0.0, QUICK_CHECKS_SLOTS - cycles_per_day) if quick_checks else 0.0
+    check_slots: wake-ups per day of a node with quick checks (quick_check_slots);
+    each one without a transmission is a probe-only check."""
+    checks = max(0.0, check_slots - cycles_per_day) if check_slots else 0.0
     cap_key = "battery_capacity_alk_mah" if kind == "alkaline" else "battery_capacity_mah"
     # capacity of the tank's battery (settings.NODE_SCHEMA, inheritable); typical 3x AA as fallback
     nominal_mas = float(s.get(cap_key) or (2500.0 if kind == "alkaline" else 3000.0)) * 3600.0
