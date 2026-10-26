@@ -66,7 +66,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/backup` · `/api/backup/download` | admin | `{"backups": [{name, size_mb, ts}], "keep": 7, "dir": "…/backup"}` – automatické denní zálohy na kartě; stažení aktuální zálohy (`.db.gz`) |
 | POST | `/api/backup/import[?full=1]` | admin | tělo = soubor zálohy (`.db.gz` / `.db`, max 1 GB, streamuje se); sloučení bez duplicit, `full=1` i nastavení a uživatelé; vrací počty |
 
-`/api/state` navíc obsahuje `outlook` (`days_left`, `use_per_day_l`, `rain_7d_mm`, `inflow_7d_l`, `pct_after_rain`), pro schéma toků `catchment_m2`, `rain_today`, `refill_today` (litry za dnešek), `flowing` (`rain`, `use`: hladina se v posledních 15 min zvedla / klesla o víc než pásmo necitlivosti) a v `refill` příznak `fault` (poslední pokus o dopouštění skončil chybou ventilu)
+`/api/state` navíc obsahuje `outlook` (`days_left`, `use_per_day_l` ze změřené spotřeby; `auto_refill`, `refill_in_days`, `refill_l`: kdy a kolik automatika dopustí podle změřené spotřeby a předpovědi deště, `null` = v příštích 7 dnech ne), změřené objemy `rain_today`, `rain_7d`, `refill_today`, `refill_7d` (litry dnes / za 7 dní, z rozdílů hladiny), pro schéma toků `catchment_m2`, `flowing` (`rain`, `use`: hladina se v posledních 15 min zvedla / klesla o víc než pásmo necitlivosti) a v `refill` příznak `fault` (poslední pokus o dopouštění skončil chybou ventilu)
 a v `refill.zone_controlled_by` nádrž, která ovládá stejný ventil (pak je dopouštění u této nádrže vypnuté).
 
 ## Rádiový protokol v3

@@ -367,7 +367,8 @@
         recompute: 'Po uložení kalibrace nebo parametrů nádrže (výška sondy, tvar a rozměry, přesnost a rozsah sondy) se uložená měření přepočítají samy. Tlačítko spustí přepočet ručně.',
         battrim: 'Změřte napětí baterií voltmetrem a zadejte ho. Hub z toho spočítá korekci (násobek), aby údaj souhlasil. Korekce 1,0000 = bez úpravy.',
         servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.',
-        outlook: 'Odhad výdrže vychází z průměrné denní spotřeby za poslední týden. Srážky (48 h) ukazují úhrn předpovězený na nejbližší 2 dny, přítok deštěm (7 dní) kolik litrů by podle předpovědi přiteklo ze střechy; čekání automatického dopouštění na déšť se řídí oknem „Výhled deště“ v nastavení nádrže.'
+        outlook: 'Výhled je odhad. Výdrž vychází ze změřené průměrné denní spotřeby za poslední týden. Srážky (48 h) jsou úhrn předpovězený na nejbližší 2 dny. Dopouštění (jen se zapnutou automatikou) spojuje změřenou spotřebu s předpovědí deště ze střechy a odhadne, kdy hladina klesne pod spouštěcí mez a kolik litrů se pak dopustí. Čekání automatiky na déšť se řídí oknem „Výhled deště“ v nastavení nádrže.',
+        measured: 'Skutečné objemy z čidla hladiny, ne z předpovědi. Pokles hladiny je spotřeba, vzestup mimo dopouštění je přítok deštěm, vzestup během dopouštění je dopuštěná voda.',
     };
     let closeHelp = () => {};
     function bindHelpTips() {
@@ -1002,7 +1003,9 @@
             data: {
                 datasets: [
                     line(T.s3, { label: tr('Baterie (%)'), data: series(d.t, d.bat_pct || []), spanGaps: true, yAxisID: 'y' }),
-                    line(T.s4, { label: tr('Signál (%)'), data: series(d.t, (d.rssi || []).map(sigPct)), borderWidth: 1.5, yAxisID: 'y' })
+                    line(T.s4, { label: tr('Signál (%)'), data: series(d.t, (d.rssi || []).map(sigPct)), borderWidth: 1.5, yAxisID: 'y' }),
+                    // napětí v mV na vlastní ose: ADC (64× akumulace, medián) rozliší ~1 mV, procenta to schovají
+                    line(T.s5, { label: tr('Napětí (V)'), data: series(d.t, d.vbat || []), spanGaps: true, borderWidth: 1.5, yAxisID: 'y1' })
                 ]
             },
             options: Object.assign(baseOpts(), {
@@ -1014,8 +1017,9 @@
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
                                 if (ctx.datasetIndex === 1) return tr('Signál') + ' ' + sigTxt(d.rssi[i]);
+                                if (ctx.datasetIndex === 0) return `${tr('Baterie')} ${num(d.bat_pct[i], 0, ' %')}`;
                                 const sag = d.sag_mv && d.sag_mv[i] ? ` (${tr('při vysílání')} −${num(d.sag_mv[i], 0)} mV)` : '';
-                                return `${tr('Baterie')} ${num(d.bat_pct[i], 0, ' %')} · ${num(d.vbat[i], 2, ' V')}${sag}`;
+                                return `${tr('Napětí')} ${num(d.vbat[i], 3, ' V')}${sag}`;
                             },
                             footer: (items) => {
                                 if (!items.length) return [];
@@ -1028,7 +1032,9 @@
                 },
                 scales: {
                     x: timeScale(r),
-                    y: pctAxis()
+                    y: pctAxis(),
+                    y1: { position: 'right', grace: '5%', grid: { drawOnChartArea: false },
+                          ticks: { callback: (v) => num(v, 3, ' V'), maxTicksLimit: 6 } }
                 }
             })
         });
@@ -1145,27 +1151,33 @@
 
         const b = s.battery || {};
         $('txtBat').textContent = num(b.percent, 0, ' %');
-        $('txtBatV').textContent = num(b.voltage, 2, ' V') + (b.sag_mv ? ` · při vysílání −${num(b.sag_mv, 0)} mV` : '');
+        $('txtBatV').textContent = num(b.voltage, 3, ' V') + (b.sag_mv ? ` · při vysílání −${num(b.sag_mv, 0)} mV` : '');
         $('batBox').classList.toggle('battery-low', !!b.low);
         const days = b.days_left;
         $('txtBatEst').textContent = b.off ? 'Čidlo vypnuto – vyměňte baterii'
             : days == null ? 'Nedostatek dat' : (days > 3650 ? '> 10 let' : days > 730 ? `${num(days / 365, 1)} roku` : `${num(days, 0)} dní`);
 
-        $('txtConsToday').textContent = num(s.consumption_today, 0, ' L');
-        $('txtCons7d').textContent = num(s.consumption_7d, 0, ' L');
+        // změřeno čidlem (rozdíly hladiny): dnes velkým písmem, týden pod tím
+        const meas = (id, today, week, sign) => {
+            const f = (v) => (v == null ? '–' : (v > 0 ? sign : '') + num(v, 0, ' L'));
+            $(id).textContent = f(today);
+            $(id + '7d').textContent = `za 7 dní ${f(week)}`;
+        };
+        meas('txtCons', s.consumption_today, s.consumption_7d, '');
+        meas('txtRainIn', s.rain_today, s.rain_7d, '+');
+        meas('txtRefilled', s.refill_today, s.refill_7d, '+');
+        $('rowRefilled').classList.toggle('hidden', !(s.refill || {}).configured && !s.refill_7d);
         $('txtRain').textContent = num(s.expected_rain_mm, 1, ' mm');
-        $('rowRain7d').classList.toggle('hidden', !((s.catchment_m2 || 0) > 0));      // jen s nastavenou střechou
+
+        // výhled: změřená spotřeba + předpověď deště → kdy a kolik dopustit
         const o = s.outlook || {};
         $('txtOutlook').textContent = o.days_left == null ? '–' : (o.days_left > 365 ? 'vystačí > rok' : `vystačí ~${num(o.days_left, 0)} dní`);
-        const outlookDetail = [
-            o.use_per_day_l != null ? `spotřeba ~${num(o.use_per_day_l, 0)} L/den` : 'málo dat o spotřebě',
-            o.inflow_7d_l ? `déšť 7 dní: +${num(o.inflow_7d_l, 0)} L → ~${num(o.pct_after_rain, 0)} %` : ''
-        ].filter(Boolean).join(' · ');
-        $('txtOutlookSub').textContent = o.inflow_7d_l
-            ? `s předpovězeným deštěm déle (~${num(o.pct_after_rain, 0)} %)`
-            : (o.use_per_day_l != null ? `spotřeba ~${num(o.use_per_day_l, 0)} L/den` : 'málo dat o spotřebě');
-        $('txtOutlookSub').title = outlookDetail;
-        $('txtRain7d').textContent = o.inflow_7d_l == null ? 'načítám' : (o.inflow_7d_l > 0 ? '+' : '') + num(o.inflow_7d_l, 0, ' L');
+        $('txtOutlookSub').textContent = o.use_per_day_l != null ? `při spotřebě ~${num(o.use_per_day_l, 0)} L/den` : 'málo dat o spotřebě';
+        $('rowRefillFcst').classList.toggle('hidden', !o.auto_refill);
+        $('txtRefillFcst').textContent = o.use_per_day_l == null ? '–'
+            : o.refill_in_days == null ? 'nebude potřeba' : o.refill_in_days <= 1 ? 'do 1 dne' : `za ~${num(o.refill_in_days, 0)} dny`;
+        $('txtRefillFcstSub').textContent = o.use_per_day_l == null ? 'málo dat o spotřebě'
+            : o.refill_in_days == null ? 'v příštích 7 dnech' : `doplní asi ${num(o.refill_l, 0, ' L')}`;
 
         const n = s.node || {};
         $('txtRssi').textContent = sigTxt(n.rssi);

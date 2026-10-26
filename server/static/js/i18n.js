@@ -38,7 +38,8 @@
         "recompute": "Recalculates stored measurements according to current calibration and smoothing. Useful after correcting calibration or probe offset; new measurements are always processed correctly.",
         "battrim": "Measure battery voltage with a multimeter and enter it here. The hub computes a correction multiplier so readings match. Correction 1.0000 = no trim.",
         "servis": "Access automatically turns off after 24 hours; “Permanently” stays active until disabled. A technician can connect via encrypted NetBird network only when enabled.",
-        "outlook": "Duration estimate is based on average daily consumption over the past week. Rain (48 h) shows forecast precipitation for the next 2 days; automatic refill rain delay uses the “Rain outlook” window in tank settings."
+        "outlook": "The outlook is an estimate. Duration is based on the measured average daily consumption over the past week. Rain (48 h) is the forecast precipitation for the next 2 days. Refilling (only with automatic refilling on) combines the measured consumption with the roof rain forecast to estimate when the level drops below the trigger and how many litres will then be added. The automatic rain delay uses the “Rain outlook” window in tank settings.",
+        "measured": "Real volumes from the level sensor, not from the forecast. A falling level is consumption, a rise outside refilling is rain inflow, a rise during refilling is refilled water."
 };
 
     const ACTIONS_EN = {
@@ -187,7 +188,7 @@
         "Nainstalovat vzdálený servis": "Install remote service",
         "Naposledy": "Last seen",
         "Napětí (mV)": "Voltage (mV)",
-        "Napětí baterie a síla signálu; značky ukazují vložení baterie nebo restart čidla.": "Battery voltage and signal strength; marks indicate battery insertion or sensor reboot.",
+        "Stav baterie, napětí s rozlišením na tisíciny voltu a síla signálu; značky ukazují vložení baterie nebo restart čidla.": "Battery level, voltage to a thousandth of a volt and signal strength; marks indicate battery insertion or sensor reboot.",
         "Napětí sondy": "Probe voltage",
         "Nastavení": "Settings",
         "Načítám…": "Loading…",
@@ -747,7 +748,14 @@
         "načítám": "loading",
         "Z řadu dnes": "From mains today",
         "Spojení s hubem": "Link to the hub",
-        "Přítok deštěm (7 dní)": "Rain inflow (7 days)",
+        "Napětí (V)": "Voltage (V)",
+        "Napětí": "Voltage",
+        "Změřeno čidlem": "Measured by the sensor",
+        "Přítok deštěm dnes": "Rain inflow today",
+        "Dopuštěno dnes": "Refilled today",
+        "nebude potřeba": "not needed",
+        "do 1 dne": "within a day",
+        "v příštích 7 dnech": "in the next 7 days",
         "Spotřeba dnes": "Used today",
         "bez předpovědi": "no forecast",
         "Hub": "Hub",
@@ -1025,7 +1033,10 @@
         [/^Přítok z deště\s+(\d{1,2}:\d{2}–\d{1,2}:\d{2})(.*)$/, 'Rain inflow $1$2'],
         [/^(neděle|pondělí|úterý|středa|čtvrtek|pátek|sobota)\s+(\d+\.\s*\d+\.\s*\d{4})$/, (m, d, rest) => ({'neděle':'Sunday','pondělí':'Monday','úterý':'Tuesday','středa':'Wednesday','čtvrtek':'Thursday','pátek':'Friday','sobota':'Saturday'}[d] || d) + ' ' + rest],
         [/^(offline|zpožděná data)\s*·\s*naposledy\s+(.+)$/, (m, st, ago) => (st === 'offline' ? 'offline' : 'delayed data') + ' · last seen ' + translateToEn(ago)],
-        [/^s předpovězeným deštěm déle\s*\((.+)\)$/, 'longer with forecast rain ($1)'],
+        [/^za ~(\d+) dny$/, 'in ~$1 days'],
+        [/^doplní asi\s*(.+)$/, 'adds about $1'],
+        [/^za 7 dní\s+(.+)$/, '7 days: $1'],
+        [/^při spotřebě\s*~(\d+(?:[ ,]\d+)?)\s*L\/den$/, 'at ~$1 L/day'],
         [/^(silný|dobrý|slabší|slabý)\s*·\s*(.+)$/, (m, w, rest) => ({'silný': 'strong', 'dobrý': 'good', 'slabší': 'fair', 'slabý': 'weak'}[w] || w) + ' · ' + rest],
         [/^Čidla online:\s*(\d+\s*\/\s*\d+)$/, 'Sensors online: $1'],
         [/^(Čidlo online|Čidlo offline|Zpožděná data)\s*·\s*(.+)$/, (m, st, ago) => ({ 'Čidlo online': 'Sensor online', 'Čidlo offline': 'Sensor offline', 'Zpožděná data': 'Delayed data' }[st]) + ' · ' + translateToEn(ago)],

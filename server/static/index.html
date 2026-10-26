@@ -200,14 +200,15 @@
                             <dl class="facts">
                                 <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
                                 <div class="fact"><dt>Srážky (48 h)</dt><dd id="txtRain">–</dd></div>
-                                <div class="fact" id="rowRain7d"><dt>Přítok deštěm (7 dní)</dt><dd id="txtRain7d">–</dd></div>
+                                <div class="fact hidden" id="rowRefillFcst"><dt>Dopouštění</dt><dd><span id="txtRefillFcst">–</span><small id="txtRefillFcstSub">–</small></dd></div>
                             </dl>
                         </div>
                         <div class="fact-group">
-                            <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Spotřeba</h3>
+                            <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Změřeno čidlem <button type="button" class="help-tip" data-help="measured"></button></h3>
                             <dl class="facts">
-                                <div class="fact"><dt>Dnes</dt><dd id="txtConsToday">–</dd></div>
-                                <div class="fact"><dt>Za 7 dní</dt><dd id="txtCons7d">–</dd></div>
+                                <div class="fact"><dt>Spotřeba dnes</dt><dd><span id="txtCons">–</span><small id="txtCons7d">–</small></dd></div>
+                                <div class="fact"><dt>Přítok deštěm dnes</dt><dd><span id="txtRainIn">–</span><small id="txtRainIn7d">–</small></dd></div>
+                                <div class="fact hidden" id="rowRefilled"><dt>Dopuštěno dnes</dt><dd><span id="txtRefilled">–</span><small id="txtRefilled7d">–</small></dd></div>
                             </dl>
                         </div>
                         <div class="fact-group" id="batBox">
@@ -274,7 +275,7 @@
 
                 <section class="card chart-card span-2 bat-card">
                     <div class="card-head">
-                        <div class="card-head-text"><h2>Baterie a signál</h2><p class="card-desc">Napětí baterie a síla signálu; značky ukazují vložení baterie nebo restart čidla.</p></div>
+                        <div class="card-head-text"><h2>Baterie a signál</h2><p class="card-desc">Stav baterie, napětí s rozlišením na tisíciny voltu a síla signálu; značky ukazují vložení baterie nebo restart čidla.</p></div>
                         <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
                     </div>
                     <div class="chart-container"><canvas id="batteryChart"></canvas></div>
