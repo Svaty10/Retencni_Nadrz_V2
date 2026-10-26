@@ -174,7 +174,8 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 ### 2.4 Data
 - SQLite, WAL, `synchronous=NORMAL`, kompaktní schéma (celá čísla, epoch s) ≈ 30 B/záznam.
 - Ukládá se **surová** hodnota (`probe_100uv`, `vbat_mv`, …) + vypočtená hladina v mm, takže změna kalibrace jde
-  zpětně přepočítat.
+  zpětně přepočítat. Po uložení kalibrace nebo parametrů nádrže (výška sondy, tvar a rozměry, přesnost
+  a rozsah sondy) se historie přepočítá **automaticky** na pozadí; procenta baterie se počítají až při zobrazení.
 - Retence: **nic se nemaže** (výchozí; volitelně „mazat podrobná měření starší než N dní“). Hodinové agregace
   zůstávají vždy. Odhad ~10 MB na čidlo a rok (~95 B na záznam) → 8GB karta vystačí na desítky let. Pojistka: když na kartě
   zbývá < 300 MB, smaže se nejstarší měsíc podrobných dat (starších než půl roku) a zapíše se do logu.

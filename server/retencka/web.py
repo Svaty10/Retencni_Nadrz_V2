@@ -34,6 +34,9 @@ log = logging.getLogger("retencka.web")
 
 COOKIE_PLAIN = "rt_sid"
 MAX_BODY = 64 * 1024
+# node parameters the stored levels / volumes depend on: saving one recomputes the history
+RECALC_KEYS = {"cal_points", "sensor_offset_cm", "max_depth_cm", "tank_area_m2", "tank_shape", "tank_diameter_cm",
+               "tank_length_cm", "tank_width_cm", "probe_accuracy_pct", "probe_range_cm"}
 
 FIELD_LABELS = {
     "name": "název", "tank_shape": "tvar nádrže", "max_depth_cm": "hloubka nádrže", "tank_area_m2": "plocha dna",
@@ -712,10 +715,38 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             core.audit("SETTINGS_CHANGED", f"Čidlo {nid:04X}: " + labels(changed), *user_of(request))
         if "flow_rate_lpm" in changed:
             core.nodes.update(nid, {"real_flow_rate_lpm": None}, allow_internal=True)
-        recalc = bool(set(changed) & {"cal_points", "sensor_offset_cm", "max_depth_cm", "tank_area_m2",
-                                      "tank_shape", "tank_diameter_cm", "tank_length_cm", "tank_width_cm",
-                                      "probe_accuracy_pct", "probe_range_cm"})
-        return jresp({"ok": True, "changed": changed, "recalc_suggested": recalc, "node": node_public(node)})
+        recalc = bool(set(changed) & RECALC_KEYS)
+        if recalc:
+            schedule_recompute(nid, user_of(request))         # stored history follows the new parameters
+        return jresp({"ok": True, "changed": changed, "recalc": recalc, "node": node_public(node)})
+
+    # ------------------------------------------- automatic history recompute
+    recompute_tasks: dict[int, asyncio.Task] = {}
+    recompute_again: set[int] = set()
+
+    async def recompute_bg(nid: int, who: tuple) -> None:
+        """Recompute the stored levels of one node in a worker thread; a change saved
+        while it runs triggers one more pass, so the last parameters always win."""
+        n = 0
+        try:
+            while True:
+                recompute_again.discard(nid)
+                if core.nodes.get(nid) is None:
+                    return
+                n = await asyncio.to_thread(core.recompute_levels, nid)
+                core.after_recompute(nid)
+                if nid not in recompute_again:
+                    break
+            core.audit("CALIBRATION", f"Čidlo {nid:04X}: historie přepočítána automaticky ({n} záznamů)", *who)
+        except Exception:
+            log.exception("history recompute of %04X failed", nid)
+
+    def schedule_recompute(nid: int, who: tuple) -> None:
+        t = recompute_tasks.get(nid)
+        if t is not None and not t.done():
+            recompute_again.add(nid)
+            return
+        recompute_tasks[nid] = asyncio.get_running_loop().create_task(recompute_bg(nid, who))
 
     # ------------------------------------------- place search, Hydrawise helpers
     @need("admin")
@@ -808,7 +839,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jerr(str(e) + " Druhý bod změřte při výrazně jiné hladině.")
         core.invalidate()
         core.audit("CALIBRATION", f"Čidlo {nid:04X}: bod {mv:.1f} mV = {column:.1f} cm nad sondou", *user_of(request))
-        return jresp({"ok": True, "node": node_public(core.nodes.get(nid))})
+        schedule_recompute(nid, user_of(request))
+        return jresp({"ok": True, "recalc": True, "node": node_public(core.nodes.get(nid))})
 
     @need("admin")
     async def api_cal_recompute(request):

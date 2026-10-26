@@ -364,7 +364,7 @@
         autorefill: 'Hub sám otevře ventil, když hladina klesne pod spouštěcí hladinu. Vypnuté = dopouští se jen ručně tlačítkem „Dopustit“.',
         retention: 'Podrobná měření (každých pár minut) se po této době mažou, hodinové průměry zůstávají navždy. 0 = nemazat. Při nedostatku místa na kartě se mažou dříve.',
         calpoints: 'Dvojice „napětí sondy – výška vody nad sondou“. Z nich hub počítá přímku, která mění napětí na hladinu. Body se doplňují tlačítkem Přidat bod výše; ručně je upravujte jen výjimečně.',
-        recompute: 'Přepočítá už uložená měření podle aktuální kalibrace a vyhlazení. Hodí se po opravě kalibrace nebo výšky sondy; nová měření se počítají vždy správně.',
+        recompute: 'Po uložení kalibrace nebo parametrů nádrže (výška sondy, tvar a rozměry, přesnost a rozsah sondy) se uložená měření přepočítají samy. Tlačítko spustí přepočet ručně.',
         battrim: 'Změřte napětí baterií voltmetrem a zadejte ho. Hub z toho spočítá korekci (násobek), aby údaj souhlasil. Korekce 1,0000 = bez úpravy.',
         servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.',
         outlook: 'Odhad výdrže vychází z průměrné denní spotřeby za poslední týden. Srážky (48 h) ukazují úhrn předpovězený na nejbližší 2 dny, přítok deštěm (7 dní) kolik litrů by podle předpovědi přiteklo ze střechy; čekání automatického dopouštění na déšť se řídí oknem „Výhled deště“ v nastavení nádrže.'
@@ -2161,7 +2161,7 @@
             action(() => api('POST', '/api/node?' + nq(), data)).then((r) => {
                 if (!r) return;
                 setCalDirty(false);
-                toast(r.recalc_suggested ? 'Uloženo. Pro starší data použijte „Přepočítat historii“.' : 'Uloženo.');
+                toast(r.recalc ? 'Uloženo. Uložená data se přepočítávají podle nových parametrů.' : 'Uloženo.');
                 loadSettingsTab(); pollState(); histCache.clear(); flowsCache.clear();
             });
         });
@@ -2267,7 +2267,7 @@
         $('calAddBtn').addEventListener('click', () => {
             const v = $('calActualCm').value;
             if (v === '') { toast('Zadejte skutečnou hladinu v cm.', true); return; }
-            action(() => api('POST', '/api/calibration/point?' + nq(), { actual_cm: v }), 'Kalibrační bod uložen.').then((r) => {
+            action(() => api('POST', '/api/calibration/point?' + nq(), { actual_cm: v }), 'Kalibrační bod uložen, uložená data se přepočítávají.').then((r) => {
                 if (r) { $('calActualCm').value = ''; loadSettingsTab(); pollState(); }
             });
         });
