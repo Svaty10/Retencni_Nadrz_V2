@@ -15,9 +15,8 @@
  *   (60 s period) the first step already is the full cycle – no quick checks.
  *
  *   A quick check compares the probe with the last transmitted value. A change
- *   of at least the threshold on QUICK_CONFIRM checks in a row cuts the wait
- *   short: full cycle + transmission right away. The full cycle's own reading
- *   then decides about the fast mode (a noisy check costs one packet at most).
+ *   of at least the threshold on QUICK_CONFIRM checks in a row (noise filter)
+ *   cuts the wait short: full cycle + transmission right away, fast mode.
  */
 
 #ifndef SCHED_H_

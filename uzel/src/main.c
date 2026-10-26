@@ -12,9 +12,8 @@
  *
  * Quick checks: in the normal mode the node also wakes every QUICK_CHECK_S and
  * measures only the probe (no SHT40 / battery / radio). A change of at least
- * FAST_DELTA_100UV against the last transmitted value (QUICK_CONFIRM checks in a
- * row) starts the full cycle right away; that one decides about the fast mode.
- * Timeline and decision: sched.h.
+ * FAST_DELTA_100UV against the last transmitted value on QUICK_CONFIRM checks in a
+ * row starts the full cycle right away and the fast mode. Timeline: sched.h.
  *
  * Pairing: after a battery change (power-on reset) the node sends a PAIR_REQ
  * every 5 s for PAIR_WINDOW_S and listens 0.6 s for the hub's answer.
@@ -63,6 +62,7 @@ typedef struct {
     uint8_t  boot_fast_left;
     uint16_t interval_s;
     uint16_t since_full_s;          /* time since the previous full cycle */
+    bool     force_fast;            /* quick checks confirmed a change */
 
     /* battery under TX load (measured hourly during the transmission) */
     uint16_t vbat_load_mv;
@@ -152,7 +152,8 @@ static bool update_interval(bool probe_ok, uint16_t probe)
         g.have_last_probe = true;
     }
 
-    if (changed) {
+    if (changed || g.force_fast) {
+        g.force_fast = false;
         g.calm_cycles = 0;
     } else if (g.calm_cycles < 255U) {
         g.calm_cycles++;
@@ -416,7 +417,8 @@ int main(void)
         while (quick) {
             sleep_s(sched_next_sleep(&remaining, QUICK_CHECK_S, &quick));
             if (quick && quick_check(&hits)) {
-                break;                           /* change: full cycle + report now */
+                g.force_fast = true;             /* confirmed change: report now, fast mode */
+                break;
             }
         }
     }

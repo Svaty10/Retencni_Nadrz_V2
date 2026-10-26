@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.20.0] - 2026-10-26
+
+### Změněno
+- **Firmware čidla 14:** když dvě rychlé kontroly po sobě (každou minutu) naměří změnu hladiny, čidlo hned odešle data a přepne do rychlého režimu (měření po minutě). Nečeká se na 5minutový cyklus ani na rozhodnutí plného měření.
+- Přehled je zase uspořádaný jako ve verzi 1.18.0: vedle schématu nádrže Výhled, Změřeno čidlem, Baterie čidla a Čidlo (2 × 2), pod nimi graf hladiny. Stejně vysoké karty grafů, napětí v popisku grafu baterie a *Klima v čidle* zůstávají.
+
 ## [1.19.0] - 2026-10-26
 
 ### Změněno
