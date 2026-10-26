@@ -5,7 +5,7 @@
  *
  * Timeline (normal mode, one scheduler for both kinds of wake-up):
  *
- *   TX ---150--- Q ---142..157--- TX        (QUICK_CHECK_S = 150 s)
+ *   TX ---60--- Q ---60--- Q ---60--- Q ---60--- Q ---52..67--- TX   (QUICK_CHECK_S = 60 s)
  *
  *   After every transmission the node draws the next full-cycle period
  *   (interval +-JITTER_S/2) and walks towards it in QUICK_CHECK_S steps. Each

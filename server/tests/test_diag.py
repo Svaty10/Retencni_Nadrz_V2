@@ -98,6 +98,7 @@ class DiagTest(unittest.TestCase):
         self.assertLess(fw12, base)
         self.assertEqual(model.quick_check_slots(10), 0)
         self.assertEqual(model.quick_check_slots(12), 576)
+        self.assertEqual(model.quick_check_slots(13), 1440)        # fw 13: back to every 60 s
 
     def test_quick_checks_only_from_fw11(self):
         self.feed(self.frame(1, fw=10))

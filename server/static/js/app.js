@@ -1003,9 +1003,7 @@
             data: {
                 datasets: [
                     line(T.s3, { label: tr('Baterie (%)'), data: series(d.t, d.bat_pct || []), spanGaps: true, yAxisID: 'y' }),
-                    line(T.s4, { label: tr('Signál (%)'), data: series(d.t, (d.rssi || []).map(sigPct)), borderWidth: 1.5, yAxisID: 'y' }),
-                    // napětí v mV na vlastní ose: ADC (64× akumulace, medián) rozliší ~1 mV, procenta to schovají
-                    line(T.s5, { label: tr('Napětí (V)'), data: series(d.t, d.vbat || []), spanGaps: true, borderWidth: 1.5, yAxisID: 'y1' })
+                    line(T.s4, { label: tr('Signál (%)'), data: series(d.t, (d.rssi || []).map(sigPct)), borderWidth: 1.5, yAxisID: 'y' })
                 ]
             },
             options: Object.assign(baseOpts(), {
@@ -1017,9 +1015,9 @@
                             label: (ctx) => {
                                 const i = ctx.dataIndex;
                                 if (ctx.datasetIndex === 1) return tr('Signál') + ' ' + sigTxt(d.rssi[i]);
-                                if (ctx.datasetIndex === 0) return `${tr('Baterie')} ${num(d.bat_pct[i], 0, ' %')}`;
+                                // napětí na tisíciny voltu: ADC (64× akumulace, medián) rozliší ~1 mV
                                 const sag = d.sag_mv && d.sag_mv[i] ? ` (${tr('při vysílání')} −${num(d.sag_mv[i], 0)} mV)` : '';
-                                return `${tr('Napětí')} ${num(d.vbat[i], 3, ' V')}${sag}`;
+                                return `${tr('Baterie')} ${num(d.bat_pct[i], 0, ' %')} · ${num(d.vbat[i], 3, ' V')}${sag}`;
                             },
                             footer: (items) => {
                                 if (!items.length) return [];
@@ -1032,9 +1030,7 @@
                 },
                 scales: {
                     x: timeScale(r),
-                    y: pctAxis(),
-                    y1: { position: 'right', grace: '5%', grid: { drawOnChartArea: false },
-                          ticks: { callback: (v) => num(v, 3, ' V'), maxTicksLimit: 6 } }
+                    y: pctAxis()
                 }
             })
         });

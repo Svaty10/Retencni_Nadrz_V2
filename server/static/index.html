@@ -193,40 +193,6 @@
                 </section>
 
                 <div class="dash-side">
-                    <!-- Doplňkové hodnoty ve skupinách -->
-                    <section class="card facts-card" aria-label="Podrobnosti nádrže">
-                        <div class="fact-group" id="outlookBox">
-                            <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled <button type="button" class="help-tip" data-help="outlook"></button></h3>
-                            <dl class="facts">
-                                <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
-                                <div class="fact"><dt>Srážky (48 h)</dt><dd id="txtRain">–</dd></div>
-                                <div class="fact hidden" id="rowRefillFcst"><dt>Dopouštění</dt><dd><span id="txtRefillFcst">–</span><small id="txtRefillFcstSub">–</small></dd></div>
-                            </dl>
-                        </div>
-                        <div class="fact-group">
-                            <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Změřeno čidlem <button type="button" class="help-tip" data-help="measured"></button></h3>
-                            <dl class="facts">
-                                <div class="fact"><dt>Spotřeba dnes</dt><dd><span id="txtCons">–</span><small id="txtCons7d">–</small></dd></div>
-                                <div class="fact"><dt>Přítok deštěm dnes</dt><dd><span id="txtRainIn">–</span><small id="txtRainIn7d">–</small></dd></div>
-                                <div class="fact hidden" id="rowRefilled"><dt>Dopuštěno dnes</dt><dd><span id="txtRefilled">–</span><small id="txtRefilled7d">–</small></dd></div>
-                            </dl>
-                        </div>
-                        <div class="fact-group" id="batBox">
-                            <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie čidla</h3>
-                            <dl class="facts">
-                                <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
-                                <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
-                            </dl>
-                        </div>
-                        <div class="fact-group" id="linkBox">
-                            <h3><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg>Čidlo v šachtě</h3>
-                            <dl class="facts">
-                                <div class="fact"><dt>Teplota a vlhkost</dt><dd><span class="plain" id="txtTemp">–</span>, <span class="plain" id="txtHum">–</span></dd></div>
-                                <div class="fact"><dt>Signál</dt><dd><span id="txtRssi">–</span><small id="txtLoss">–</small></dd></div>
-                            </dl>
-                        </div>
-                    </section>
-
                     <section class="card chart-card level-card">
                         <div class="card-head">
                             <div class="card-head-text"><h2>Hladina vody</h2><p class="card-desc">Vývoj hladiny v čase; podbarvení značí dopouštění a přítok z deště.</p></div>
@@ -240,6 +206,40 @@
                     </section>
                 </div>
             </div>
+
+            <!-- Doplňkové hodnoty pod nádrží -->
+            <section class="card facts-card" aria-label="Podrobnosti nádrže">
+                <div class="fact-group" id="outlookBox">
+                    <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled <button type="button" class="help-tip" data-help="outlook"></button></h3>
+                    <dl class="facts">
+                        <div class="fact"><dt>Zásoba</dt><dd><span id="txtOutlook">–</span><small id="txtOutlookSub">–</small></dd></div>
+                        <div class="fact"><dt>Srážky (48 h)</dt><dd id="txtRain">–</dd></div>
+                        <div class="fact hidden" id="rowRefillFcst"><dt>Dopouštění</dt><dd><span id="txtRefillFcst">–</span><small id="txtRefillFcstSub">–</small></dd></div>
+                    </dl>
+                </div>
+                <div class="fact-group">
+                    <h3><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg>Změřeno čidlem <button type="button" class="help-tip" data-help="measured"></button></h3>
+                    <dl class="facts">
+                        <div class="fact"><dt>Spotřeba dnes</dt><dd><span id="txtCons">–</span><small id="txtCons7d">–</small></dd></div>
+                        <div class="fact"><dt>Přítok deštěm dnes</dt><dd><span id="txtRainIn">–</span><small id="txtRainIn7d">–</small></dd></div>
+                        <div class="fact hidden" id="rowRefilled"><dt>Dopuštěno dnes</dt><dd><span id="txtRefilled">–</span><small id="txtRefilled7d">–</small></dd></div>
+                    </dl>
+                </div>
+                <div class="fact-group" id="batBox">
+                    <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie čidla</h3>
+                    <dl class="facts">
+                        <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
+                        <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
+                    </dl>
+                </div>
+                <div class="fact-group" id="linkBox">
+                    <h3><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg>Čidlo</h3>
+                    <dl class="facts">
+                        <div class="fact"><dt>Teplota a vlhkost</dt><dd><span class="plain" id="txtTemp">–</span>, <span class="plain" id="txtHum">–</span></dd></div>
+                        <div class="fact"><dt>Signál</dt><dd><span id="txtRssi">–</span><small id="txtLoss">–</small></dd></div>
+                    </dl>
+                </div>
+            </section>
 
             <div class="chart-grid">
                 <section class="card chart-card">
@@ -260,7 +260,7 @@
 
                 <section class="card chart-card">
                     <div class="card-head">
-                        <div class="card-head-text"><h2>Klima v šachtě</h2><p class="card-desc">Teplota a vlhkost u čidla v čase.</p></div>
+                        <div class="card-head-text"><h2>Klima v čidle</h2><p class="card-desc">Teplota a vlhkost uvnitř krabičky čidla.</p></div>
                         <div class="range-picker" data-chart="klima" data-default="7d" data-kind="time"></div>
                     </div>
                     <div class="chart-container"><canvas id="klimaChart"></canvas></div>
@@ -275,7 +275,7 @@
 
                 <section class="card chart-card span-2 bat-card">
                     <div class="card-head">
-                        <div class="card-head-text"><h2>Baterie a signál</h2><p class="card-desc">Stav baterie, napětí s rozlišením na tisíciny voltu a síla signálu; značky ukazují vložení baterie nebo restart čidla.</p></div>
+                        <div class="card-head-text"><h2>Baterie a signál</h2><p class="card-desc">Stav baterie a síla signálu, napětí po najetí na graf; značky ukazují vložení baterie nebo restart čidla.</p></div>
                         <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
                     </div>
                     <div class="chart-container"><canvas id="batteryChart"></canvas></div>

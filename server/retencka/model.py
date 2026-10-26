@@ -251,11 +251,11 @@ QUICK_CHECK_FW = 11               # firmware from which the node checks the prob
 
 def quick_check_slots(fw: Optional[int]) -> int:
     """Wake-ups per day of a node in the normal mode (a full cycle or a quick probe
-    check each): fw 11 every 60 s, fw >= 12 every 150 s, older firmware none."""
+    check each): fw 11 and >= 13 every 60 s, fw 12 every 150 s, older firmware none."""
     fw = fw or 0
     if fw < QUICK_CHECK_FW:
         return 0
-    return 1440 if fw == QUICK_CHECK_FW else 576
+    return 576 if fw == 12 else 1440
 
 
 def battery_percent(vbat_v: float, cells: int = 3, kind: str = "lifes2") -> float:
