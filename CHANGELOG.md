@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.17.0] - 2026-10-26
+
+### Změněno
+- **Firmware čidla 12:** rychlá kontrola hladiny každých 150 s místo 60 s (jedna kontrola v polovině 5min intervalu). Změnu hladiny čidlo ohlásí do 2,5 minuty; o rychlém režimu rozhodne až plné měření, takže šum jedné kontroly stojí nanejvýš jeden paket. Alkalické články se mezi minutovými pulzy firmwaru 11 nestačily zotavit a klidové napětí se ustálilo asi o 0,15 V níž.
+- Hub počítá výdrž baterie podle počtu kontrol daného firmwaru (11: každou minutu, 12: každých 150 s).
+
 ## [1.16.0] - 2026-10-26
 
 ### Přidáno

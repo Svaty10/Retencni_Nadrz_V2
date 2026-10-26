@@ -84,14 +84,20 @@ class DiagTest(unittest.TestCase):
     def test_quick_checks_in_battery_model(self):
         s = self.core.settings.all()
         base = model.battery_days_left(80, 288, s)
-        quick = model.battery_days_left(80, 288, s, quick_checks=True)
+        quick = model.battery_days_left(80, 288, s, check_slots=model.quick_check_slots(11))
         # 1152 checks x 1.4 mAs a day (~1.6 As) roughly double the daily budget
         # incl. self-discharge (~1.7 As)
         self.assertLess(quick, base * 0.6)
         self.assertGreater(quick, base * 0.4)
         # every minute a full cycle (fast mode all day): no room for quick checks
-        self.assertEqual(model.battery_days_left(80, 1440, s, quick_checks=True),
+        self.assertEqual(model.battery_days_left(80, 1440, s, check_slots=model.quick_check_slots(11)),
                          model.battery_days_left(80, 1440, s))
+        # fw 12: a check every 150 s -> 288 checks a day, a quarter of fw 11
+        fw12 = model.battery_days_left(80, 288, s, check_slots=model.quick_check_slots(12))
+        self.assertGreater(fw12, quick)
+        self.assertLess(fw12, base)
+        self.assertEqual(model.quick_check_slots(10), 0)
+        self.assertEqual(model.quick_check_slots(12), 576)
 
     def test_quick_checks_only_from_fw11(self):
         self.feed(self.frame(1, fw=10))

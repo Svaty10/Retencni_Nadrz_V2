@@ -57,13 +57,17 @@
 /** Quick level check between the full cycles: every QUICK_CHECK_S the node wakes,
  *  measures only the probe (no SHT40, battery, radio or heater, ~1.4 mAs) and
  *  compares it with the last transmitted value. |change| >= FAST_DELTA_100UV on
- *  QUICK_CONFIRM checks in a row (noise filter) -> full cycle + TX right away and
- *  the fast mode. Same timeline as the full cycle (see sched.h): the checks
- *  subdivide the 300 s interval, the slot of the full cycle is never a check,
- *  none in the fast mode, while unpaired / pairing or after the cut-off.
- *  Cost: 4 checks per 5 min = ~+19 uA on average (~12 -> ~31 uA). */
-#define QUICK_CHECK_S           60U
-#define QUICK_CONFIRM           2U
+ *  QUICK_CONFIRM checks in a row -> full cycle + TX right away; the full cycle
+ *  then decides about the fast mode from its own reading (update_interval), so a
+ *  noisy check costs one extra packet at most. Same timeline as the full cycle
+ *  (see sched.h): the checks subdivide the 300 s interval, the slot of the full
+ *  cycle is never a check, none in the fast mode, while unpaired / pairing or
+ *  after the cut-off.
+ *  fw 11: every 60 s, 2 confirmations (4 checks per 5 min). Alkaline cells did
+ *  not keep up with a boost + probe pulse every minute (rest voltage settled
+ *  ~0.15 V lower), so fw 12 checks every 150 s: 1 check per 5 min, ~+5 uA. */
+#define QUICK_CHECK_S           150U
+#define QUICK_CONFIRM           1U
 
 /* ========================================================================== */
 /* Battery (3x Li-FeS2 in series)                                             */
@@ -161,7 +165,7 @@
 #define PKT_UNPAIR_LEN          19U
 #define PAIR_REQ_PAIRED         0x01
 #define PKT_MAC_LEN             4U
-#define FW_VERSION              11U     /**< 1.1 – reported in every packet (>= 11: quick checks) */
+#define FW_VERSION              12U     /**< 1.2 – reported in every packet (11: quick checks every 60 s, >= 12: every 150 s) */
 
 #define PAIR_WINDOW_S           600U    /**< Pairing offered for 10 min after a battery change */
 #define PAIR_PERIOD_S           5U      /**< One PAIR_REQ every 5 s inside the window */

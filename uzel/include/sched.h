@@ -5,7 +5,7 @@
  *
  * Timeline (normal mode, one scheduler for both kinds of wake-up):
  *
- *   TX ---60--- Q ---60--- Q ---60--- Q ---60--- Q ---52..67--- TX
+ *   TX ---150--- Q ---142..157--- TX        (QUICK_CHECK_S = 150 s)
  *
  *   After every transmission the node draws the next full-cycle period
  *   (interval +-JITTER_S/2) and walks towards it in QUICK_CHECK_S steps. Each
@@ -15,8 +15,9 @@
  *   (60 s period) the first step already is the full cycle – no quick checks.
  *
  *   A quick check compares the probe with the last transmitted value. A change
- *   of at least the threshold on QUICK_CONFIRM checks in a row (noise filter)
- *   cuts the wait short: full cycle + transmission right away, fast mode.
+ *   of at least the threshold on QUICK_CONFIRM checks in a row cuts the wait
+ *   short: full cycle + transmission right away. The full cycle's own reading
+ *   then decides about the fast mode (a noisy check costs one packet at most).
  */
 
 #ifndef SCHED_H_
