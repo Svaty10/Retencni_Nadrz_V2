@@ -276,8 +276,10 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   hladiny se hýbe, jen když voda právě teče (déšť, spotřeba, dopouštění); jinak je hladina rovná čára. Cesta: zelená = funguje
   (běžící tečky, jen když tudy právě teče: dopouštění běží, nebo se hladina v posledních 15 min zvedla deštěm / klesla spotřebou), oranžová = zpožděná data čidla, červená = porucha (čidlo offline,
   chyba ventilu). Okraj nádrže má barvu stavu čidla.
-- Vedle karty nádrže (na širokém displeji) doplňkové údaje 2 × 2 (Výhled, Změřeno čidlem, Baterie čidla, Čidlo)
-  a pod nimi **graf hladiny** (karta nádrže se výškou srovná s pravým sloupcem); ostatní grafy jsou pod tím.
+- V hlavičce karty nádrže stav čidla, jak dávno přišla poslední zpráva a její přesný čas.
+- Vedle karty nádrže (na širokém displeji) doplňkové údaje ve 2 sloupcích: Výhled a Změřeno čidlem pod sebou,
+  vedle nich Čidlo a Baterie čidla. Pod nádrží i údaji přes celou šířku **graf hladiny**, pak ostatní grafy.
+  V kartě Změřeno čidlem mají objemy znaménka jako ve schématu toků (spotřeba −, déšť a dopouštění +).
   V mřížce grafů je přepínač rozsahu vždy pod popisem a graf dole, takže karty v řadě jsou stejně vysoké.
   Graf *Baterie a signál* ukazuje procenta a signál, napětí (na tisíciny voltu) až v popisku po najetí.
   Graf *Klima v čidle* je teplota a vlhkost uvnitř krabičky čidla. Na úzkém displeji jde vše pod sebe.

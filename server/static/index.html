@@ -143,7 +143,7 @@
                 <section class="card tank-card" aria-labelledby="tankTitle">
                     <div class="tank-head">
                         <h2 class="tank-name" id="tankTitle"><span translate="no" id="txtTankName">Nádrž</span></h2>
-                        <p class="tank-status" id="txtTankStatus"><span class="dot"></span><span>–</span></p>
+                        <p class="tank-status" id="txtTankStatus"><span class="dot"></span><span>–</span><span class="tank-time" id="txtUpdated"></span></p>
                     </div>
                     <!-- Schéma toků: kulatá nádrž uprostřed, kolem jen to, co je nastavené.
                          Cesta: zelená = funguje (tečky běží, když právě teče; spojení s hubem bez teček), červená = porucha. -->
@@ -171,10 +171,6 @@
                             </div>
                         </div>
                     </div>
-                    <dl class="tank-meta">
-                        <div><dt>Výška hladiny</dt><dd id="txtLevelCm">–</dd></div>
-                        <div><dt>Poslední aktualizace</dt><dd id="txtUpdated">–</dd></div>
-                    </dl>
 
                     <div class="refill-block hidden" id="refillBox">
                         <div class="refill-state">
@@ -192,9 +188,9 @@
                     </div>
                 </section>
 
-                <div class="dash-side">
-                    <!-- Doplňkové hodnoty ve skupinách -->
-                    <section class="card facts-card" aria-label="Podrobnosti nádrže">
+                <!-- Doplňkové hodnoty: Výhled + Změřeno čidlem | Čidlo + Baterie -->
+                <section class="card facts-card" aria-label="Podrobnosti nádrže">
+                    <div class="fact-col">
                         <div class="fact-group" id="outlookBox">
                             <h3><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg>Výhled <button type="button" class="help-tip" data-help="outlook"></button></h3>
                             <dl class="facts">
@@ -211,13 +207,8 @@
                                 <div class="fact hidden" id="rowRefilled"><dt>Dopuštěno dnes</dt><dd><span id="txtRefilled">–</span><small id="txtRefilled7d">–</small></dd></div>
                             </dl>
                         </div>
-                        <div class="fact-group" id="batBox">
-                            <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie čidla</h3>
-                            <dl class="facts">
-                                <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
-                                <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
-                            </dl>
-                        </div>
+                    </div>
+                    <div class="fact-col">
                         <div class="fact-group" id="linkBox">
                             <h3><svg class="ico" aria-hidden="true"><use href="#i-thermo"/></svg>Čidlo</h3>
                             <dl class="facts">
@@ -225,20 +216,29 @@
                                 <div class="fact"><dt>Signál</dt><dd><span id="txtRssi">–</span><small id="txtLoss">–</small></dd></div>
                             </dl>
                         </div>
-                    </section>
-                    <section class="card chart-card level-card">
-                        <div class="card-head">
-                            <div class="card-head-text"><h2>Hladina vody</h2><p class="card-desc">Vývoj hladiny v čase; podbarvení značí dopouštění a přítok z deště.</p></div>
-                            <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
+                        <div class="fact-group" id="batBox">
+                            <h3><svg class="ico" aria-hidden="true"><use href="#i-battery"/></svg>Baterie čidla</h3>
+                            <dl class="facts">
+                                <div class="fact"><dt>Stav</dt><dd><span id="txtBat">–</span><small id="txtBatV">–</small></dd></div>
+                                <div class="fact"><dt>Výdrž</dt><dd id="txtBatEst">–</dd></div>
+                            </dl>
                         </div>
-                        <div class="chart-container"><canvas id="historyChart"></canvas></div>
-                        <div class="chart-legend-extra">
-                            <span class="refill-only"><i class="lg lg-refill"></i>dopouštění</span>
-                            <span><i class="lg lg-rain"></i>přítok z deště</span>
-                        </div>
-                    </section>
-                </div>
+                    </div>
+                </section>
             </div>
+
+            <!-- Graf hladiny přes celou šířku pod nádrží a údaji -->
+            <section class="card chart-card level-card">
+                <div class="card-head">
+                    <div class="card-head-text"><h2>Hladina vody</h2><p class="card-desc">Vývoj hladiny v čase; podbarvení značí dopouštění a přítok z deště.</p></div>
+                    <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
+                </div>
+                <div class="chart-container"><canvas id="historyChart"></canvas></div>
+                <div class="chart-legend-extra">
+                    <span class="refill-only"><i class="lg lg-refill"></i>dopouštění</span>
+                    <span><i class="lg lg-rain"></i>přítok z deště</span>
+                </div>
+            </section>
 
             <div class="chart-grid">
                 <section class="card chart-card">
