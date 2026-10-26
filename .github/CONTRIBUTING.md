@@ -24,9 +24,8 @@ To build the ATtiny1624 firmware (`avr-gcc` required) and run host-side cryptogr
 
 ```bash
 cd uzel
-make
-gcc -O2 -Iinclude tools/crypto_selftest.c src/crypto.c src/proto.c -o crypto_selftest && ./crypto_selftest
-gcc -O2 -Iinclude tools/sched_test.c -o sched_test && ./sched_test
+make          # build/firmware.hex
+make test     # crypto self-test against official vectors + scheduler test (host gcc)
 ```
 
 ## Coding & Architecture Guidelines

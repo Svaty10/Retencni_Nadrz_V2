@@ -75,8 +75,7 @@ přes vstup UPDI částečně napájelo.
 
 ## 4. Nahrání (dvojklik)
 1. Zapojte podle bodu 2 a 3, Arduino připojte USB kabelem k počítači.
-2. Otevřete složku projektu **`Retencni_Nadrz_V2\uzel`**
-   (u vás `C:\Users\matej\OneDrive\Projekty\Retencni_Nadrz_V2\uzel`).
+2. Otevřete složku projektu **`Retencni_Nadrz_V2\uzel`**.
 3. Dvojklik na **`1-test-spojeni.cmd`** – otevře se okno; na konci má být
    **„Spojení OK (signatura ATtiny1624 = 1E 94 2A)“**. Okno zavřete libovolnou klávesou.
 4. **Nový čip (poprvé):** dvojklik na **`2-novy-cip.cmd`** – nastaví čip (fuses) a nahraje firmware.
@@ -116,13 +115,16 @@ Při napájení 3,3 V smí ATtiny1624 běžet nejvýš na **10 MHz** (20 MHz až
 Aktualizace firmwaru později = `3-aktualizace-firmwaru.cmd`. Párování zůstane.
 
 ### Smazání párování (`4-smazat-parovani.cmd`)
-Když hub čidlo ukazuje jako **„cizí čidlo“**, čidlo má klíč, který hub nezná – bylo z hubu odebrané
-(*Odebrat bez čidla*), nebo jde o nový hub bez zálohy. Takové čidlo se samo znovu nespáruje (z bezpečnosti
-přijme nový klíč jen od hubu, který zná ten starý). Řešení:
+Čidlo drží klíč, který hub nezná – patří jinému hubu, nebo bylo spárované před přeinstalací či obnovou
+továrního nastavení hubu bez zálohy. Hub ho v *Čidla v dosahu* ukazuje jako **„cizí čidlo“** s nápovědou
+a bez tlačítka. Takové čidlo se znovu nespáruje (z bezpečnosti přijme nový klíč jen od hubu, který zná ten
+starý). Čidlo odebrané tlačítkem *Odebrat bez čidla* tohle nepotřebuje – jeho klíč má hub v archivu
+a stačí **Spárovat znovu** ([instalace.md](instalace.md#odpárování--přesun-čidla-k-jinému-hubu)). Řešení:
 1. Zapojit jako pro nahrání (bod 2 a 3), dvojklik na **`4-smazat-parovani.cmd`** – smaže EEPROM
    (klíč a čítač), firmware zůstane.
 2. Odpojit a znovu připojit napájení (nebo vyndat a vložit baterii) – čidlo 10 minut nabízí párování.
-3. Na hubu *Nastavení → Obecné → Čidla → Přidat čidlo…*, v dialogu zadejte jeho ID a název a **Čekat na čidlo**.
+3. Na hubu *Nastavení → Obecné → Čidla → Přidat čidlo…*, u jeho ID klikněte **Spárovat** (nebo ID zadejte
+   ručně), doplňte název a **Čekat na čidlo**.
 
 ## 6. Když to nejde
 
@@ -133,8 +135,7 @@ přijme nový klíč jen od hubu, který zná ten starý). Řešení:
 | **„Signál se nevrací“** | odpojte drát UPDI od čidla a test zopakujte. Pak „Arduino OK“ → čidlo drží linku: **nemá napájení** (bod 3) nebo je drát na jiném pinu než UPDI. Pořád nic → zapojení Arduina: RESET–GND, D0 (přes odpor) a D1 spojené v jednom bodě, dráty opravdu na D0/D1 (na Nanu RX0/TX1), kontakty v nepájivém poli. |
 | **„Arduino neodpovídá ani jako převodník, ani jako jtag2updi“** | klon s CH340: spusťte `0-priprav-arduino.cmd` (bez drátů na Arduinu) a zapojte pin 6 podle varianty B |
 | **„Arduino (jtag2updi) je v pořádku, ale čip neodpovídá“** | drát z pinu 6 přes odpor na UPDI (pin 10), GND, napájení čidla; na Arduinu nesmí být drát RESET–GND |
-| **„Čip v čidle neodpovídá“** | Arduino je v pořádku, chyba je u čidla: napájení (bod 3), UPDI na pin 10, GND; zkuste `.
-ahraj.ps1 -Test -Baud 57600` |
+| **„Čip v čidle neodpovídá“** | Arduino je v pořádku, chyba je u čidla: napájení (bod 3), UPDI na pin 10, GND; zkuste `.\nahraj.ps1 -Test -Baud 57600` |
 | `could not open port` | zavřete Arduino IDE (sériový monitor drží port) |
 | `Device signature … expected 1E 94 2A` | špatný kontakt na UPDI nebo jiný čip |
 | `… nemá správný kontrolní součet` | stažení se poškodilo – spusťte znovu |

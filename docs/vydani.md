@@ -40,6 +40,7 @@ cd ../uzel && make && make test                          # jen když se měnil f
 - Firmware změněn → zvýšit `FW_VERSION` v `uzel/include/config.h` (10 = 1.0, 11 = 1.1 …).
 - `server/retencka/__init__.py` → `__version__ = "1.0.1"`.
 - `CHANGELOG.md` → nová sekce `## [1.0.1] - RRRR-MM-DD` (Přidáno / Změněno / Opraveno), nahoře.
+- `README.md` → odznak verze nahoře (`badge/verze-1.0.1-…`).
 - Dokumentace odpovídá změnám (README, docs/).
 
 ## 3. Vydání

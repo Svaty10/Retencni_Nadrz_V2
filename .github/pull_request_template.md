@@ -13,6 +13,6 @@
 ## Verification Checklist
 
 - [ ] Server unit & integration tests pass (`cd server && python -m unittest discover -s tests -v`)
-- [ ] Firmware builds and host self-tests pass, if `uzel/` was modified (`cd uzel && make`)
+- [ ] Firmware builds and host self-tests pass, if `uzel/` was modified (`cd uzel && make && make test`)
 - [ ] `CHANGELOG.md` and relevant documentation (`README.md`, `docs/*.md`) are updated in sync with the changes
 - [ ] Privilege boundaries (`O_NOFOLLOW`, atomic writes, CSRF, input validation) are preserved

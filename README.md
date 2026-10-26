@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.14.0-1b5e8a)
+![verze](https://img.shields.io/badge/verze-1.21.2-1b5e8a)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -17,7 +17,7 @@ na webu (i přes Cloudflare), poskytuje je Home Assistantu a umí řídit dopou�
 ```mermaid
 flowchart LR
     subgraph S["Šachta"]
-        N["Čidlo ATtiny1624 + CC1101<br/>SHT40 + hydrostatická sonda<br/>3× AA, ~12 µA průměrně"]
+        N["Čidlo ATtiny1624 + CC1101<br/>SHT40 + hydrostatická sonda<br/>3× AA, ~31 µA průměrně"]
     end
     subgraph D["Dům"]
         H["Hub Raspberry Pi + CC1101"]
@@ -37,7 +37,7 @@ flowchart LR
 
 **Čidlo**
 - Měření hladiny (hydrostatická sonda), teploty a vlhkosti v šachtě; baterie 1× za hodinu.
-- Výdrž na 3× AA Li-FeS2 omezuje hlavně samovybíjení (10+ let), na 3× AA alkalické několik let (typ baterie se přepíná u čidla); při nízké baterii varuje a na konci životnosti článků (1,0 V/článek) se samo vypne, aby se článek nepřepóloval.
+- Výdrž s firmwarem 14 odhadem ~8 let na 3× AA Li-FeS2 a ~5 let na 3× AA alkalických (typ baterie se nastavuje u nádrže, viz [energetický rozpočet](#energetický-rozpočet-odhad)); při nízké baterii varuje a na konci životnosti článků (1,0 V/článek) se samo vypne, aby se nejslabší článek nepřepóloval.
 - Šifrované a podepsané pakety (AES-128-CTR + CMAC, klíč z párování X25519), ochrana proti přehrání.
 - **Čidlo patří svému hubu** – cizí hub ho nepřevezme; odpárovat jde jen z hubu + vložením baterie.
 
@@ -68,10 +68,10 @@ flowchart LR
 - Klidný „vodohospodářský“ vzhled s výraznou měrkou nádrže (vodočetná lať), světlý i tmavý režim
   podle systému nebo volby v menu; využívá celou šířku monitoru a je plně funkční na mobilu.
 - Home Assistant přes REST (YAML se vygeneruje sám), CSV export.
-- Záloha i obnova přes web (nahraná data se sloučí bez duplicit), noční zálohy. Data se nemažou (~10 MB na čidlo a rok).
+- Záloha i obnova přes web (nahraná data se sloučí bez duplicit), noční zálohy. Podrobná data se ve výchozím stavu nemažou (~10 MB na čidlo a rok, retenci lze nastavit).
 - Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem
   – na webu v okně se seznamem změn a průběhem, instalace po potvrzení nebo automaticky v noci.
-- Proces ~28–35 MB RAM, bez Dockeru a bez pip – jen standardní knihovna Pythonu.
+- Proces ~25–35 MB RAM, bez Dockeru a bez pip – jen standardní knihovna Pythonu.
 
 <p align="center">
   <img src="docs/img/prehled.webp" alt="Přehled všech nádrží" width="600">
@@ -143,8 +143,8 @@ Fuse `EESAVE` zachová klíč i při přehrání firmwaru. Ladicí konstanty jso
 | Šifrované vysílání +10 dBm (53 ms + kalibrace) | ~30 mA | ~58 ms | ~1,7 mAs |
 | SHT40, CPU, baterie (1×/h) | – | – | ~0,1 mAs |
 
-Rychlá kontrola hladiny = jen sonda ≈ 1,4 mAs: firmware 11 mezi vysíláními 4× za 5 min
-(1152 kontrol denně), firmware 12 jednou za 5 min, v polovině intervalu (288 kontrol denně), firmware 13 a novější znovu 4× za 5 min.
+Rychlá kontrola hladiny = jen sonda ≈ 1,4 mAs. Mezi dvěma vysíláními (5 min) dělá firmware 11 a firmware 13 a novější
+4 kontroly (1152 denně), firmware 12 jednu kontrolu v polovině intervalu (288 denně).
 
 | Režim | Průměrný proud | Výdrž Li-FeS2 (3000 mAh) | Výdrž alkalické (2500 mAh) |
 |---|---|---|---|
@@ -153,12 +153,13 @@ Rychlá kontrola hladiny = jen sonda ≈ 1,4 mAs: firmware 11 mezi vysíláními
 | Firmware 12: navíc kontrola sondy každých 150 s | ~17 µA | ~9 let | ~6 let |
 | Firmware 13 a 14: kontrola sondy znovu každých 60 s | ~31 µA | ~8 let | ~5 let |
 
-Model hubu (včetně samovybíjení 2 %/3 % ročně) vychází teoreticky ~9 let (Li-FeS2) a ~7 let
-(alkalické); odhad v tabulce počítá s rezervou na mráz a konec článků při 1,0 V. Kdyby čidlo trvale
+Model hubu pro firmware 14 (včetně samovybíjení 2 % ročně u Li-FeS2 a 3 % u alkalických) vychází teoreticky
+~9 let (Li-FeS2) a ~7 let (alkalické); odhad v tabulce počítá s rezervou na mráz a konec článků při 1,0 V. Kdyby čidlo trvale
 vysílalo 1× za minutu: ~57 µA → reálně ~5 let. Proto vysílá po minutě jen při změně hladiny
 (dopouštění, déšť) – tu díky kontrolám pozná do 2 minut. Firmware 12 kontroloval jen každých 150 s
 kvůli poklesu napětí alkalických článků po firmwaru 11; napětí se ale ustaluje, proto firmware 14
-kontroluje znovu každou minutu a po dvou potvrzených změnách hned přepne do rychlého režimu. Skutečnou spotřebu sondy ověřte měřením.
+kontroluje znovu každou minutu a po dvou potvrzených změnách hned přepne do rychlého režimu.
+Skutečnou spotřebu sondy ověřte měřením.
 
 ## Vývoj a testy
 ```bash

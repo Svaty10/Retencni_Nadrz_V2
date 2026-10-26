@@ -62,13 +62,15 @@ přihlášení na web) – obsah vytiskněte na štítek. Funguje i na Pi 3 B/3 
 6. *Nastavení → Obecné → Poloha*: do pole *Obec / adresa* napsat obec a vybrat ji ze seznamu (souřadnice
    pro předpověď počasí se doplní samy; ruční
    souřadnice jsou v pokročilém režimu).
-7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Obecné → Čidla → Spárovat* u jeho ID
-   (po vložení baterie čidlo 10 min nabízí párování, ID porovnat se štítkem). Samo se nespáruje nikdy.
-8. *Nastavení → ‹nádrž›*: *Nádrž* (název, rozměry), *Kalibrace* (2 body „skutečná hladina je teď X cm“ –
-   ideálně jednou při nízké a jednou při vysoké hladině), *Sonda* (výška nade dnem, přesnost, rozsah –
-   pokročilé), *Baterie*, *Upozornění*. Nová nádrž dostane výchozí hodnoty (baterie alkalické, sonda
-   0,5 % z rozsahu 200 cm, výška sondy 1 cm, pravidla dopouštění); rozměry nádrže, plocha střechy a průtok
-   jsou prázdné a je potřeba je vyplnit. Každá nádrž se nastavuje zvlášť.
+7. Čidlo se páruje vždy jen po potvrzení: *Nastavení → Obecné → Čidla → Přidat čidlo…*, vložit do čidla
+   baterii (pak 10 min nabízí párování), v tabulce dialogu u jeho ID kliknout **Spárovat** (ID porovnat se
+   štítkem), zadat název a **Čekat na čidlo**. Samo se nespáruje nikdy.
+8. *Nastavení → ‹nádrž›*: *Nádrž* (název, tvar a rozměry, střecha), *Kalibrace* (2 body „skutečná hladina je
+   teď X cm“ – ideálně jednou při nízké a jednou při vysoké hladině), *Sonda* (výška nade dnem, přesnost,
+   rozsah – pokročilé), *Baterie*, *Dopouštění*, *Upozornění*. Nová nádrž dostane výchozí hodnoty (baterie
+   alkalické, sonda 0,5 % z rozsahu 200 cm, výška sondy 1 cm, upozornění pod 15 %, pravidla dopouštění);
+   rozměry nádrže, plocha střechy a průtok jsou prázdné a je potřeba je vyplnit. Každá nádrž se nastavuje
+   zvlášť, změny se uloží tlačítkem *Uložit změny* v liště dole.
 9. Dopouštění (volitelné): API klíč účtu do *Nastavení → Obecné → Hunter Hydrawise* (*Otestovat připojení*
    ukáže název ovladače), pak *Nastavení → ‹nádrž› → Dopouštění → Ventil: Hunter Hydrawise* →
    *Načíst zóny z Hydrawise* a vybrat zónu podle názvu (ruční Relay ID jen v pokročilém režimu; do pole
@@ -98,8 +100,8 @@ takže čidlo zůstane spárované se svým hubem.
 vložit baterii; hub ho uvolní a spáruje znovu (bez UPDI). Stejně se obnoví čidlo, kterému se po
 spárování ztratila první data a hub je do 24 h neviděl.
 
-Čidlo, které hub opravdu nezná (patří jinému hubu, nebo bylo spárované před přeinstalací hubu bez
-zálohy), ukazuje *Čidla v dosahu* jako „cizí čidlo“ s nápovědou – odemknout ho jde jen smazáním
+Čidlo, které hub opravdu nezná (patří jinému hubu, nebo bylo spárované před přeinstalací či obnovou
+továrního nastavení hubu bez zálohy), ukazuje *Čidla v dosahu* jako „cizí čidlo“ s nápovědou – odemknout ho jde jen smazáním
 párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 [programovani_uzlu.md](programovani_uzlu.md#smazání-párování-4-smazat-parovanicmd)).
 **Zálohujte `/var/lib/retencka`** – záloha obsahuje klíče čidel i archiv klíčů.
@@ -128,10 +130,13 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 ### Obnova továrního nastavení
 *Nastavení → Obecné → Systém → Obnovit tovární nastavení…* (jen administrátor). Dialog nejdřív nabídne
 stažení zálohy, pak chce napsat **OBNOVIT** a vaše heslo. Smaže se vše: měření, nastavení nádrží, uživatelé,
-klíče čidel (čidla je potřeba znovu spárovat – u každého *Znovu spárovat* a vložit baterii), Telegram, token HA,
-zálohy na kartě; vzdálený servis se vypne. Zůstane identita zařízení (název `retencka-xxxx`, **heslo ze
-štítku** pro hotspot i první přihlášení). Aplikace se restartuje a čeká na první přihlášení `admin` + heslo ze štítku jako po instalaci.
-Ze zálohy jde vše vrátit (*Nahrát zálohu* s „včetně nastavení a uživatelů“).
+klíče čidel včetně archivu klíčů, Telegram, token HA, zálohy na kartě; vzdálený servis se vypne. Zůstane
+identita zařízení (název `retencka-xxxx`, **heslo ze štítku** pro hotspot i první přihlášení). Aplikace se
+restartuje a čeká na první přihlášení `admin` + heslo ze štítku jako po instalaci.
+Ze zálohy jde vše vrátit (*Nahrát zálohu* s „včetně nastavení a uživatelů“) – **včetně klíčů čidel**, která pak
+hned pokračují. Bez zálohy hub klíče čidel nezná a čidla ukáže jako cizí: znovu spárovat je jde jen po smazání
+párování přes UPDI ([programovani_uzlu.md](programovani_uzlu.md#smazání-párování-4-smazat-parovanicmd)).
+Proto si zálohu před obnovou stáhněte.
 
 ### Restart a vypnutí
 V menu účtu (vpravo nahoře, jen administrátor): **Restartovat aplikaci** (asi 10–30 s, měření se neztratí),
@@ -150,7 +155,7 @@ Totéž v Telegramu: `restart`, `reboot`, `vypnout`.
 | Zamrznutí aplikace / rádiového vlákna | systemd watchdog (60 s) → restart |
 | Zamrznutí celého systému | HW watchdog BCM2835 (15 s) → reboot |
 | Zaseknuté rádio CC1101 | kontrola registrů každých 30 s, reset; preventivní reset po 16 min ticha |
-| Poškozená databáze | odložena jako `*.corrupt-*`, založena nová, provoz pokračuje |
+| Poškozená databáze | odložena jako `*.corrupt-*` a obnovena z poslední noční zálohy (když žádná není, založí se nová); provoz pokračuje |
 | Nepovedená aktualizace | automatický návrat na předchozí verzi do 2 min, verze se už nezkouší |
 | Bez internetu | web, grafy i HA běží dál (vše lokálně); čas drží `fake-hwclock`, dashboard upozorní |
 

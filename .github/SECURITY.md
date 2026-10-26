@@ -8,8 +8,8 @@ we strongly recommend keeping your hub on the latest release.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.11.x  | :white_check_mark: |
-| < 1.11  | :x:                |
+| 1.21.x  | :white_check_mark: |
+| < 1.21  | :x:                |
 
 ## Security Architecture Overview
 
