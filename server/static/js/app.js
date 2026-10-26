@@ -62,6 +62,7 @@
         p.push(s + 's');
         return p.join(' ');
     }
+    const dni = (n) => (n === 1 ? 'den' : n >= 2 && n <= 4 ? 'dny' : 'dní');   // 1 den, 2–4 dny, 5+ dní
     function fmtAgo(sec) {
         if (sec == null) return '–';
         const isEn = window.I18N && window.I18N.getLang() === 'en';
@@ -1150,7 +1151,7 @@
         $('batBox').classList.toggle('battery-low', !!b.low);
         const days = b.days_left;
         $('txtBatEst').textContent = b.off ? 'Čidlo vypnuto – vyměňte baterii'
-            : days == null ? 'Nedostatek dat' : (days > 3650 ? '> 10 let' : days > 730 ? `${num(days / 365, 1)} roku` : `${num(days, 0)} dní`);
+            : days == null ? 'Nedostatek dat' : (days > 3650 ? '> 10 let' : days > 730 ? `${num(days / 365, 1)} roku` : `${num(days, 0)} ${dni(Math.round(days))}`);
 
         // změřeno čidlem (rozdíly hladiny): dnes velkým písmem, týden pod tím
         const meas = (id, today, week) => {
@@ -1166,11 +1167,11 @@
 
         // výhled: změřená spotřeba + předpověď deště → kdy a kolik dopustit
         const o = s.outlook || {};
-        $('txtOutlook').textContent = o.days_left == null ? '–' : (o.days_left > 365 ? 'vystačí > rok' : `vystačí ~${num(o.days_left, 0)} dní`);
+        $('txtOutlook').textContent = o.days_left == null ? '–' : (o.days_left > 365 ? 'vystačí > rok' : `vystačí ~${num(o.days_left, 0)} ${dni(Math.round(o.days_left))}`);
         $('txtOutlookSub').textContent = o.use_per_day_l != null ? `při spotřebě ~${num(o.use_per_day_l, 0)} L/den` : 'málo dat o spotřebě';
         $('rowRefillFcst').classList.toggle('hidden', !o.auto_refill);
         $('txtRefillFcst').textContent = o.use_per_day_l == null ? '–'
-            : o.refill_in_days == null ? 'nebude potřeba' : o.refill_in_days <= 1 ? 'do 1 dne' : `za ~${num(o.refill_in_days, 0)} dny`;
+            : o.refill_in_days == null ? 'nebude potřeba' : o.refill_in_days <= 1 ? 'do 1 dne' : `za ~${num(o.refill_in_days, 0)} ${dni(Math.round(o.refill_in_days))}`;
         $('txtRefillFcstSub').textContent = o.use_per_day_l == null ? 'málo dat o spotřebě'
             : o.refill_in_days == null ? 'v příštích 7 dnech' : `doplní asi ${num(o.refill_l, 0, ' L')}`;
 
@@ -2313,7 +2314,7 @@
         panel.classList.remove('hidden');
         await formDialog({
             title: 'Přidat čidlo', wide: true, cancel: 'Zavřít', confirm: 'Čekat na čidlo',
-            body: ['Zadejte ID ze štítku čidla a jeho název, potvrďte a vložte do čidla baterii. Nové čidlo v dosahu se objeví v tabulce dole – stačí u něj kliknout „Spárovat“.',
+            body: ['Vložte do čidla baterii – objeví se v tabulce dole, klikněte u něj „Spárovat“ a doplňte název. ID ze štítku můžete zadat i předem a vložit baterii až po potvrzení.',
                 $('pairSteps')],
             fields: [{ name: 'id', label: 'ID ze štítku', value: knownId || '', maxLength: 6, trim: true, placeholder: '4 znaky, např. 3F2A', hint: 'Čtyři znaky 0–9 / A–F vytištěné na štítku čidla.' },
                 { name: 'name', label: 'Název', maxLength: 40, trim: true, hint: 'Povinný – pod tímto jménem se nádrž ukáže v přehledu.' }],
@@ -2352,7 +2353,7 @@
             body: [para('Hub se vrátí do stavu po první instalaci. Nejde to vzít zpět.'),
                 para('Smaže se:', true),
                 list(['všechna naměřená data a historie', 'nastavení (poloha, klíč Hydrawise, Home Assistant)', 'všichni uživatelé včetně vás',
-                    'klíče čidel – čidla bude nutné znovu spárovat', 'Telegram (token a propojené chaty)', 'zálohy uložené na kartě']),
+                    'klíče čidel – čidla půjde znovu spárovat jen po nahrání zálohy, jinak smazáním párování v čidle přes UPDI', 'Telegram (token a propojené chaty)', 'zálohy uložené na kartě']),
                 para('Zůstane:', true),
                 list(['identita zařízení a heslo ze štítku']),
                 para('Zálohy na kartě se smažou také, proto si ji stáhněte teď:'), dl],
@@ -2534,7 +2535,7 @@
                 });
                 cell.appendChild(b);
             } else if (foreign) {
-                cell.innerHTML = '<span class="muted small">Čidlo patří jinému hubu nebo bylo spárované před přeinstalací – smažte párování v čidle (4-smazat-parovani.cmd).</span>';
+                cell.innerHTML = '<span class="muted small">Čidlo patří jinému hubu nebo bylo spárované před přeinstalací či obnovou továrního nastavení – smažte párování v čidle (4-smazat-parovani.cmd).</span>';
             }
             hb.appendChild(tr);
         });

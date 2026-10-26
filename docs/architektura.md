@@ -10,7 +10,7 @@ flowchart LR
     subgraph Nádrž
       P[Hydrostatická sonda 0–3,3 V] --> U
       S[SHT40] --> U
-      B[3× Li-FeS2] --> U
+      B[3× AA: alkalické / Li-FeS2] --> U
       U[uzel/ ATtiny1624 + CC1101]
     end
     U -- "433,92 MHz, 2-FSK 4,8 kBd<br/>AES-CTR + CMAC, každých 300/60 s" --> R
@@ -74,7 +74,8 @@ s vysíláním a hned rychlý režim (měření po 60 s). Fw 14 (`QUICK_CONFIRM`
 tak změnu ohlásí do 2 minut a dál měří po minutě. Fw 11 dělal totéž; fw 12 kontroloval jednou
 za 150 s s jedním potvrzením a fw 13 nechal o rychlém režimu rozhodnout plné měření. V rychlém režimu (perioda 60 s) se
 kontroly nekonají, stejně tak v párovacím okně, nespárovaném stavu a po odpojení baterie.
-Odhad výdrže na hubu (`node_check_mAs`) počítá 1440 − počet vysílání za den kontrol denně.
+Odhad výdrže na hubu počítá s tolika kontrolami denně, kolik probuzení zbude po odečtení vysílání
+(fw 11 a ≥ 13: 1440 − 288 = 1152, fw 12: 576 − 288 = 288), každou za `node_check_mAs`.
 
 ## 3. Hub (`server/retencka/`)
 
@@ -138,7 +139,7 @@ sequenceDiagram
 | spotřeba / přítok | hystereze na vyhlazeném objemu s ½ mrtvého pásma (min. 5 L); stoupání při dopouštění = „refill“, jinak „rain“ | L |
 | přítok z deště | `srážky_mm · plocha_střechy_m² · odtokový_součinitel` (1 mm na 1 m² = 1 L) | L |
 | baterie % | vybíjecí křivka na článek (3 články) podle typu baterie u čidla: Li-FeS2 (plochá, 1,48 V ≈ 50 %) nebo alkalická (klesá průběžně, 1,30 V ≈ 50 %); 1,0 V = 0 % | % |
-| výdrž baterie | `kapacita · % / (cykly/den · mAs/cyklus + µA_spánek · 86,4 + 2 %/rok samovybíjení)` | dny |
+| výdrž baterie | `kapacita · % / (vysílání/den · node_cycle_mAs + kontroly/den · node_check_mAs + ohřevy/den · node_heat_mAs + µA_spánek · 86,4 + samovybíjení)`; samovybíjení 2 %/rok (Li-FeS2), 3 %/rok (alkalické) | dny |
 | výhled | `objem / průměrná denní spotřeba (posledních ≤ 7 celých dní)` | dny |
 
 Časy předpovědi Open-Meteo chodí jako epoch (`timeformat=unixtime`), dny podle kalendáře místa
@@ -202,7 +203,7 @@ stateDiagram-v2
 | `measurements` | jedno měření = jeden řádek: `ts, node_id, seq, flags, vbat_mv, temp_x100, hum_x100, probe_100uv, level_mm, level_raw_mm, volume_l, rssi_x2, lqi, refilling, time_ok` |
 | `hourly` | hodinové agregace na čidlo (grafy nad 45 dní, zůstávají i po mazání podrobných dat) |
 | `nodes` | čidla: název, JSON konfigurace (geometrie, kalibrace, dopouštění), klíče, stav párování (`unpair_at`, `unpair_sent_at`), `last_ctr` |
-| `node_key_archive` | čekající klíče z párování a klíče odebraných čidel (jen pro podpis UNPAIR, viz 3.9) |
+| `node_key_archive` | čekající klíče z párování (platí do prvního ověřeného DATA) a archivní klíče odebraných čidel (jen pro podpis UNPAIR), viz 3.9 |
 | `settings` | globální nastavení (klíč → JSON) |
 | `refills` | každé dopouštění: start/konec, cíl, litry, plánovaný čas, výsledek |
 | `users`, `sessions` | účty (scrypt, motiv `theme` a jazyk rozhraní `lang` u účtu), session (hash tokenu, CSRF token) |
@@ -211,7 +212,9 @@ stateDiagram-v2
 Grafy: SQL bucketing `(ts / bucket) * bucket`, bucket zvolený tak, aby vyšlo ≤ ~600 bodů;
 nad 45 dní se čte z `hourly`.
 
-Odolnost databáze: Při poškození SQLite databáze se při startu automaticky vyhledá a obnoví poslední validní noční záloha. Klíče spárovaných čidel jsou navíc trvale zrcadleny do atomického souboru `<db>.keys`, aby nedošlo ke ztrátě párování ani při úplné havárii databáze.
+Odolnost databáze: když je SQLite při startu poškozená, hub ji odloží a obnoví poslední platnou noční
+zálohu. Klíče spárovaných čidel se navíc zrcadlí do souboru `<db>.keys` (atomický zápis), takže párování
+nezmizí ani při úplném zničení databáze.
 
 ### 3.7 Periodické úlohy (`__main__.periodic`)
 
@@ -301,13 +304,15 @@ importovat beze změny.
 | `retencka-update.timer/.path/.service` | denní / ruční aktualizace z GitHub Release, Ed25519 podpis, snapshot databáze a rollback (kód, jednotky i DB) |
 | `retencka-control.path/.timer/.service` | akce s právy roota na žádost aplikace: restart zařízení, servisní přístup NetBird (24 h / trvale / vypnuto), úklid souborů HTTPS z verzí 1.7–1.9 |
 
-Read-only root (overlayfs), data na `/var/lib/retencka`, logy v RAM, HW watchdog. Před přepnutím verze provede updater konzistentní snapshot SQLite databáze; při neúspěšné aktualizaci nebo selhání kontroly zdraví vrátí kód, systemd jednotky i stav databáze zpět.
+Read-only root (overlayfs, volitelně), data na `/var/lib/retencka`, logy v RAM, HW watchdog. Před přepnutím
+verze udělá updater konzistentní snímek databáze; když aktualizace selže nebo nová verze neprojde kontrolou
+zdraví, vrátí kód, systemd jednotky i databázi zpět.
 
 ## 5. Zdroje na Pi Zero 2 W
 
 | Položka | Hodnota | Proč stačí |
 |---|---|---|
-| RAM | 512 MB, služba omezená na 128 MB | jeden Python proces bez frameworků ~20–30 MB RSS; scrypt 16 MB serializovaně |
+| RAM | 512 MB, služba omezená na 128 MB | jeden Python proces bez frameworků ~25–35 MB RSS; scrypt 16 MB serializovaně |
 | CPU | 4× Cortex-A53 | jeden paket za minutu: dešifrování ~ms; X25519 při párování desítky ms; grafy kreslí prohlížeč |
 | Disk | ~10 MB na čidlo a rok | WAL, `commit=60`, hodinové agregace |
 | Síť | jen 2,4 GHz Wi-Fi | |

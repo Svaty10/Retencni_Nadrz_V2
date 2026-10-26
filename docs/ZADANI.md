@@ -13,7 +13,7 @@ Tři části:
 
 | Část | HW | Úkol |
 |---|---|---|
-| `uzel/` | ATtiny1624 + CC1101 + SHT40 + hydrostatická sonda, 3× Li-FeS2 | měří a odesílá každých 5 min |
+| `uzel/` | ATtiny1624 + CC1101 + SHT40 + hydrostatická sonda, 3× AA (alkalické / Li-FeS2) | měří a odesílá každých 5 min |
 | `server/` | Raspberry Pi Zero 2 W (512 MB RAM) + CC1101 na SPI0 | příjem, ukládání, web, Home Assistant, Hydrawise |
 | `system/` | Raspberry Pi OS Lite (Bookworm/Trixie) | Wi-Fi provisioning, mDNS, aktualizace, odolnost |
 
@@ -22,21 +22,26 @@ Tři části:
 ## 1. Senzorový uzel (firmware, bare-metal C, avr-gcc ≥ 12 / avr-libc ≥ 2.1)
 
 ### 1.1 Priority
-1. **Energie** – průměrný odběr ~12 µA (sonda ~1,4 mAs + šifrované TX ~1,7 mAs na cyklus + spánek 1,5 µA), výdrž omezená samovybíjením článků (10+ let).
+1. **Energie** – měření a vysílání 1× za 5 min ~12 µA (sonda ~1,4 mAs + šifrované TX ~1,7 mAs na cyklus
+   + spánek 1,5 µA); s rychlými kontrolami sondy každou minutu (fw 14) ~31 µA, tj. odhadem ~8 let na
+   Li-FeS2 a ~5 let na alkalických článcích (podrobně README, *Energetický rozpočet*).
 2. **Přesnost** – hladina s rozlišením < 1 mm, šum < ±2 mm.
 3. **Kvalita** – každý paket nese stav senzorů (flagy chyb), server pozná ztrátu paketů a restart uzlu.
 
 ### 1.2 Časování
 - Normální interval **300 s** (RTC PIT 1 s tick, WDT 8 s se kopne při každém probuzení).
 - **Adaptivní rychlý režim:** pokud se napětí sondy mezi měřeními změní o víc než `FAST_DELTA_100UV`
-  (≈ 1 cm), další měření za **60 s**. Návrat na 300 s po 3 klidných měřeních. Pojistka: max. 90 rychlých
+  (10 mV ≈ 6 mm), další měření za **60 s**. Návrat na 300 s po 3 klidných měřeních. Pojistka: max. 90 rychlých
   cyklů po sobě (ochrana baterie při vadné sondě).
+- **Rychlé kontroly** (fw ≥ 11): mezi vysíláními se čidlo každých 60 s (fw 12: 150 s) probudí a změří jen
+  sondu (≈ 1,4 mAs, bez rádia). Dvě kontroly po sobě se změnou ≥ `FAST_DELTA_100UV` (fw 14) → hned plné
+  měření s vysíláním a rychlý režim; změnu hladiny tak hub pozná do 2 minut. Podrobně `docs/architektura.md` 2.
 - **Dálková změna intervalu se NEDĚLÁ.** Downlink by vyžadoval RX okno po každém TX, Python na Pi nemá
   deterministickou latenci a energeticky to nemá smysl (rozpočet dominuje sonda a samovybíjení).
 
 ### 1.3 Měření
 - **Sonda:** zapnout 5V boost (TPS63900), ustálení `PROBE_SETTLE_MS` (výchozí 150 ms), pak 16 dávek
-  × 64 vzorků (ADC0 BURST, 12 bit, ref. 2,500 V) rozložených do ~100 ms; dávky seřadit, zprůměrovat
+  × 64 vzorků (ADC0 BURST, 12 bit, ref. 2,500 V) rozložených do ~70 ms; dávky seřadit, zprůměrovat
   prostředních 8 (ořezaný průměr 512 vzorků); okno ~70 ms potlačí vlny a rušení, energii určuje hlavně
   ustálení sondy, ne počet vzorků. Výstup = **napětí sondy v jednotkách 0,1 mV**.
   Přepočet na cm dělá **server** (vícebodová kalibrace) → kalibrace bez přeflashování.
@@ -46,9 +51,9 @@ Tři části:
   (~30 mA z článků) – pokles napětí odhalí opotřebované nebo studené články dřív než klidové napětí; posílá se
   v dalších paketech (`vbat_sag`), o vypnutí rozhoduje horší z obou hodnot.
 - **SHT40:** každý cyklus (5 min), high-precision, CRC-8. **Ohřev jen při dlouhé vysoké vlhkosti:** když
-  RH ≥ 95 % vydrží 1 h, jeden puls 200 mW / 1 s (≈ 60 mAs) po odeslání paketu, nejvýš 1× za 6 h, ne při
-  nízké baterii a nad 60 °C. Nejhorší případ +240 mAs/den (≈ +15 % spotřeby) – na cílovou výdrž 5 let
-  je rezerva velká.
+  RH ≥ 95 % vydrží 1 h, dva pulsy 110 mW / 1 s (≈ 66 mAs) po odeslání paketu, nejvýš 1× za 6 h, ne při
+  nízké baterii a nad 60 °C. Nejhorší případ ~+265 mAs/den (≈ +8 % spotřeby s rychlými kontrolami) – rezerva
+  na cílovou výdrž je dostatečná.
 - ADC driver musí odpovídat **tinyAVR řady 2** (`ADC0.CTRLC.REFSEL`, `COMMAND.MODE`, 32bit `RESULT`).
 
 ### 1.4 Rádio
@@ -130,9 +135,10 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
   (power-down bez probouzení, ~1,5 µA) – ochrana proti přepólování nejslabšího článku v sérii. Znovu ho
   spustí až nová baterie (power-on reset); se zjevně vybitými články se po vložení vůbec nespustí.
   BOD fuse 1,8 V jen jako poslední pojistka MCU. Hub po posledním paketu ukáže „Čidlo vypnuto – vyměňte baterii“.
-- Server: křivka Li-FeS2 → 0 % při 3,0 V (1,0 V/čl.), ~1 % při 3,3 V; pod 5 % varování „vybitá baterie“.
+- Server: vybíjecí křivka podle typu baterie nastaveného u nádrže (Li-FeS2 plochá, alkalická klesá průběžně)
+  → 0 % při 3,0 V (1,0 V/čl.); pod 5 % varování „vybitá baterie“.
 
-### 1.7 Otevřené HW otázky (ověřit na schématu)
+### 1.8 Otevřené HW otázky (ověřit na schématu)
 - Napájení MCU / CC1101 / SHT40 (CC1101 a SHT40 max. 3,6 V; 3× Li-FeS2 = až 5,4 V) – předpoklad: 3,3V LDO s Iq < 1 µA.
 - ~~Dělič sondy~~ ověřeno: sonda 0–3,3 V, dělič 100k/220k → max 2,27 V na pinu proti ref. 2,5 V (OK).
 - ~~Dělič baterie~~ ověřeno: 1M/220k proti ref. 1,024 V → rozsah do 5,68 V (OK).
@@ -172,7 +178,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   má vlastní název, nádrž, kalibraci, přesnost sondy, **vlastní dopouštění**, grafy, export a entity v HA.
 
 ### 2.4 Data
-- SQLite, WAL, `synchronous=NORMAL`, kompaktní schéma (celá čísla, epoch s) ≈ 30 B/záznam.
+- SQLite, WAL, `synchronous=NORMAL`, kompaktní schéma (celá čísla, epoch s).
 - Ukládá se **surová** hodnota (`probe_100uv`, `vbat_mv`, …) + vypočtená hladina v mm, takže změna kalibrace jde
   zpětně přepočítat. Po uložení kalibrace nebo parametrů nádrže (výška sondy, tvar a rozměry, přesnost
   a rozsah sondy) se historie přepočítá **automaticky** na pozadí; procenta baterie se počítají až při zobrazení.
@@ -220,14 +226,15 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - **Výhled** (odhad): „vystačí ~N dní“ (objem / změřená průměrná spotřeba posledních 7 dní), srážky na
   48 h a se zapnutou automatikou řádek *Dopouštění*: den po dni se odečte změřená spotřeba a přičte
   předpovězený déšť ze střechy (srážky × plocha × odtokový součinitel, výchozí 0,8); první den pod prahem
-  → „za ~N dny, doplní asi X L“ (cíl − práh), jinak „nebude potřeba“. Předpověď slouží jen k tomuto odhadu
+  → „za ~N dní, doplní asi X L“ (cíl − práh), jinak „nebude potřeba“. Předpověď slouží jen k tomuto odhadu
   a k čekání automatiky na déšť.
 - Systémy dopouštění jsou za rozhraním „provider“. Teď: **Hunter Hydrawise** (oficiální REST API s API
   klíčem – Hunter jej uvádí jako veřejné API pro domácí uživatele; GraphQL API aplikace není oficiálně
   dokumentované). Kandidáti do budoucna: OpenSprinkler (lokální HTTP API), Rachio (oficiální cloud API),
   Gardena smart system (oficiální Husqvarna API), Shelly / libovolné relé (lokální HTTP/MQTT, bez cloudu),
   Home Assistant (zapnutí libovolného ventilu přes jeho REST API), Rain Bird / B-hyve (jen neoficiální API).
-- Baterie Li-FeS2 3S: odhad SoC z napěťové křivky, odhad výdrže z trendu.
+- Baterie 3× AA (alkalické / Li-FeS2): procenta z napěťové křivky typu, výdrž z energetického modelu čidla
+  (vysílání, rychlé kontroly, ohřev, spánek, samovybíjení) a nastavené kapacity.
 - Stav: `online` (< 3 intervaly), `stale` (< 30 min), `offline`.
 
 ### 2.6 Bezpečnost webu (vystaveno přes Cloudflare)
@@ -248,7 +255,8 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Audit log s escapováním (žádné XSS přes jméno při neúspěšném loginu).
 - První přihlášení: výchozí účet `admin` + **heslo ze štítku** (stejné jako heslo hotspotu) → povinné vytvoření
   vlastního účtu (jiné jméno i heslo) → výchozí přístup přestane fungovat (existuje uživatel).
-  Obnova továrního stavu = smazání uživatelů → opět heslo ze štítku.
+  Bez uživatelů platí opět výchozí přístup (smazání tabulky `users` = nouzový tovární přístup); úplná
+  obnova továrního nastavení z webu smaže celý datový adresář kromě hesla ze štítku.
 - Tajemství nikdy v gitu (`.gitignore`), data mimo adresář aplikace (`/var/lib/retencka`).
 
 ### 2.7 Home Assistant
@@ -286,7 +294,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Přehled **Všechny nádrže**: nahoře mapa systému (hub uprostřed, nádrže kolem, cesta podle stavu čidla),
   pod ní karty nádrží a společný graf.
 - Grafy: hladina s **podbarvenými úseky** pod křivkou (jemný tón + přerušované svislé hrany na začátku a konci):
-  **dopouštění** zeleně (jako ve staré verzi) (přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo
+  **dopouštění** zeleně (jako ve staré verzi, přesně z logu dopouštění), **přítok z deště** modře (z měřené hladiny: stoupání mimo
   dopouštění nad mrtvé pásmo, začátek = poslední vzorek před stoupáním, konec = poslední stoupající vzorek,
   úseky do 45 min se slučují; čidlo při změně měří po minutě, takže hrany jsou přesné na ~1 min). V tooltipu
   čas od–do a litry. Spotřeba/den, dopouštění/den, klima, počasí 7 dní, **baterie a signál (RSSI), výchozí
@@ -308,10 +316,10 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   plocha střechy i odtokový součinitel (výchozí 0,8) jsou vidět bez pokročilých. Zóna a pravidla dopouštění
   (automatika, čekání na déšť, prahy) se ukážou jen s nastaveným ventilem. Mazání dat má výchozí rozsah *Vše*.
 - Baterie: typ (alkalické / lithiové) a jedno pole *Kapacita baterie* pro zvolený typ v pokročilých, ve stejném řádku vedle typu (výchozí 2500 / 3000 mAh, každý typ si pamatuje svou hodnotu).
-- Párování s průvodcem (1 vložit baterii → 2 potvrdit ID → 3 první data → 4 hotovo).
+- Párování v dialogu *Přidat čidlo* s průvodcem (1 vložit baterii → 2 potvrdit ID → 3 první data → 4 hotovo).
 - U grafů s historií (hladina, spotřeba, dopouštění, klima, baterie) volba 24 h / 7 d / 30 d / 1 rok
   **+ vlastní rozsah od–do** (date pickery). Předpověď počasí má pevný výhled 7 dní.
-- Dopouštění má v grafech jednotnou zelenou barvu (`#10b981`, jako ve staré verzi) (úseky v grafu hladiny i denní sloupce).
+- Dopouštění má v grafech jednotnou zelenou barvu (`#10b981`, jako ve staré verzi) – úseky v grafu hladiny i denní sloupce.
 - Odstranit ESP32 relikty (OTA mód, intervaly den/noc, sync na celé hodiny) → nahradit stavem rádia
   (RSSI, ztráta paketů, ID uzlu, flagy chyb).
 
@@ -321,8 +329,8 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - **Telegram bot** (každá instalace vlastní bot z @BotFather, token v nastavení): long polling, bez veřejné IP.
   Chat se propojí s účtem hubu jednorázovým kódem (10 min, max. 5 špatných pokusů) a má jeho roli
   (uživatel čte, admin ovládá a servis). Jen soukromé chaty; smazání uživatele odpojí jeho chaty.
-- Příkazy: stav, graf (PNG z vlastního kreslení, bez knihoven), upozornění zap/vyp, dopustit/stop, diag, log,
-  restart, reboot, aktualizovat, servis. Upozornění na hladinu pod hranicí (hystereze 3 %), dopouštění,
+- Příkazy: stav, graf (PNG z vlastního kreslení, bez knihoven), upozornění zap/vyp, dopustit/stop, obnovit,
+  diag, log, restart, reboot, vypnout, aktualizovat, servis, odhlásit. Upozornění na hladinu pod hranicí (hystereze 3 %), dopouštění,
   poruchy, čekání na déšť, baterii, výpadek čidla; administrátorům i servisní události.
 - **Vzdálený servis přes NetBird** (volitelné při instalaci): zapnuto 24 h po instalaci, pak jen se souhlasem
   zákazníka (vypnuto / 24 h / trvale, viditelné na webu, v záznamech). Akce s právy roota (NetBird, reboot)

@@ -4,7 +4,7 @@
 
 ## Conformance & Design Measures
 
-- **Semantic HTML & Landmarks:** The single-page application (`index.html`, `login.html`, `setup.html`) uses semantic landmarks (`<header>`, `<nav>`, `<main>`, `<section>`, `<dialog>`), explicit `<label>` associations, and `aria-label` / `aria-live` attributes on dynamic controls and status alerts.
+- **Semantic HTML & Landmarks:** The single-page application (`index.html`, `login.html`, `setup.html`) uses semantic landmarks (`<header>`, `<nav>`, `<section>`), ARIA dialogs (`role="dialog"` / `role="alertdialog"` with `aria-modal`), explicit `<label>` associations, and `aria-label` / `aria-live` attributes on dynamic controls and status alerts.
 - **Keyboard Navigation & Focus Management:**
   - All interactive controls, tabs, and actions are reachable via keyboard (`Tab` / `Shift+Tab`, `Enter`, `Escape`).
   - Modal dialogs (`openDialog` in `server/static/js/app.js`) implement focus trapping, automatic initial focus, and `Escape` dismissal.
@@ -18,7 +18,7 @@
 
 ## Known Limitations
 
-- Historical charts rendered on `<canvas>` via Chart.js have summary metrics displayed as accessible DOM text in the surrounding cards (`Stav nádrže`, `Přehled`, and `Spojení`), though individual canvas data points are primarily visual.
+- Historical charts rendered on `<canvas>` via Chart.js have summary metrics displayed as accessible DOM text in the surrounding cards (the tank card with its flow diagram, *Outlook*, *Measured by the sensor*, *Sensor* and *Sensor battery*), though individual canvas data points are primarily visual.
 
 ## Reporting Accessibility Issues
 

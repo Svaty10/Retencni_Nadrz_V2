@@ -33,17 +33,17 @@ na Linuxu, kde běží v CI před každým vydáním.
 |---|---|---|
 | nízká | NetBird setup key | `retencka-netbird-install.sh` předává klíč `netbird up --setup-key …` v příkazové řádce, takže je po pár sekund vidět v `ps` pro lokální uživatele. Na hubu jsou jen systémové účty a klíč je jednorázový / časově omezený. Klíč se neloguje ani neukládá. |
 | nízká | MAC rádiových rámců 32 bitů | DATA rámec nese zkrácený CMAC (4 B). Padělání = 1 : 4·10⁹ na pokus a jeden rámec ~ desítky ms vysílání; úspěch by vložil jediné falešné měření, ne klíč. Délka rámce je dána energetickým rozpočtem čidla. |
-| nízká | Párování bez autentizace a okno „znovu spárovat“ (X25519) | Útočník v dosahu rádia může během 15minutového okna párování odpovědět podvrženým `PAIR_REQ` dříve než skutečné čidlo a následně podvrhovat hladinu vody (ovládat ventil). Riziko a mitice (RSSI, varování při více klíčích, preference nejsilnějšího signálu v `PENDING_MAX`) jsou popsány níže. |
+| nízká | Párování bez autentizace a okno „znovu spárovat“ (X25519) | Útočník v dosahu rádia může během 15minutového okna párování odpovědět podvrženým `PAIR_REQ` dříve než skutečné čidlo a následně podvrhovat hladinu vody (ovládat ventil). Riziko a jeho zmírnění (RSSI, varování při více klíčích, preference nejsilnějšího signálu v `PENDING_MAX`) jsou popsány níže. |
 | nízká | Entropie čidla | ATtiny1624 nemá TRNG; klíč vzniká z šumu ADC, jitteru hodin, sériového čísla a poolu z EEPROM přes AES-CMAC. Pro tuto hrozbu dostatečné. |
 | info | Port 8081 (Home Assistant) | Bearer token po HTTP v LAN, port se nesmí směrovat do tunelu (dokumentováno). Token se porovnává v konstantním čase a neúspěch zdržuje o 1 s. |
 | info | První přihlášení po HTTP | Než existuje účet, funguje web i po http (heslo ze štítku = heslo hotspotu). Vydá jen 15minutový lístek na vytvoření vlastního admina. |
 | info | Import zálohy | Záloha je SQLite soubor od admina; ověří se `quick_check`, tabulky a verze, sloupce se berou ze schématu hubu (žádné SQL ze souboru). Plný import obnoví i nastavení a účty – záměr. |
 
-### Směrové riziko v okně „znovu spárovat“ a mitice
+### Směrové riziko v okně „znovu spárovat“ a jeho zmírnění
 
 Při otevření 15minutového okna pro párování nového čidla nebo po stisku „Znovu spárovat“ existuje směrové rádiové riziko: útočník v dosahu 433 MHz může odeslat falešný `PAIR_REQ` s očekávaným ID dříve než legitimní čidlo po vložení baterie. Pokud by byl klíč potvrzen, útočník získá možnost podvrhovat měření hladiny (např. hlásit prázdnou nádrž a vyvolat nežádoucí dopouštění z řadu).
 
-**Mitice implementované v systému (1.13.1):**
+**Zmírnění zavedená v systému (1.13.1):**
 - **Zobrazení RSSI v reálném čase:** V tabulce čekajících i detekovaných požadavků na párování webové rozhraní zobrazuje sílu signálu (dBm i %). Při párování v těsné blízkosti hubu má legitimní čidlo silný signál; podezřele slabý signál varuje před vzdáleným útočníkem.
 - **Detekce a varování při vícenásobných veřejných klíčích:** Pokud pro dané ID hub zachytí více různých veřejných klíčů (`pub_count > 1`), v UI se zobrazí výrazné červené varování `· pozor: X klíče!`. Správce vidí, že o registraci ID soupeří více vysílačů, a párování může zrušit.
 - **Preference nejsilnějšího RSSI ve frontě (`PENDING_MAX`):** Backend při naplnění kapacity čekajících klíčů upřednostňuje kandidáta s nejsilnějším signálem, což brání DoS útoku vytlačením legitimního klíče slabými podvrženými pakety.
