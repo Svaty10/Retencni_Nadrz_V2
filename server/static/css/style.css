@@ -396,9 +396,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .tank-card.is-stale .wave svg {
     animation: none !important;
 }
-.tank-meta { margin: 0; padding-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.tank-meta dt { font-size: 12px; color: var(--muted); }
-.tank-meta dd { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-num); }
+.tank-time:not(:empty)::before { content: "· "; }      /* přesný čas poslední zprávy za stavem */
 
 /* --- Schéma toků: kulatá nádrž uprostřed, uzly v rozích ------------------- */
 .flow { position: relative; height: 350px; margin: auto 0; }
@@ -480,7 +478,7 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .refill-block.ok .refill-state .ico, .refill-block.ok .refill-title strong { color: var(--green); }
 .refill-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
-/* Doplňkové hodnoty: 2 × 2 skupiny */
+/* Doplňkové hodnoty vedle nádrže: 2 sloupce (Výhled + Změřeno | Čidlo + Baterie) */
 .facts-card {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -489,8 +487,9 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
     align-content: stretch;
 }
 .fact-group { padding: 20px 24px; min-width: 0; }
-.fact-group:nth-child(odd) { border-right: 1px solid var(--line); }
-.fact-group:nth-child(n+3) { border-top: 1px solid var(--line); }
+.fact-col { min-width: 0; }
+.fact-col:first-child { border-right: 1px solid var(--line); }
+.fact-group + .fact-group { border-top: 1px solid var(--line); }
 .fact-group h3 {
     display: flex; align-items: center; gap: 8px;
     margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--ink);
@@ -518,9 +517,8 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .span-2 { grid-column: span 2; }
 .chart-container { position: relative; height: 260px; width: 100%; }
 .chart-container.chart-tall { height: clamp(300px, 45vh, 560px); }
-/* Graf hladiny v pravém sloupci vedle nádrže (stejně vysoký jako ostatní grafy) */
-.dash-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.level-card { flex: 1; display: flex; flex-direction: column; }
+/* Graf hladiny přes celou šířku pod nádrží a údaji */
+.level-card { margin-top: 16px; }
 /* grafy v mřížce: přepínač rozsahu vždy pod popisem, graf dole – karty v řadě stejně vysoké */
 .chart-grid .chart-card { display: flex; flex-direction: column; }
 .chart-grid .card-head-text { flex-basis: 100%; }
@@ -950,7 +948,8 @@ body.no-refill .refill-only { display: none !important; }
     .nav-tab { font-size: 14px; padding: 0 10px; }
     .node-bar { margin: 0 -16px; padding: 12px 16px 0; }
     .chart-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px; }
-    .dash-top, .dash-side, .stack { gap: 12px; }
+    .dash-top, .stack { gap: 12px; }
+    .level-card { margin-top: 12px; }
     .brand-name { font-size: 15px; }
     .card { padding: 16px; }
     .tab-content { padding-top: 16px; }
@@ -970,12 +969,10 @@ body.no-refill .refill-only { display: none !important; }
 
     .facts-card { grid-template-columns: minmax(0, 1fr); padding: 0; }
     .fact-group { padding: 16px; }
-    .fact-group:nth-child(odd) { border-right: 0; }
-    .fact-group:nth-child(n+2) { border-top: 1px solid var(--line); }
+    .fact-col:first-child { border-right: 0; border-bottom: 1px solid var(--line); }
     .chart-container { height: 220px; }
     .chart-container.chart-tall { height: 260px; }
     .span-2 { grid-column: auto; }
-    .tank-meta { padding-top: 12px; gap: 8px; grid-template-columns: minmax(0, 1fr); }
     .level-litres { font-size: 16px; }
     .card-head { align-items: flex-start; }
     .range-picker { justify-content: flex-start; width: 100%; }

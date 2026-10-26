@@ -1128,7 +1128,7 @@
         $('txtTankName').textContent = cur.name || 'Nádrž';
         const ts = $('txtTankStatus');
         ts.className = 'tank-status ' + s.status;
-        ts.lastElementChild.textContent = ({ online: 'Čidlo online', stale: 'Zpožděná data', offline: 'Čidlo offline' }[s.status] || s.status)
+        ts.children[1].textContent = ({ online: 'Čidlo online', stale: 'Zpožděná data', offline: 'Čidlo offline' }[s.status] || s.status)
             + (s.timestamp ? ` · ${fmtAgo(s.last_seen_seconds_ago)}` : '');
 
         const isStale = s.status !== 'online';
@@ -1140,8 +1140,7 @@
         $('gauge').classList.toggle('empty', pct == null || pct < 0.5);        // prázdná nádrž: bez vlnky
         $('txtPercent').textContent = num(pct, 1, ' %');
         $('txtLiters').textContent = num(s.volume_liters, 0, ' L');
-        $('txtLevelCm').textContent = s.water_level_cm == null ? '–' : `${num(s.water_level_cm, 1, ' cm')} z ${num(s.max_depth_cm, 0, ' cm')}`;
-        $('txtUpdated').textContent = s.timestamp ? `${fmtDateTime(s.timestamp * 1000)} (${fmtAgo(s.last_seen_seconds_ago)})` : 'Čekám na data z čidla…';
+        $('txtUpdated').textContent = s.timestamp ? fmtDateTime(s.timestamp * 1000) : '';
         $('txtTemp').textContent = num(s.temperature, 1, ' °C');
         $('txtHum').textContent = num(s.humidity, 1, ' %');
 
@@ -1159,7 +1158,7 @@
             $(id).textContent = f(today);
             $(id + '7d').textContent = `za 7 dní ${f(week)}`;
         };
-        meas('txtCons', s.consumption_today, s.consumption_7d, '');
+        meas('txtCons', s.consumption_today, s.consumption_7d, '−');      // znaménka jako ve schématu toků
         meas('txtRainIn', s.rain_today, s.rain_7d, '+');
         meas('txtRefilled', s.refill_today, s.refill_7d, '+');
         $('rowRefilled').classList.toggle('hidden', !(s.refill || {}).configured && !s.refill_7d);

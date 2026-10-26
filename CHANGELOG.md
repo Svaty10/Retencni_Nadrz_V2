@@ -3,6 +3,13 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.21.0] - 2026-10-26
+
+### Změněno
+- **Přehled je nižší:** vedle schématu nádrže jsou jen údaje ve dvou sloupcích (Výhled a Změřeno čidlem pod sebou, vedle nich Čidlo a Baterie čidla). Graf hladiny je pod nimi přes celou šířku.
+- Pod nádrží už není *Výška hladiny* a *Poslední aktualizace*. Přesný čas poslední zprávy je v hlavičce vedle stavu čidla („Čidlo online · před 43 s · 26.10.2026 10:38“).
+- *Změřeno čidlem*: spotřeba má znaménko −, stejně jako ve schématu toků. Přítok deštěm a dopuštěná voda mají +.
+
 ## [1.20.0] - 2026-10-26
 
 ### Změněno
