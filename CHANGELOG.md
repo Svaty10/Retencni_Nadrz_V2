@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.21.1] - 2026-10-26
+
+### Změněno
+- Ve skupině *Čidlo* jsou teplota a vlhkost na samostatných řádcích.
+- Tlačítka dopouštění (*Dopustit*, *Zastavit*) jsou vpravo vedle stavu dopouštění, ne pod ním. Na úzkém displeji zůstávají pod textem přes celou šířku.
+
 ## [1.21.0] - 2026-10-26
 
 ### Změněno

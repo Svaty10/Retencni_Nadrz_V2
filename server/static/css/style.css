@@ -476,7 +476,9 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .refill-title { font-size: 15px; }
 .refill-block.ok { background: var(--green-soft); }
 .refill-block.ok .refill-state .ico, .refill-block.ok .refill-title strong { color: var(--green); }
-.refill-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+/* stav vlevo, tlačítka vpravo na stejném řádku; když se nevejdou, zalomí se pod něj */
+.refill-block:not(.hidden) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; }
+.refill-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* Doplňkové hodnoty vedle nádrže: 2 sloupce (Výhled + Změřeno | Čidlo + Baterie) */
 .facts-card {
@@ -965,6 +967,7 @@ body.no-refill .refill-only { display: none !important; }
     .fn-tl, .fn-bl { left: 15%; } .fn-tr, .fn-br { left: 85%; }
     .tank-card { padding: 18px 16px; }
     .refill-block { margin: 16px -16px -18px; padding: 14px 16px 16px; }
+    .refill-actions { flex: 1 1 100%; }
     .refill-actions > * { flex: 1 1 auto; }
 
     .facts-card { grid-template-columns: minmax(0, 1fr); padding: 0; }
