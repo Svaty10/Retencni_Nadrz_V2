@@ -34,6 +34,7 @@ FRESH_S = 15 * 60                 # data younger than this may drive the valve
 REFILL_WAIT_S = 15 * 60           # manual refill without valid data waits this long for a measurement
 AUTO_COOLDOWN_S = 30 * 60
 FLOWING_WINDOW_S = 15 * 60        # flow diagram: a level change this recent counts as flowing now
+OUTLOOK_DAYS = 7                  # refill prediction horizon (= forecast length)
 NO_RISE_LOCK_S = 24 * 3600
 AUTO_CANCEL_S = 24 * 3600         # user cancelled an automatic refill -> automation paused this long
 AUTO_PAUSE_KEY = "auto_refill_pause"   # settings row: {node_id: until} (survives a restart)
@@ -1219,15 +1220,18 @@ class Core:
             "consumption_7d": round(sum(d["use"] for d in flows if d["day"] >= week_start)),
             "catchment_m2": float(node["catchment_area_m2"] or 0),                          # schéma toků
             "rain_today": round(sum(d["rain"] for d in flows if d["day"] == today)),
+            "rain_7d": round(sum(d["rain"] for d in flows if d["day"] >= week_start)),      # změřený přítok
             "refill_today": round(sum(d["refill"] for d in flows if d["day"] == today)),
+            "refill_7d": round(sum(d["refill"] for d in flows if d["day"] >= week_start)),
             "flowing": self.cached(f"flowing:{nid}", 60, lambda: self.flowing_now(nid, now)),
         }
 
     def outlook(self, node: dict, lv: Optional[model.Level], flows: list[dict]) -> dict:
-        """Simple forecast: how long the water lasts at the recent consumption, and how
-        much the roof should bring with the forecast rain (next 7 days)."""
-        out = {"days_left": None, "use_per_day_l": None, "rain_7d_mm": None,
-               "inflow_7d_l": None, "pct_after_rain": None}
+        """How long the water lasts at the measured consumption and, with automatic
+        refilling, when it will start and roughly how much it adds. The weather forecast
+        only enters this prediction; the past inflow and use always come from the sensor."""
+        out = {"days_left": None, "use_per_day_l": None, "auto_refill": False,
+               "refill_in_days": None, "refill_l": None}
         if lv is None:
             return out
         past = [d for d in flows if d["day"] < datetime.now().strftime("%Y-%m-%d")][-7:]
@@ -1236,13 +1240,24 @@ class Core:
             out["use_per_day_l"] = round(use)
             if use >= 5:
                 out["days_left"] = round(lv.volume_l / use, 1)
-        rain = self.weather.rain_next_days(7)
-        if rain is not None:
-            inflow = rain * float(node["catchment_area_m2"]) * float(node.get("runoff_coef") or 0.8)
-            out["rain_7d_mm"] = rain
-            out["inflow_7d_l"] = round(inflow)
-            if lv.max_volume_l:
-                out["pct_after_rain"] = round(min(100.0, (lv.volume_l + inflow) / lv.max_volume_l * 100.0), 1)
+        if not (node.get("auto_refill_enabled") and self._provider(node) is not None and lv.max_volume_l):
+            return out
+        out["auto_refill"] = True
+        if out["use_per_day_l"] is None:
+            return out
+        thr = float(node["refill_threshold_pct"]) / 100.0 * lv.max_volume_l
+        target = float(node["auto_refill_target_pct"]) / 100.0 * lv.max_volume_l
+        roof = float(node.get("catchment_area_m2") or 0) * float(node.get("runoff_coef") or 0.8)
+        vol, before = lv.volume_l, 0.0
+        for day in range(1, OUTLOOK_DAYS + 1):
+            ahead = self.weather.rain_ahead(day * 24) if roof else None
+            mm = ahead[0] if ahead else 0.0
+            vol = min(lv.max_volume_l, vol - out["use_per_day_l"] + (mm - before) * roof)
+            before = mm
+            if vol < thr:
+                out["refill_in_days"] = day
+                out["refill_l"] = round(max(0.0, target - thr))
+                break
         return out
 
     def _radio_info(self) -> dict:

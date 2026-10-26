@@ -215,9 +215,13 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
   - předpověď se změní a déšť už nestačí.
   Pokud se dopouští a déšť je stále předpovězen, **dopustí se jen to, co déšť nedodá** (cíl − očekávaný přítok,
   min. práh + 2 %). Když déšť nádrž doplní, čekání se ukončí a zapíše do logu.
-- **Výhled:** „vystačí ~N dní“ (objem / průměrná spotřeba posledních 7 dní) a přítok z předpovědi deště na
-  7 dní (srážky × plocha střechy × odtokový součinitel, výchozí 0,8) → odhad % po dešti; v kartě Výhled
-  řádek *Přítok deštěm (7 dní)* (jen s nastavenou střechou).
+- **Změřeno čidlem:** spotřeba, přítok deštěm a dopuštěná voda dnes a za 7 dní – vždy ze skutečných
+  rozdílů hladiny (pokles = spotřeba, vzestup mimo dopouštění = déšť, vzestup při dopouštění = dopuštěno).
+- **Výhled** (odhad): „vystačí ~N dní“ (objem / změřená průměrná spotřeba posledních 7 dní), srážky na
+  48 h a se zapnutou automatikou řádek *Dopouštění*: den po dni se odečte změřená spotřeba a přičte
+  předpovězený déšť ze střechy (srážky × plocha × odtokový součinitel, výchozí 0,8); první den pod prahem
+  → „za ~N dny, doplní asi X L“ (cíl − práh), jinak „nebude potřeba“. Předpověď slouží jen k tomuto odhadu
+  a k čekání automatiky na déšť.
 - Systémy dopouštění jsou za rozhraním „provider“. Teď: **Hunter Hydrawise** (oficiální REST API s API
   klíčem – Hunter jej uvádí jako veřejné API pro domácí uživatele; GraphQL API aplikace není oficiálně
   dokumentované). Kandidáti do budoucna: OpenSprinkler (lokální HTTP API), Rachio (oficiální cloud API),

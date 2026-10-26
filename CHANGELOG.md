@@ -3,6 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.18.0] - 2026-10-26
+
+### Změněno
+- **Změřeno čidlem:** karta Spotřeba se jmenuje *Změřeno čidlem* a kromě spotřeby ukazuje i přítok deštěm a dopuštěnou vodu, dnes a za 7 dní. Všechno pochází ze skutečných změn hladiny, ne z předpovědi.
+- **Výhled jen jako předpověď:** řádek *Přítok deštěm (7 dní)*, který počítal litry z předpovědi počasí, nahradil řádek *Dopouštění*. Se zapnutou automatikou odhadne ze změřené spotřeby a předpovězeného deště, za kolik dní hladina klesne pod spouštěcí mez a kolik litrů se pak dopustí, nebo že v příštích 7 dnech dopouštění potřeba nebude. Výdrž zásoby ukazuje jen změřenou spotřebu.
+- **Napětí baterie na tisíciny voltu:** graf *Baterie a signál* má vlastní osu s napětím a karta Baterie čidla ukazuje napětí na tři desetinná místa. ADC čidla (64 vzorků, medián ze 4 měření) rozliší zhruba 1 mV, takže je vidět, jestli se napětí ustaluje.
+- `/api/state`: `outlook` má místo `rain_7d_mm`, `inflow_7d_l` a `pct_after_rain` pole `auto_refill`, `refill_in_days` a `refill_l`. Přibyly změřené součty `rain_7d` a `refill_7d`.
+
 ## [1.17.0] - 2026-10-26
 
 ### Změněno

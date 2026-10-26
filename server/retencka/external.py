@@ -127,12 +127,6 @@ class Weather:
                 last = ts
         return round(total, 1), last
 
-    def rain_next_days(self, days: int) -> Optional[float]:
-        d = self._data
-        if not d or not d["precipitation_sum"]:
-            return None
-        return round(sum(d["precipitation_sum"][:days]), 1)
-
     async def rain_next_2_days(self, lat: float, lon: float, wait: bool = True) -> Optional[float]:
         d = await self.forecast(lat, lon) if wait else self.cached(lat, lon)
         if not d or not d["precipitation_sum"]:
