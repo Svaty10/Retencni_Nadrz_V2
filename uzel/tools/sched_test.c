@@ -5,8 +5,8 @@
 #include "sched.h"
 
 /* values of include/config.h (needs the AVR headers, not usable on the host) */
-#define QUICK_CHECK_S     150
-#define QUICK_CONFIRM     1
+#define QUICK_CHECK_S     60
+#define QUICK_CONFIRM     2
 #define FAST_DELTA_100UV  100
 
 static int fails = 0;
@@ -34,12 +34,12 @@ static int walk(uint16_t period, uint16_t step, uint16_t *t_full)
 int main(void)
 {
     uint16_t t;
-    /* normal mode: 300 s +- 8 s jitter; fw 12 (150 s) -> 1 check, fw 11 (60 s) -> 4 checks;
+    /* normal mode: 300 s +- 8 s jitter; 60 s (fw 11, 13) -> 4 checks, 150 s (fw 12) -> 1 check;
      * the full cycle always exactly at the period */
     for (uint16_t p = 292; p <= 307; p++) {
-        CHECK(walk(p, QUICK_CHECK_S, &t) == 1);
+        CHECK(walk(p, QUICK_CHECK_S, &t) == 4);
         CHECK(t == p);
-        CHECK(walk(p, 60, &t) == 4);
+        CHECK(walk(p, 150, &t) == 1);
         CHECK(t == p);
     }
     /* fast mode: 60 s +- 8 s -> no checks */
@@ -48,12 +48,12 @@ int main(void)
         CHECK(t == p);
     }
 
-    /* fw 12 trigger: one check over the threshold is enough (QUICK_CONFIRM = 1) */
+    /* fw 12 trigger: one check over the threshold is enough (confirm = 1) */
     uint8_t h1 = 0;
-    CHECK(sched_quick_trigger(&h1, true, 1100, 1000, FAST_DELTA_100UV, QUICK_CONFIRM));
+    CHECK(sched_quick_trigger(&h1, true, 1100, 1000, FAST_DELTA_100UV, 1));
     h1 = 0;
-    CHECK(!sched_quick_trigger(&h1, true, 1099, 1000, FAST_DELTA_100UV, QUICK_CONFIRM));
-    CHECK(!sched_quick_trigger(&h1, false, 1500, 1000, FAST_DELTA_100UV, QUICK_CONFIRM));
+    CHECK(!sched_quick_trigger(&h1, true, 1099, 1000, FAST_DELTA_100UV, 1));
+    CHECK(!sched_quick_trigger(&h1, false, 1500, 1000, FAST_DELTA_100UV, 1));
 
     /* trigger: 2 checks in a row with |delta| >= 100 */
     uint8_t h = 0;

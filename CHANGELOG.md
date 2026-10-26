@@ -3,6 +3,15 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.19.0] - 2026-10-26
+
+### Změněno
+- **Firmware čidla 13:** rychlá kontrola hladiny znovu každou minutu (4 kontroly za 5 min, změna potvrzená dvěma kontrolami po sobě se ohlásí do 2 minut). O rychlém režimu dál rozhoduje plné měření jako ve firmwaru 12. Hub počítá výdrž baterie pro firmware 13 stejně jako pro 11.
+- **Přehled:** vedle karty nádrže je graf hladiny, který vyplní její výšku, takže kolem schématu nádrže už není prázdné místo. Výhled, Změřeno čidlem, Baterie čidla a Čidlo jsou pod nimi ve 4 sloupcích, na užším displeji 2 × 2.
+- Karty grafů v jedné řadě jsou stejně vysoké: přepínač rozsahu je vždy pod popisem a graf začíná ve stejné výšce.
+- Graf *Baterie a signál* zase ukazuje jen procenta a signál. Napětí na tisíciny voltu je v popisku po najetí na graf.
+- *Klima v šachtě* se jmenuje *Klima v čidle* (teplota a vlhkost uvnitř krabičky čidla), skupina *Čidlo v šachtě* je *Čidlo*.
+
 ## [1.18.0] - 2026-10-26
 
 ### Změněno
