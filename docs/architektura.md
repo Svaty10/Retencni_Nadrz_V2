@@ -63,17 +63,16 @@ Jeden plánovač pro obojí – po každém vysílání se vylosuje perioda 300 
 po `QUICK_CHECK_S`:
 
 ```
-fw 11, 13:  TX ──60── Q ──60── Q ──60── Q ──60── Q ──52…67── TX
+fw 11, 13+: TX ──60── Q ──60── Q ──60── Q ──60── Q ──52…67── TX
 fw 12:      TX ──150── Q ──142…157── TX
 ```
 
 Poslední krok je zbytek do plného cyklu, takže kontrola a plný cyklus nikdy nesplynou a jitter
 posouvá jen vysílání. Kontrola porovná sondu s poslední *odeslanou* hodnotou; |Δ| ≥
 `FAST_DELTA_100UV` (10 mV ≈ 6 mm) ve `QUICK_CONFIRM` kontrolách po sobě → hned plný cyklus
-s vysíláním. Fw 13 (`QUICK_CONFIRM` = 2, každých 60 s): změnu ohlásí do 2 minut a o rychlém
-režimu rozhodne až plné měření z vlastní hodnoty, takže šum stojí nanejvýš jeden paket navíc.
-Fw 12 kontroloval jednou za 150 s s jedním potvrzením, fw 11 každých 60 s a rychlý režim po
-potvrzení vynutil. V rychlém režimu (perioda 60 s) se
+s vysíláním a hned rychlý režim (měření po 60 s). Fw 14 (`QUICK_CONFIRM` = 2, každých 60 s)
+tak změnu ohlásí do 2 minut a dál měří po minutě. Fw 11 dělal totéž; fw 12 kontroloval jednou
+za 150 s s jedním potvrzením a fw 13 nechal o rychlém režimu rozhodnout plné měření. V rychlém režimu (perioda 60 s) se
 kontroly nekonají, stejně tak v párovacím okně, nespárovaném stavu a po odpojení baterie.
 Odhad výdrže na hubu (`node_check_mAs`) počítá 1440 − počet vysílání za den kontrol denně.
 

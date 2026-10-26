@@ -57,16 +57,16 @@
 /** Quick level check between the full cycles: every QUICK_CHECK_S the node wakes,
  *  measures only the probe (no SHT40, battery, radio or heater, ~1.4 mAs) and
  *  compares it with the last transmitted value. |change| >= FAST_DELTA_100UV on
- *  QUICK_CONFIRM checks in a row -> full cycle + TX right away; the full cycle
- *  then decides about the fast mode from its own reading (update_interval), so a
- *  noisy check costs one extra packet at most. Same timeline as the full cycle
+ *  QUICK_CONFIRM checks in a row (noise filter) -> full cycle + TX right away and
+ *  the fast mode. Same timeline as the full cycle
  *  (see sched.h): the checks subdivide the 300 s interval, the slot of the full
  *  cycle is never a check, none in the fast mode, while unpaired / pairing or
  *  after the cut-off.
  *  fw 11: every 60 s, 2 confirmations, a confirmed change forced the fast mode.
  *  fw 12: every 150 s, 1 confirmation (~+5 uA instead of ~+19 uA).
- *  fw 13: back to every 60 s (4 checks per 5 min, ~+19 uA) with 2 confirmations;
- *  the fast mode is decided by the full cycle as in fw 12. */
+ *  fw 13: every 60 s, 2 confirmations, the full cycle decided about the fast mode.
+ *  fw 14: every 60 s (4 checks per 5 min, ~+19 uA), 2 confirmations switch the
+ *  fast mode on right away (as fw 11). */
 #define QUICK_CHECK_S           60U
 #define QUICK_CONFIRM           2U
 
@@ -166,7 +166,7 @@
 #define PKT_UNPAIR_LEN          19U
 #define PAIR_REQ_PAIRED         0x01
 #define PKT_MAC_LEN             4U
-#define FW_VERSION              13U     /**< 1.3 – reported in every packet (quick checks: 11 and >= 13 every 60 s, 12 every 150 s) */
+#define FW_VERSION              14U     /**< 1.4 – reported in every packet (quick checks: 11 and >= 13 every 60 s, 12 every 150 s) */
 
 #define PAIR_WINDOW_S           600U    /**< Pairing offered for 10 min after a battery change */
 #define PAIR_PERIOD_S           5U      /**< One PAIR_REQ every 5 s inside the window */

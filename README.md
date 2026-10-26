@@ -144,21 +144,21 @@ Fuse `EESAVE` zachová klíč i při přehrání firmwaru. Ladicí konstanty jso
 | SHT40, CPU, baterie (1×/h) | – | – | ~0,1 mAs |
 
 Rychlá kontrola hladiny = jen sonda ≈ 1,4 mAs: firmware 11 mezi vysíláními 4× za 5 min
-(1152 kontrol denně), firmware 12 jednou za 5 min, v polovině intervalu (288 kontrol denně), firmware 13 znovu 4× za 5 min.
+(1152 kontrol denně), firmware 12 jednou za 5 min, v polovině intervalu (288 kontrol denně), firmware 13 a novější znovu 4× za 5 min.
 
 | Režim | Průměrný proud | Výdrž Li-FeS2 (3000 mAh) | Výdrž alkalické (2500 mAh) |
 |---|---|---|---|
 | Firmware ≤ 10: měření + vysílání 1× za 5 min | ~12 µA | 10+ let (omezuje samovybíjení) | ~6–7 let (samovybíjení, riziko vytečení) |
 | Firmware 11: navíc kontrola sondy každých 60 s | ~31 µA | ~8 let | ~5 let |
 | Firmware 12: navíc kontrola sondy každých 150 s | ~17 µA | ~9 let | ~6 let |
-| Firmware 13: kontrola sondy znovu každých 60 s | ~31 µA | ~8 let | ~5 let |
+| Firmware 13 a 14: kontrola sondy znovu každých 60 s | ~31 µA | ~8 let | ~5 let |
 
 Model hubu (včetně samovybíjení 2 %/3 % ročně) vychází teoreticky ~9 let (Li-FeS2) a ~7 let
 (alkalické); odhad v tabulce počítá s rezervou na mráz a konec článků při 1,0 V. Kdyby čidlo trvale
 vysílalo 1× za minutu: ~57 µA → reálně ~5 let. Proto vysílá po minutě jen při změně hladiny
 (dopouštění, déšť) – tu díky kontrolám pozná do 2 minut. Firmware 12 kontroloval jen každých 150 s
-kvůli poklesu napětí alkalických článků po firmwaru 11; napětí se ale ustaluje, proto firmware 13
-kontroluje znovu každou minutu. Skutečnou spotřebu sondy ověřte měřením.
+kvůli poklesu napětí alkalických článků po firmwaru 11; napětí se ale ustaluje, proto firmware 14
+kontroluje znovu každou minutu a po dvou potvrzených změnách hned přepne do rychlého režimu. Skutečnou spotřebu sondy ověřte měřením.
 
 ## Vývoj a testy
 ```bash
