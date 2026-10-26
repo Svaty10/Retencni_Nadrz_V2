@@ -279,7 +279,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - V hlavičce karty nádrže stav čidla, jak dávno přišla poslední zpráva a její přesný čas.
 - Vedle karty nádrže (na širokém displeji) doplňkové údaje ve 2 sloupcích: Výhled a Změřeno čidlem pod sebou,
   vedle nich Čidlo a Baterie čidla. Pod nádrží i údaji přes celou šířku **graf hladiny**, pak ostatní grafy.
-  V kartě Změřeno čidlem mají objemy znaménka jako ve schématu toků (spotřeba −, déšť a dopouštění +).
+  Objemy v kartě Změřeno čidlem i ve schématu toků jsou bez znamének, směr říká popisek.
   V mřížce grafů je přepínač rozsahu vždy pod popisem a graf dole, takže karty v řadě jsou stejně vysoké.
   Graf *Baterie a signál* ukazuje procenta a signál, napětí (na tisíciny voltu) až v popisku po najetí.
   Graf *Klima v čidle* je teplota a vlhkost uvnitř krabičky čidla. Na úzkém displeji jde vše pod sebe.
