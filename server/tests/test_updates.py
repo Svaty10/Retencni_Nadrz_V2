@@ -5,6 +5,7 @@ import io
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import tarfile
 import sys
@@ -12,6 +13,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -172,6 +174,69 @@ class UpdaterMain(unittest.TestCase):
         self.assertEqual(st["state"], "error")
         self.assertIn("offline", st["message"])
         self.assertIsInstance(st["updated_at"], int)
+
+
+class DbSnapshot(unittest.TestCase):
+    """snapshot_db runs as root while the app (owner of the data dir) is live: root
+    must not open the database there, sqlite would open the -wal/-shm siblings by path."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        d = Path(self.tmp.name)
+        self.db, self.snap = d / "retencka.db", d / "snap.sqlite"
+        self.live = sqlite3.connect(self.db)
+        self.live.execute("PRAGMA journal_mode=WAL")
+        self.live.execute("PRAGMA wal_autocheckpoint=0")
+        self.live.execute("CREATE TABLE t(x)")
+        self.live.execute("INSERT INTO t VALUES (42)")
+        self.live.commit()                                   # only in the WAL, app still running
+
+    def tearDown(self):
+        self.live.close()
+        self.tmp.cleanup()
+
+    def test_snapshot_includes_live_wal_content(self):
+        self.assertTrue(upd.snapshot_db(self.db, self.snap))
+        with contextlib.closing(sqlite3.connect(self.snap)) as s:
+            self.assertEqual(s.execute("SELECT x FROM t").fetchall(), [(42,)])
+
+    def test_root_process_never_opens_the_app_database(self):
+        opened = []
+        real = upd.sqlite3.connect
+
+        def spy(path, *a, **kw):
+            opened.append(str(path))
+            return real(path, *a, **kw)
+
+        with mock.patch.object(upd.sqlite3, "connect", spy):
+            self.assertTrue(upd.snapshot_db(self.db, self.snap))
+        self.assertNotIn(str(self.db), opened)
+        self.assertEqual(opened, [str(self.snap)])
+
+    def test_backup_child_runs_as_the_app_user_when_root(self):
+        pw = mock.Mock(pw_uid=999, pw_gid=998)
+        seen = {}
+        real_run = subprocess.run
+
+        def run(cmd, **kw):
+            seen.update(kw)
+            kw = {k: v for k, v in kw.items() if k not in ("user", "group", "extra_groups")}
+            return real_run(cmd, **kw)
+
+        fake_pwd = mock.Mock(getpwnam=mock.Mock(return_value=pw))
+        with mock.patch.object(upd, "pwd", fake_pwd), \
+                mock.patch.object(upd.os, "geteuid", lambda: 0, create=True), \
+                mock.patch.object(upd.subprocess, "run", run):
+            self.assertTrue(upd.snapshot_db(self.db, self.snap))
+        fake_pwd.getpwnam.assert_called_with("retencka")
+        self.assertEqual((seen["user"], seen["group"], seen["extra_groups"]), (999, 998, []))
+
+    def test_missing_app_user_fails_closed(self):
+        fake_pwd = mock.Mock(getpwnam=mock.Mock(side_effect=KeyError("retencka")))
+        with mock.patch.object(upd, "pwd", fake_pwd), \
+                mock.patch.object(upd.os, "geteuid", lambda: 0, create=True):
+            self.assertFalse(upd.snapshot_db(self.db, self.snap))
+        self.assertFalse(self.snap.exists())
 
 
 class AppSide(unittest.TestCase):

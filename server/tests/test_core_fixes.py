@@ -161,6 +161,21 @@ class PairingTest(Base):
         status = self.core.pairing_status()
         self.assertGreaterEqual(status["requests"][0]["pub_count"], 2)
 
+    def test_pair_request_log_is_bounded(self):
+        # PAIR_REQ is unauthenticated: a radio flood with random keys and IDs must not
+        # grow the request log without limit (outside any pairing window)
+        for i in range(core_mod.PAIR_PUBS_MAX * 5):
+            self.core._on_frame(crypto.build_pair_req(0x1234, os.urandom(32), False), -80.0, 20)
+        pr = self.core.pair_requests[0x1234]
+        self.assertEqual(len(pr["pubs"]), core_mod.PAIR_PUBS_MAX)
+        self.assertEqual(pr["pub_count"], core_mod.PAIR_PUBS_MAX)
+        self.assertEqual(pr["count"], core_mod.PAIR_PUBS_MAX * 5)
+        for nid in range(1, core_mod.PAIR_REQUESTS_MAX * 3):
+            self.core._on_frame(crypto.build_pair_req(nid, os.urandom(32), False), -80.0, 20)
+        self.assertEqual(len(self.core.pair_requests), core_mod.PAIR_REQUESTS_MAX)
+        self.assertIn(core_mod.PAIR_REQUESTS_MAX * 3 - 1, self.core.pair_requests)   # newest kept
+        self.assertNotIn(0x1234, self.core.pair_requests)                            # oldest dropped
+
 
 class UnpairTest(Base):
     def setUp(self):

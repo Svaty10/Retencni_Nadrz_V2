@@ -47,6 +47,11 @@ PAIR_TARGET_S = 15 * 60           # user's confirmation of an ID: new PAIR_ACKs 
 PENDING_KEY_S = 24 * 3600
 PENDING_MAX = 4                   # pending keys kept per node (strongest RSSI preferred when full)
 ARCHIVE_MAX = 8                   # archived keys kept per node (see db.py v10)
+# PAIR_REQ is unauthenticated, so the per-ID request log is bounded: distinct public
+# keys remembered per ID (enough for the multi-key warning) and IDs remembered at all
+# (the least recently heard one is dropped first).
+PAIR_PUBS_MAX = 8
+PAIR_REQUESTS_MAX = 64
 ARCHIVE_SEEN_WRITE_S = 600        # node_key_archive.seen_at is refreshed at most this often
 # unpairing: the sensor answers an UNPAIR by an unpaired PAIR_REQ ~6 s later (next
 # attempt in its pairing window, uzel/src/main.c). Such a request is unauthenticated:
@@ -665,12 +670,15 @@ class Core:
             nid, node_pub, node_paired = req
             self._heard(nid, rssi, "pair")
             with self._pair_lock:
-                pr = self.pair_requests.get(nid, {"count": 0, "pubs": set()})
-                pubs = set(pr.get("pubs") or ())
-                pubs.add(node_pub.hex())
+                pr = self.pair_requests.pop(nid, None) or {"count": 0, "pubs": set()}
+                pubs = pr["pubs"]
+                if len(pubs) < PAIR_PUBS_MAX:
+                    pubs.add(node_pub.hex())
                 pr.update(ts=int(time.time()), rssi=rssi, count=pr["count"] + 1,
-                          node_paired=node_paired, pubs=pubs, pub_count=len(pubs))
-                self.pair_requests[nid] = pr
+                          node_paired=node_paired, pub_count=len(pubs))
+                self.pair_requests[nid] = pr      # re-insert: dict order = least recently heard first
+                while len(self.pair_requests) > PAIR_REQUESTS_MAX:
+                    del self.pair_requests[next(iter(self.pair_requests))]
                 for e in self._pending_keys.get(nid, ()):
                     if e.get("pub") == node_pub.hex():
                         e["rssi"] = max(e.get("rssi", -120.0), rssi)

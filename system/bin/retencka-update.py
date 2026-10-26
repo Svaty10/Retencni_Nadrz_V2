@@ -469,12 +469,33 @@ def load_bad() -> set:
         return set()
 
 
+# Runs as the app user: reads the live database (and its -wal/-shm siblings, which
+# sqlite opens by path) with the app's own rights and prints a serialized copy.
+_SNAPSHOT_CHILD = (
+    "import sqlite3, sys\n"
+    "src = sqlite3.connect(sys.argv[1], timeout=30.0)\n"
+    "mem = sqlite3.connect(':memory:')\n"
+    "src.backup(mem)\n"
+    "sys.stdout.buffer.write(mem.serialize())\n"
+)
+
+
+def _as_app_user() -> dict:
+    """subprocess kwargs dropping root to the app user (empty when not root, e.g. tests)."""
+    if pwd is None or not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return {}
+    pw = pwd.getpwnam("retencka")
+    return {"user": pw.pw_uid, "group": pw.pw_gid, "extra_groups": []}
+
+
 def snapshot_db(db_path: Path, snap_path: Path) -> Optional[bool]:
     """Create a consistent SQLite backup in root-owned `snap_path` before switching
     to a new version, so a failed update can roll back schema migrations too.
     True = snapshot made, None = no database yet (nothing to protect), False = failed.
-    sqlite opens the file by path, so the file must still be the same inode after the
-    backup (a link the app swapped in meanwhile would make it a root read of another file)."""
+    The app is still running and owns the data directory, so root never opens the
+    database there: sqlite opens (creates, and as root chowns) the -wal/-shm siblings
+    by path, and the app could have planted links under those names. The backup runs
+    in a child process as the app user, and root only writes its output."""
     snap_path.unlink(missing_ok=True)
     try:
         fd = os.open(db_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -488,18 +509,23 @@ def snapshot_db(db_path: Path, snap_path: Path) -> Optional[bool]:
             return False
         if st.st_size == 0:
             return None
-        with contextlib.closing(sqlite3.connect(str(db_path), timeout=30.0)) as src,                 contextlib.closing(sqlite3.connect(str(snap_path))) as dst:
-            src.backup(dst)
-        now = os.lstat(db_path)
-        if not stat.S_ISREG(now.st_mode) or (now.st_dev, now.st_ino) != (st.st_dev, st.st_ino):
-            raise RuntimeError("database file was replaced during the snapshot")
+    finally:
+        os.close(fd)
+    try:
+        r = subprocess.run([sys.executable, "-I", "-c", _SNAPSHOT_CHILD, str(db_path)],
+                           capture_output=True, env={}, cwd="/", timeout=600, **_as_app_user())
+        if r.returncode != 0 or not r.stdout.startswith(b"SQLite format 3\x00"):
+            raise RuntimeError(r.stderr.decode("utf-8", "replace").strip()[-300:] or "no output")
+        with open(snap_path, "wb") as f:
+            f.write(r.stdout)
+        with contextlib.closing(sqlite3.connect(str(snap_path))) as snap:
+            if snap.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                raise RuntimeError("snapshot failed quick_check")
         return True
     except Exception as e:
         print(f"db snapshot failed: {e}", flush=True)
         snap_path.unlink(missing_ok=True)
         return False
-    finally:
-        os.close(fd)
 
 
 def restore_db(snap_path: Path, db_path: Path) -> None:
