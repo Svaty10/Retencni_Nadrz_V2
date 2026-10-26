@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.16.0] - 2026-10-26
+
+### Přidáno
+- **Automatický přepočet historie:** po uložení kalibračního bodu nebo parametru nádrže (výška sondy, tvar a rozměry, přesnost a rozsah sondy) hub sám přepočítá uloženou hladinu, objem a z nich denní déšť a spotřebu. Dřív se to muselo spustit tlačítkem *Přepočítat*, které zůstává pro ruční spuštění. Odpověď `POST /api/node` má místo `recalc_suggested` pole `recalc`.
+
 ## [1.15.1] - 2026-10-25
 
 ### Změněno

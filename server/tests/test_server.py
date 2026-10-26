@@ -184,6 +184,14 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(st, 403)
         st, js, _ = self.req("POST", "/api/node", {"max_depth_cm": 100}, headers=h)
         self.assertEqual(st, 200, js)
+        self.assertTrue(js["recalc"])                            # tank parameter -> history recomputed by itself
+        for _ in range(50):
+            if self.core.db.scalar("SELECT COUNT(*) FROM audit WHERE detail LIKE '%přepočítána automaticky%'", (), 0):
+                break
+            time.sleep(0.1)
+        self.assertTrue(self.core.db.scalar("SELECT COUNT(*) FROM audit WHERE detail LIKE '%přepočítána automaticky%'", (), 0))
+        st, js, _ = self.req("POST", "/api/node", {"name": "Zahrada"}, headers=h)
+        self.assertFalse(js["recalc"])                           # a name does not touch the levels
         st, js, _ = self.req("POST", "/api/node", {"max_depth_cm": -5}, headers=h)
         self.assertEqual(st, 400)
         st, js, _ = self.req("POST", "/api/settings", {"hydrawise_api_key": "secret-key-1234"}, headers=h)

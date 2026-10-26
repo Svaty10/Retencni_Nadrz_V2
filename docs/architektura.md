@@ -142,7 +142,9 @@ sequenceDiagram
 se počítají v místním čase Pi – zónu nastavuje `install.sh` (výchozí Europe/Prague).
 
 Do DB se ukládá surové `probe_100uv`, nefiltrovaná výška `level_raw_mm`, filtrovaná `level_mm`
-a `volume_l`. Tlačítko *Přepočítat* projde historii čidla znovu (`Core.recompute_levels`).
+a `volume_l`. Po uložení kalibračního bodu nebo parametru, na kterém hladina či objem závisí (`RECALC_KEYS`
+ve `web.py`), projde hub historii čidla znovu na pozadí (`Core.recompute_levels`); změna uložená během
+přepočtu spustí ještě jeden průchod. Tlačítko *Přepočítat* to umí spustit ručně.
 
 ### 3.5 Řízení dopouštění
 
