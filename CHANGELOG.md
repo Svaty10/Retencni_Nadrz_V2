@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.21.2] - 2026-10-26
+
+### Změněno
+- Objemy v kartě *Změřeno čidlem* i ve schématu toků jsou bez znamének (+ / −), směr říká popisek (Spotřeba, Přítok deštěm, Dopuštěno).
+
 ## [1.21.1] - 2026-10-26
 
 ### Změněno

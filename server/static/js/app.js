@@ -1153,14 +1153,14 @@
             : days == null ? 'Nedostatek dat' : (days > 3650 ? '> 10 let' : days > 730 ? `${num(days / 365, 1)} roku` : `${num(days, 0)} dní`);
 
         // změřeno čidlem (rozdíly hladiny): dnes velkým písmem, týden pod tím
-        const meas = (id, today, week, sign) => {
-            const f = (v) => (v == null ? '–' : (v > 0 ? sign : '') + num(v, 0, ' L'));
+        const meas = (id, today, week) => {
+            const f = (v) => num(v, 0, ' L');
             $(id).textContent = f(today);
             $(id + '7d').textContent = `za 7 dní ${f(week)}`;
         };
-        meas('txtCons', s.consumption_today, s.consumption_7d, '−');      // znaménka jako ve schématu toků
-        meas('txtRainIn', s.rain_today, s.rain_7d, '+');
-        meas('txtRefilled', s.refill_today, s.refill_7d, '+');
+        meas('txtCons', s.consumption_today, s.consumption_7d);
+        meas('txtRainIn', s.rain_today, s.rain_7d);
+        meas('txtRefilled', s.refill_today, s.refill_7d);
         $('rowRefilled').classList.toggle('hidden', !(s.refill || {}).configured && !s.refill_7d);
         $('txtRain').textContent = num(s.expected_rain_mm, 1, ' mm');
 
@@ -1229,7 +1229,7 @@
         const sensor = { online: 'ok', stale: 'warn' }[s.status] || 'bad';    // zpožděná data = oranžová
         const roof = (s.catchment_m2 || 0) > 0;
         const o = s.outlook || {};
-        const litres = (v, sign) => (v == null ? '–' : (v > 0 ? sign : '') + num(v, 0, ' L'));
+        const litres = (v) => num(v, 0, ' L');      // bez znamének, směr ukazuje popisek
         const set = (key, show, value, state, flowing) => {
             const node = $('fn' + key), line = $('fl' + key);
             node.classList.toggle('hidden', !show);
@@ -1240,13 +1240,13 @@
             node.querySelector('.fn-val').textContent = value;
         };
         const now = s.flowing || {};    // tečky běží, jen když voda teče právě teď (ne kvůli dnešnímu součtu)
-        set('Rain', roof, litres(s.rain_today, '+'), sensor, !!now.rain);
-        set('Mains', hasValve, rf.active ? 'dopouští' : litres(s.refill_today, '+'), rf.fault ? 'bad' : 'ok', rf.active);
+        set('Rain', roof, litres(s.rain_today), sensor, !!now.rain);
+        set('Mains', hasValve, rf.active ? 'dopouští' : litres(s.refill_today), rf.fault ? 'bad' : 'ok', rf.active);
         // předpověď se po startu hubu chvíli načítá – to není porucha, jen šedá cesta
         // spojení čidla s hubem: síla signálu, barva podle čerstvosti dat (bez teček – nic neteče)
         const rssi = (s.node || {}).rssi;
         set('Hub', true, s.status === 'offline' ? 'offline' : sigPct(rssi) == null ? '–' : `${sigPct(rssi)} %`, sensor, false);
-        set('Use', true, litres(s.consumption_today, '−'), sensor, !!now.use);
+        set('Use', true, litres(s.consumption_today), sensor, !!now.use);
         ['online', 'stale', 'offline'].forEach((c) => $('gauge').classList.toggle(c, s.status === c));
         // vlnka se hýbe, jen když voda opravdu teče dovnitř nebo ven
         $('gauge').classList.toggle('moving', !!(now.rain || now.use || rf.active));
