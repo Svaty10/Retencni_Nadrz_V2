@@ -260,12 +260,11 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Tajemství nikdy v gitu (`.gitignore`), data mimo adresář aplikace (`/var/lib/retencka`).
 
 ### 2.7 Home Assistant
-- `GET :8081/api/v1/water/state?node=XXXX` s Bearer tokenem (bez `node` = první čidlo); YAML generuje
-  admin UI pro všechna čidla (první: `sensor.retencka_hladina` …, další `sensor.retencka_<nazev>_hladina` …).
-- JSON: `water_level_cm, water_level_percent, volume_liters, temperature, humidity, battery_voltage,
-  battery_percent, battery_low, rssi, last_seen_seconds_ago, status, is_refilling`.
-- YAML: platforma `rest` (jeden request, více entit), `device_class`, `state_class`,
-  `unit_of_measurement`, `availability` z pole `status`.
+- MQTT (od 1.22, dřív REST na :8081): hub je klient brokeru (doplněk Mosquitto), v UI jen adresa, jméno a heslo.
+- MQTT Discovery: každá nádrž = zařízení s entitami (hladina, objem, teplota, vlhkost, baterie, spotřeba,
+  déšť, diagnostika; s ventilem stav dopouštění a tlačítka Dopustit / Zastavit – vypnutelné).
+- Stav jako retained JSON při změně a aspoň 1× za minutu, dostupnost hubu (poslední vůle) i čidla;
+  odebraná nádrž nebo odpojení smaže entity. Podrobně [home_assistant.md](home_assistant.md).
 
 ### 2.8 Dashboard
 - Střídmý vzhled: světlý i tmavý režim (podle systému nebo volby v menu), jedna akcentová barva (vodní modř),

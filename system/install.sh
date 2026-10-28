@@ -284,7 +284,7 @@ if [ -n "$CF_TOKEN" ]; then
         apt-get update -qq && apt-get install -y -qq cloudflared >/dev/null
     fi
     cloudflared service install "$CF_TOKEN" || true
-    echo "V Cloudflare Zero Trust nasměrujte hostname na http://localhost:80 (NE na port 8081)."
+    echo "V Cloudflare Zero Trust nasměrujte hostname na http://localhost:80."
 fi
 
 # ------------------------------------------------------------------- NetBird
@@ -328,14 +328,14 @@ SSID=$(sed -n 's/^hotspot_ssid=//p' "$INFO" 2>/dev/null | head -n1 || true)
 PASS=$(sed -n 's/^hotspot_password=//p' "$INFO" 2>/dev/null | head -n1 || true)
 
 # adresa a port zdravotního dotazu z /etc/default/retencka (stejně jako ji čte služba)
-HA_PORT=$( ( set +u; . /etc/default/retencka >/dev/null 2>&1; echo "${RETENCKA_HA_PORT:-8081}" ) || echo 8081 )
+HEALTH_PORT=$( ( set +u; . /etc/default/retencka >/dev/null 2>&1; echo "${RETENCKA_HEALTH_PORT:-${RETENCKA_HA_PORT:-8081}}" ) || echo 8081 )
 BIND=$( ( set +u; . /etc/default/retencka >/dev/null 2>&1; echo "${RETENCKA_BIND:-0.0.0.0}" ) || echo 0.0.0.0 )
 case "$BIND" in ""|0.0.0.0|::) BIND=127.0.0.1 ;; esac
 
 # počkat (max. 30 s), až web odpoví
 HTTP=000
 for _ in $(seq 1 15); do
-    HTTP=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://$BIND:$HA_PORT/health" 2>/dev/null || true)
+    HTTP=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://$BIND:$HEALTH_PORT/health" 2>/dev/null || true)
     case "$HTTP" in 200|503) break ;; esac
     sleep 2
 done
@@ -364,7 +364,7 @@ echo "Kontrola:"
 if systemctl is-active --quiet retencka.service; then ok "služba retencka běží"; else fail "služba retencka neběží (journalctl -u retencka -n 50)"; fi
 if [ -e /dev/spidev0.0 ]; then ok "SPI zařízení /dev/spidev0.0 existuje"; else fail "SPI zařízení /dev/spidev0.0 chybí (po restartu se objeví)"; fi
 case "$HTTP" in
-    200) ok "web odpovídá (http://$BIND:$HA_PORT/health)" ;;
+    200) ok "web odpovídá (http://$BIND:$HEALTH_PORT/health)" ;;
     503) ok "web odpovídá"; warn "rádio CC1101 zatím neodpovídá – zkontrolujte zapojení (docs/zapojeni_rpi.md)" ;;
     *)   fail "web neodpovídá (kód $HTTP)" ;;
 esac

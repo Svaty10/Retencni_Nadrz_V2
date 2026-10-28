@@ -26,6 +26,13 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
     "hydrawise_api_key":         ("", "str", 0, 128),
     # Telegram bot of this installation (token from @BotFather)
     "telegram_token":            ("", "str", 0, 100),
+    # Home Assistant over MQTT (broker, e.g. the Mosquitto add-on); empty host = off
+    "mqtt_host":                 ("", "str", 0, 253),
+    "mqtt_port":                 (1883, "int", 1, 65535),
+    "mqtt_username":             ("", "str", 0, 128),
+    "mqtt_password":             ("", "str", 0, 256),
+    "mqtt_tls":                  (False, "bool", None, None),
+    "mqtt_control":              (True, "bool", None, None),    # refill buttons in Home Assistant
     # node energy model (same hardware for all nodes); battery capacity is per tank
     "node_cycle_mAs":            (3.3, "float", 0.01, 100.0),
     "node_check_mAs":            (1.4, "float", 0.0, 100.0),    # quick probe-only check (fw >= 11)
@@ -87,8 +94,9 @@ INHERITABLE = ("probe_accuracy_pct", "probe_range_cm", "notify_low_pct", "runoff
                "max_refill_minutes", "flow_rate_lpm")
 DEFAULTS_KEY = "node_defaults"           # settings row with the shared defaults (JSON)
 
-SECRET_KEYS = {"hydrawise_api_key", "telegram_token"}
-INTERNAL_KEYS = {"ha_token"}
+SECRET_KEYS = {"hydrawise_api_key", "telegram_token", "mqtt_password"}
+PASSWORD_KEYS = {"mqtt_password"}          # masked without the last characters
+INTERNAL_KEYS = {"mqtt_uid"}
 MAX_NODES = 16
 
 
@@ -102,8 +110,11 @@ class Settings:
         self._lock = threading.Lock()
         self._cache: dict[str, Any] = {}
         self.reload()
-        if not self.get("ha_token"):
-            self._write({"ha_token": secrets.token_urlsafe(32)})
+        if not self.get("mqtt_uid"):           # MQTT topics + unique ids in Home Assistant
+            self._write({"mqtt_uid": secrets.token_hex(4)})
+        if self.get("ha_token") is not None:   # REST API for Home Assistant (until 1.21)
+            self.db.execute("DELETE FROM settings WHERE key='ha_token'")
+            self.reload()
 
     def reload(self) -> None:
         data: dict[str, Any] = {k: v[0] for k, v in SCHEMA.items()}
@@ -128,7 +139,7 @@ class Settings:
         for k, v in self.all().items():
             if k not in SCHEMA:
                 continue
-            out[k] = mask(v) if k in SECRET_KEYS else v
+            out[k] = mask(v, k not in PASSWORD_KEYS) if k in SECRET_KEYS else v
         return out
 
     def update(self, changes: dict[str, Any], allow_internal: bool = False) -> list[str]:
@@ -142,7 +153,7 @@ class Settings:
             elif key in SCHEMA:
                 if key in SECRET_KEYS and isinstance(raw, str) and raw.startswith("•"):
                     continue
-                val = coerce(SCHEMA, key, raw)
+                val = check_host(raw) if key == "mqtt_host" else coerce(SCHEMA, key, raw)
             else:
                 raise SettingsError(f"Neznámé nastavení: {key}")
             if current.get(key) != val:
@@ -428,8 +439,26 @@ def _check_refill(cfg: dict, who: str = "") -> None:
         raise SettingsError(pre + "Cíl automatického dopouštění nesmí překročit maximální limit")
 
 
-def mask(v: Any) -> str:
-    return ("•" * 8 + str(v)[-4:]) if v else ""
+def check_host(raw: Any) -> str:
+    """MQTT broker: a name or an IP address (a pasted URL is cut down to its host).
+
+    >>> check_host(" mqtt://homeassistant.local/ "), check_host("192.168.1.10"), check_host("fd00::1")
+    ('homeassistant.local', '192.168.1.10', 'fd00::1')
+    """
+    v = str(raw if raw is not None else "").strip()
+    for p in ("mqtts://", "mqtt://", "tcp://", "ssl://", "http://", "https://"):
+        if v.lower().startswith(p):
+            v = v[len(p):]
+    v = v.rstrip("/")
+    if v.count(":") == 1 and v.split(":")[1].isdigit():
+        raise SettingsError("Port zadejte do pole Port, do adresy jen název nebo IP.")
+    if len(v) > 253 or any(not (ch.isascii() and (ch.isalnum() or ch in ".-_:")) for ch in v):
+        raise SettingsError("Adresa brokeru: zadejte název (např. homeassistant.local) nebo IP adresu.")
+    return v
+
+
+def mask(v: Any, tail: bool = True) -> str:
+    return ("•" * 8 + (str(v)[-4:] if tail else "")) if v else ""
 
 
 def _clean_name(raw: Any) -> str:

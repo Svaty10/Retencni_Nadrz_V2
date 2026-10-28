@@ -141,6 +141,7 @@ class Core:
         # Telegram (set by __main__): notifier(text, admin_only)
         self.notifier = None
         self.telegram = None
+        self.mqtt = None                           # Home Assistant (MQTT), set by __main__
         self._watch: dict[int, dict] = {}          # node_id -> last notified conditions
 
         # clock correction after a late NTP sync (no RTC on the Pi)
@@ -389,6 +390,8 @@ class Core:
 
     def invalidate(self) -> None:
         self._cache.clear()
+        if self.mqtt is not None:
+            self.mqtt.kick()
 
     def resolve_node(self, raw: Optional[str]) -> Optional[int]:
         """Node from a hex query parameter; default = primary node."""
