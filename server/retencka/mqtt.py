@@ -289,6 +289,10 @@ class MqttBridge:
                 raise
             except Exception as e:                   # whatever happens, the bridge survives
                 prev, self.error = self.error, error_text(e)
+                if cfg["tls"] and not self.connected and isinstance(
+                        e, (ssl.SSLError, ConnectionError, asyncio.IncompleteReadError, asyncio.TimeoutError)):
+                    # a plain broker drops the TLS handshake – the usual cause
+                    self.error = "Šifrované spojení (TLS) se nepodařilo – broker na tomto portu TLS nejspíš nepoužívá (vypněte Šifrovat, port 1883)"
                 if self.error != prev or self.connected:
                     log.warning("MQTT: %s (%s: %s)", self.error, type(e).__name__, e)
                 self.connected = False

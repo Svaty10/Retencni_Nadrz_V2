@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.22.1] - 2026-10-28
+
+### Změněno
+- Home Assistant (MQTT): se zapnutým *Šifrovat (TLS)* proti brokeru bez šifrování ukáže web jasnou příčinu („broker na tomto portu TLS nejspíš nepoužívá – vypněte Šifrovat, port 1883“) místo „Spojení s brokerem přerušeno“. Přepínač TLS sám přepne port 1883 ↔ 8883; pole Port má stejný vzhled jako ostatní.
+- Návod pro Home Assistant v Dockeru (Mosquitto jako vlastní kontejner) v [docs/home_assistant.md](docs/home_assistant.md).
+
 ## [1.22.0] - 2026-10-28
 
 ### Přidáno

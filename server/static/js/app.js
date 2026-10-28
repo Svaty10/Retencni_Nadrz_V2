@@ -2292,6 +2292,11 @@
         });
         $('addNodeBtn').addEventListener('click', () => pairDialog(null));
         $('factoryBtn').addEventListener('click', factoryReset);
+        $('mqttForm').elements.namedItem('mqtt_tls').addEventListener('change', (e) => {
+            const port = $('mqttPort');                     // obvyklé porty: 1883 bez šifrování, 8883 s TLS
+            if (e.target.checked && port.value === '1883') port.value = '8883';
+            if (!e.target.checked && port.value === '8883') port.value = '1883';
+        });
         $('mqttOff').addEventListener('click', async () => {
             if (!await confirmDialog({ title: 'Odpojit Home Assistant?', body: ['Nádrže z Home Assistantu zmizí (jejich historie v Home Assistantu zůstane).'], confirm: 'Odpojit', danger: true })) return;
             action(() => api('POST', '/api/settings', { mqtt_host: '' }), 'Home Assistant odpojen.')
