@@ -311,7 +311,7 @@ class InstallAndRollback(unittest.TestCase):
         upd.sync_units = lambda release, backup: backup.update({"unit": b"old"})
         upd.restore_units = lambda backup: self.units_restored.append(dict(backup))
         self.health = True
-        upd.healthy = lambda expected, timeout=120: self.health
+        upd.healthy = lambda expected, since, timeout=120: self.health
         real = self.saved["subprocess"]
 
         class Sub:                                            # systemctl / sync are not run
@@ -387,7 +387,7 @@ class InstallAndRollback(unittest.TestCase):
             conn.execute("PRAGMA user_version = 13")
             conn.commit()
 
-        def fail_after_migrating(expected, timeout=120):
+        def fail_after_migrating(expected, since, timeout=120):
             # Simulate the new version migrating the DB before failing healthcheck
             with contextlib.closing(sqlite3.connect(str(db_file))) as conn:
                 conn.execute("UPDATE t SET v = 'mutated-by-failed-release'")
@@ -427,6 +427,59 @@ class InstallAndRollback(unittest.TestCase):
         self.assertFalse((self.d / "app" / "evil.py").exists())
         self.assertFalse((self.d / "evil.py").exists())
         self.assertEqual(sorted(p.name for p in upd.RELEASES.iterdir()), ["1.1.0"])
+
+
+
+class HealthFile(unittest.TestCase):
+    """healthy(): health.json from the service's main process, still alive 10 s later."""
+
+    def setUp(self):
+        self.saved = {k: getattr(upd, k) for k in ("HEALTH", "main_pid", "time")}
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        upd.HEALTH = Path(self.tmp.name) / "health.json"
+        self.clock = [1000.0]
+        self.pids = []
+
+        class FakeTime:                                       # sleep advances the clock
+            @staticmethod
+            def time():
+                return self.clock[0]
+
+            @staticmethod
+            def sleep(s):
+                self.clock[0] += s
+        upd.time = FakeTime
+        upd.main_pid = lambda: self.pids.pop(0) if len(self.pids) > 1 else (self.pids[0] if self.pids else 0)
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(upd, k, v)
+        self.tmp.cleanup()
+
+    def write(self, **kw):
+        h = {"version": "1.23.0", "pid": 812, "radio": True, "ts": 1001}
+        h.update(kw)
+        upd.HEALTH.write_text(json.dumps(h))
+
+    def test_new_version_running(self):
+        self.write()
+        self.pids = [812]
+        self.assertTrue(upd.healthy("1.23.0", 1000))
+
+    def test_old_file_wrong_version_or_foreign_pid_fail(self):
+        for kw in ({"ts": 900}, {"version": "1.22.0"}, {"pid": 999}):
+            self.write(**kw)
+            self.pids = [812]
+            self.assertFalse(upd.healthy("1.23.0", 1000, timeout=30), kw)
+
+    def test_crash_loop_fails(self):
+        self.write()
+        self.pids = [812] + [813 + i for i in range(40)]      # the process keeps being replaced
+        self.assertFalse(upd.healthy("1.23.0", 1000, timeout=30))
+
+    def test_missing_file(self):
+        self.pids = [812]
+        self.assertFalse(upd.healthy("1.23.0", 1000, timeout=30))
 
 
 if __name__ == "__main__":

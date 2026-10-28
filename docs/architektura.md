@@ -83,7 +83,7 @@ Odhad výdrže na hubu počítá s tolika kontrolami denně, kolik probuzení zb
 
 | Modul | Odpovědnost |
 |---|---|
-| `__main__.py` | start, otevření DB (při poškození automatická obnova z noční zálohy; zrcadlení klíčů do `<db>.keys`), spuštění rádia, webu, lokální kontroly stavu (`/health`), MQTT a Telegramu, periodické úlohy, systemd `READY`/`WATCHDOG` |
+| `__main__.py` | start, otevření DB (při poškození automatická obnova z noční zálohy; zrcadlení klíčů do `<db>.keys`), spuštění rádia, webu, MQTT a Telegramu, `health.json` pro updater, periodické úlohy, systemd `READY`/`WATCHDOG` |
 | `radio.py` | `Receiver` – vlastní vlákno: konfigurace CC1101, příjem (GDO0 hrana přes gpiod, jinak polling), okamžitá odpověď na PAIR_REQ, samoopravy (kontrola registrů každých 30 s, reset po tichu) |
 | `crypto.py` | čistý Python: AES-128, AES-CMAC, X25519, formát rámců v3 |
 | `core.py` | `Core` – mozek: příjem rámců, párování, ukládání, živý stav, dopouštění, historie, údržba, zálohy |
@@ -92,7 +92,7 @@ Odhad výdrže na hubu počítá s tolika kontrolami denně, kolik probuzení zb
 | `db.py` | SQLite (WAL, `synchronous=NORMAL`), připojení na vlákno, verzované migrace |
 | `external.py` | HTTPS klient přes `urllib` ve worker vlákně; `Weather` (Open-Meteo, cache 1 h), `Hydrawise` (REST `setzone.php`) |
 | `httpserver.py` | minimální striktní HTTP/1.1 server nad asyncio (limity hlaviček, bez chunked požadavků) |
-| `web.py` | routy webu a `/health`, kontrola rolí, CSRF, bezpečnostní hlavičky |
+| `web.py` | routy webu, kontrola rolí, CSRF, bezpečnostní hlavičky |
 | `mqtt.py` | Home Assistant: minimální MQTT 3.1.1 klient na asyncio smyčce, Discovery každé nádrže, stavy při změně (aspoň 1× za minutu), příkazy dopouštění, úklid entit odebraných nádrží |
 | `auth.py` | uživatelé (scrypt), session v DB, rate limiting |
 | `telegram.py` | Telegram bot: propojení chatů s účty, příkazy, upozornění (long polling ve vlastním vlákně) |

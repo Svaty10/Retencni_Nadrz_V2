@@ -5,7 +5,6 @@ Environment (systemd EnvironmentFile=/etc/default/retencka):
   RETENCKA_STATIC    static files directory   (<package>/../static)
   RETENCKA_WEB_PORT  web UI port              (80)
   RETENCKA_BIND      bind address of the web (0.0.0.0)
-  RETENCKA_HEALTH_PORT  local health check port for the updater (8081; old name RETENCKA_HA_PORT)
   RETENCKA_SPI_BUS / RETENCKA_SPI_DEV / RETENCKA_SPI_HZ / RETENCKA_GDO0_GPIO
   RETENCKA_MOCK=1    synthetic radio for development
 """
@@ -26,7 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
-from . import __version__, reset
+from . import __version__, reset, updates
 from .core import Core
 from .db import Database, SchemaTooNewError
 from .radio import Receiver
@@ -34,7 +33,7 @@ from .settings import Settings
 from .telegram import TelegramBot
 from .httpserver import Server
 from .mqtt import MqttBridge
-from .web import build_health_app, build_web_app
+from .web import build_web_app
 
 log = logging.getLogger("retencka")
 
@@ -122,6 +121,13 @@ def open_database(path: str) -> Database:
         return Database(path)
 
 
+def write_health(data_dir: str, radio_ok: bool) -> None:
+    try:
+        updates.write_health(data_dir, __version__, radio_ok)
+    except OSError:
+        log.exception("cannot write health.json")
+
+
 async def main_async() -> None:
     data_dir = env("RETENCKA_DATA", "/var/lib/retencka")
     static_dir = env("RETENCKA_STATIC", str(Path(__file__).resolve().parent.parent / "static"))
@@ -161,17 +167,12 @@ async def main_async() -> None:
 
     bind = env("RETENCKA_BIND", "0.0.0.0")
     web_port = int(env("RETENCKA_WEB_PORT", "80"))
-    health_port = int(env("RETENCKA_HEALTH_PORT", env("RETENCKA_HA_PORT", "8081")))
-    # the health check only for this device (the updater asks 127.0.0.1, or the bind address)
-    health_bind = "127.0.0.1" if bind in ("", "0.0.0.0", "::") else bind
-
-    runners = []
-    for app, host, port in ((build_web_app(core, static_dir), bind, web_port),
-                            (build_health_app(core), health_bind, health_port)):
-        srv = Server(app)
-        await srv.start(host, port)
-        runners.append(srv)
-    log.info("Retencka %s: web :%d, health %s:%d, data %s", __version__, web_port, health_bind, health_port, data_dir)
+    web = Server(build_web_app(core, static_dir))
+    await web.start(bind, web_port)
+    runners = [web]
+    radio_ok = radio.alive()
+    write_health(data_dir, radio_ok)
+    log.info("Retencka %s: web :%d, data %s", __version__, web_port, data_dir)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -196,6 +197,9 @@ async def main_async() -> None:
                 sd_notify("WATCHDOG=1")
             else:
                 log.error("Radio thread stalled – withholding watchdog ping")
+            if radio.alive() != radio_ok:
+                radio_ok = radio.alive()
+                write_health(data_dir, radio_ok)
             try:
                 if now >= next_refill:
                     next_refill = now + 30

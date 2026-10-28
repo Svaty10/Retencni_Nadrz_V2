@@ -225,7 +225,7 @@ fi
 # HTTPS s vlastní CA (verze 1.7–1.9) bylo odstraněno: pryč s jeho soubory a nastavením
 # (rm -rf u podstrčeného symlinku smaže jen odkaz)
 rm -rf /var/lib/retencka/tls-ca "$DATA/tls"
-sed -i '/RETENCKA_HTTPS_PORT=/d; /HTTPS s vlastní certifikační autoritou/d' "$DEF"
+sed -i '/RETENCKA_HTTPS_PORT=/d; /HTTPS s vlastní certifikační autoritou/d; /RETENCKA_HA_PORT=/d; /RETENCKA_HEALTH_PORT=/d' "$DEF"
 install -d -m 755 /etc/retencka
 if [ -f "$SRC/system/keys/release.pub" ]; then
     install -m 644 "$SRC/system/keys/release.pub" /etc/retencka/release.pub
@@ -327,16 +327,12 @@ HOST=$(hostname)
 SSID=$(sed -n 's/^hotspot_ssid=//p' "$INFO" 2>/dev/null | head -n1 || true)
 PASS=$(sed -n 's/^hotspot_password=//p' "$INFO" 2>/dev/null | head -n1 || true)
 
-# adresa a port zdravotního dotazu z /etc/default/retencka (stejně jako ji čte služba)
-HEALTH_PORT=$( ( set +u; . /etc/default/retencka >/dev/null 2>&1; echo "${RETENCKA_HEALTH_PORT:-${RETENCKA_HA_PORT:-8081}}" ) || echo 8081 )
-BIND=$( ( set +u; . /etc/default/retencka >/dev/null 2>&1; echo "${RETENCKA_BIND:-0.0.0.0}" ) || echo 0.0.0.0 )
-case "$BIND" in ""|0.0.0.0|::) BIND=127.0.0.1 ;; esac
-
-# počkat (max. 30 s), až web odpoví
-HTTP=000
+# počkat (max. 30 s), až aplikace naběhne: health.json zapsal hlavní proces služby
+HEALTH=""
 for _ in $(seq 1 15); do
-    HTTP=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://$BIND:$HEALTH_PORT/health" 2>/dev/null || true)
-    case "$HTTP" in 200|503) break ;; esac
+    PID=$(systemctl show -p MainPID --value retencka.service 2>/dev/null || echo 0)
+    HEALTH=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(("ok" if d.get("radio") else "degraded") if d.get("pid")==int(sys.argv[2]) and d.get("version")==sys.argv[3] else "")'         "$DATA/health.json" "${PID:-0}" "$VER" 2>/dev/null || true)
+    [ -n "$HEALTH" ] && break
     sleep 2
 done
 
@@ -363,10 +359,10 @@ echo
 echo "Kontrola:"
 if systemctl is-active --quiet retencka.service; then ok "služba retencka běží"; else fail "služba retencka neběží (journalctl -u retencka -n 50)"; fi
 if [ -e /dev/spidev0.0 ]; then ok "SPI zařízení /dev/spidev0.0 existuje"; else fail "SPI zařízení /dev/spidev0.0 chybí (po restartu se objeví)"; fi
-case "$HTTP" in
-    200) ok "web odpovídá (http://$BIND:$HEALTH_PORT/health)" ;;
-    503) ok "web odpovídá"; warn "rádio CC1101 zatím neodpovídá – zkontrolujte zapojení (docs/zapojeni_rpi.md)" ;;
-    *)   fail "web neodpovídá (kód $HTTP)" ;;
+case "$HEALTH" in
+    ok)       ok "aplikace verze $VER běží" ;;
+    degraded) ok "aplikace verze $VER běží"; warn "rádio CC1101 zatím neodpovídá – zkontrolujte zapojení (docs/zapojeni_rpi.md)" ;;
+    *)        fail "aplikace nenaběhla (journalctl -u retencka -n 50)" ;;
 esac
 if [ -n "$PASS" ]; then ok "heslo zařízení vytvořeno"; else fail "heslo zařízení chybí ($INFO)"; fi
 if [ "$HOTSPOT" -eq 1 ]; then

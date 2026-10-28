@@ -22,6 +22,7 @@ from typing import Any, Optional
 REQUEST = "update-request"
 PREFS = "update-prefs.json"
 STATUS = "update-status.json"
+HEALTH = "health.json"
 CHANNELS = ("stable", "beta")
 VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,20})?\Z")
 # states in which the updater is working; an install must not be requested again
@@ -48,6 +49,13 @@ def default_prefs() -> dict:
     channel = os.environ.get("RETENCKA_CHANNEL", "stable")
     return {"auto": os.environ.get("RETENCKA_AUTO_UPDATE", "1") == "1",
             "channel": channel if channel in CHANNELS else "stable"}
+
+
+def write_health(data_dir: str, version: str, radio_ok: bool) -> None:
+    """health.json – the updater and install.sh check from it that the new version runs
+    (no network port): version, PID of the process (compared with systemd's MainPID)."""
+    _write_atomic(data_dir, HEALTH, json.dumps({"version": version, "pid": os.getpid(),
+                                               "radio": bool(radio_ok), "ts": int(time.time())}))
 
 
 def _write_atomic(data_dir: str, name: str, text: str) -> None:

@@ -1,6 +1,5 @@
 # /etc/default/retencka – nastavení služby (po změně: sudo systemctl restart retencka)
 RETENCKA_WEB_PORT=80
-RETENCKA_HEALTH_PORT=8081
 RETENCKA_BIND=0.0.0.0
 RETENCKA_SPI_BUS=0
 RETENCKA_SPI_DEV=0

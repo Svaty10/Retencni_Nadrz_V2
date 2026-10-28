@@ -347,7 +347,7 @@ sudo sqlite3 /var/lib/retencka/data/retencka.db "DELETE FROM users"  # tovární
 ## 11. Vývoj bez hardwaru
 ```bash
 cd server
-RETENCKA_DATA=/tmp/rt RETENCKA_WEB_PORT=8080 RETENCKA_HEALTH_PORT=8081 RETENCKA_MOCK=1 python3 -m retencka
+RETENCKA_DATA=/tmp/rt RETENCKA_WEB_PORT=8080 RETENCKA_MOCK=1 python3 -m retencka
 RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30      # 30 dní ukázkových dat
 RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30 A1C3 --name "Garáž"   # další nádrž
 python3 -m unittest discover -s tests
