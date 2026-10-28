@@ -273,6 +273,14 @@ class BridgeTest(unittest.TestCase):
             self.assertEqual(b.retained, {})
         self.run_with_broker(body, password="jine")
 
+    def test_tls_against_plain_broker(self):
+        async def body(b, bridge):
+            self.core.settings.update({"mqtt_tls": True})
+            bridge.reconfigure()
+            self.assertTrue(await until(lambda: (bridge.status()["error"] or "").startswith("Šifrované spojení")))
+            self.assertFalse(bridge.status()["connected"])
+        self.run_with_broker(body)
+
     def test_unreachable_broker(self):
         async def run():
             self.core.loop = asyncio.get_running_loop()
