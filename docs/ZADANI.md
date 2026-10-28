@@ -307,9 +307,9 @@ Jeden proces `retencka` (asyncio, 1 listener; Home Assistant přes MQTT jako kli
   právě viditelnou kartu. Změny nádrže se ukládají jedním tlačítkem v dolní liště *Uložit změny*
   (objeví se po úpravě, nabízí i *Zahodit*). Přepínač *Zobrazit pokročilá nastavení* (pokročilé: offset a kalibrační body sondy, přesnost, limity a průtok dopouštění,
   přepočet historie, kalibrace baterie, retence, slyšená čidla a statistiky rádia).
-  Formuláře jednotně: **jedno pole** (klíč Hydrawise, token Telegramu, hledání polohy, token HA, uchovávání dat,
+  Formuláře jednotně: **jedno pole** (klíč Hydrawise, token Telegramu, hledání polohy, uchovávání dat,
   kalibrační bod) má tlačítka hned vedle pole na stejném řádku; textový klíč/token je přes celou šířku, číslo
-  krátké. **Více polí** (souřadnice, mazání dat, NetBird) má tlačítko pod nimi.
+  krátké. **Více polí** (souřadnice, mazání dat, NetBird, Home Assistant / MQTT) má tlačítko pod nimi.
 - Nádrž: tvar **Kvádr** (plocha dna × hloubka), **Válec nastojato** (průměr × hloubka), **Válec naležato** (průměr × délka);
   plocha střechy i odtokový součinitel (výchozí 0,8) jsou vidět bez pokročilých. Zóna a pravidla dopouštění
   (automatika, čekání na déšť, prahy) se ukážou jen s nastaveným ventilem. Mazání dat má výchozí rozsah *Vše*.

@@ -307,7 +307,7 @@ importovat beze změny.
 
 Read-only root (overlayfs, volitelně), data na `/var/lib/retencka`, logy v RAM, HW watchdog. Před přepnutím
 verze udělá updater konzistentní snímek databáze; když aktualizace selže nebo nová verze neprojde kontrolou
-zdraví, vrátí kód, systemd jednotky i databázi zpět.
+zdraví (`health.json` od hlavního procesu služby, který vydrží běžet 10 s – žádný síťový port), vrátí kód, systemd jednotky i databázi zpět.
 
 ## 5. Zdroje na Pi Zero 2 W
 
