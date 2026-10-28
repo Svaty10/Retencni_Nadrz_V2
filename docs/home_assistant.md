@@ -14,6 +14,44 @@ odebrání nádrže se projeví samo.
    Stav se změní na **MQTT: připojeno**.
 5. V Home Assistantu: *Nastavení → Zařízení a služby → MQTT → zařízení* – každá nádrž pod svým názvem.
 
+### Home Assistant v Dockeru (bez doplňků)
+Verze *Container* nemá obchod s doplňky – Mosquitto běží jako vlastní kontejner vedle Home Assistantu.
+
+1. Vedle `docker-compose.yml` Home Assistantu vytvořte `mosquitto/config/mosquitto.conf`:
+   ```
+   listener 1883
+   allow_anonymous false
+   password_file /mosquitto/config/passwd
+   persistence true
+   persistence_location /mosquitto/data/
+   ```
+2. Do `docker-compose.yml` přidejte službu:
+   ```yaml
+     mosquitto:
+       image: eclipse-mosquitto:2
+       container_name: mosquitto
+       restart: unless-stopped
+       ports:
+         - "1883:1883"
+       volumes:
+         - ./mosquitto/config:/mosquitto/config
+         - ./mosquitto/data:/mosquitto/data
+         - ./mosquitto/log:/mosquitto/log
+   ```
+3. Spustit a vytvořit uživatele (heslo se zadá dvakrát):
+   ```bash
+   docker compose up -d mosquitto
+   docker exec -it mosquitto mosquitto_passwd -c /mosquitto/config/passwd retencka
+   docker exec -it mosquitto chown mosquitto:mosquitto /mosquitto/config/passwd
+   docker restart mosquitto
+   ```
+   Pro Home Assistant si můžete přidat druhého uživatele: `mosquitto_passwd /mosquitto/config/passwd homeassistant` (bez `-c`, ta by soubor přepsala).
+4. Home Assistant → *Nastavení → Zařízení a služby → Přidat integraci → MQTT*: broker `127.0.0.1`
+   (Home Assistant s `network_mode: host`, obvyklé) nebo `mosquitto` (ve stejné síti Dockeru), port 1883,
+   jméno a heslo z bodu 3.
+5. Web nádrže: adresa = **IP počítače s Dockerem** (např. `192.168.1.20`, ne `mosquitto` ani `localhost`),
+   port 1883, uživatel `retencka`. Firewall počítače musí pustit port 1883 z domácí sítě.
+
 Port je 1883 (bez šifrování, jen v domácí síti). Broker mimo domácí síť: v *Pokročilých* zapnout
 **Šifrovat (TLS)** a port 8883; broker musí mít platný certifikát pro zadaný název.
 
