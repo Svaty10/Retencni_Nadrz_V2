@@ -63,7 +63,7 @@ stejně jako kód už řeší nepotvrzené zastavení (`stop_retry` v `refill_ti
 - **Stav:** opraveno ve verzi 1.13.1.
 - **Řešení:** `retencka-update.py` před přepnutím symlinku na novou verzi vytvoří snapshot databáze (`snapshot_db`) přes SQLite Backup API. Pokud kontrola zdraví selže, provede rollback symlinku, systemd jednotek i bezpečné obnovení původní databáze ze snapshotu (`restore_db`). Metoda `Database._migrate` navíc při `user_version > len(MIGRATIONS)` vyvolá výjimku `SchemaTooNewError` a odmítne běh starého kódu nad novějším schématem. Testováno v `test_updates.InstallAndRollback.test_unhealthy_update_restores_database`.
 
-Nová verze při startu provede migrace DB. Když neprojde kontrolou zdraví (`/health`), updater vrátil kód
+Nová verze při startu provede migrace DB. Když neprojde kontrolou zdraví (dnes `health.json`), updater vrátil kód
 (symlink) a systemd jednotky, ale databáze zůstala migrovaná. Starý kód novější schéma nepoznal –
 `Database._migrate` při `user_version` vyšší než počet známých migrací jen nic nemigroval a běžel dál.
 Migrace přitom nejsou jen přidávání sloupců: v9 a v11 přepisují JSON v nastavení.

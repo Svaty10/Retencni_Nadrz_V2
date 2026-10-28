@@ -19,7 +19,7 @@ from retencka.core import Core  # noqa: E402
 from retencka.db import Database  # noqa: E402
 from retencka.httpserver import Server  # noqa: E402
 from retencka.settings import Settings  # noqa: E402
-from retencka.web import build_health_app, build_web_app  # noqa: E402
+from retencka.web import build_web_app  # noqa: E402
 
 
 class FakeNode:
@@ -74,7 +74,7 @@ class ServerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        cls.web_port, cls.health_port = free_port(), free_port()
+        cls.web_port = free_port()
         ready = threading.Event()
 
         def run():
@@ -91,7 +91,6 @@ class ServerTest(unittest.TestCase):
                 web_app = build_web_app(cls.core, os.path.join(os.path.dirname(__file__), "..", "static"))
                 cls.web_app = web_app
                 await Server(web_app).start("127.0.0.1", cls.web_port)
-                await Server(build_health_app(cls.core)).start("127.0.0.1", cls.health_port)
                 ready.set()
             loop.run_until_complete(start())
             loop.run_forever()
@@ -326,12 +325,7 @@ class ServerTest(unittest.TestCase):
         st, js, _ = self.req("GET", "/api/backup", headers=h)
         self.assertEqual(len(js["backups"]), 1)
 
-        # health check (updater); the REST API for Home Assistant is gone (MQTT instead)
-        st, js, _ = self.req("GET", "/health", port=self.health_port)
-        self.assertIn(st, (200, 503))
-        self.assertIn("version", js)
-        st, _, _ = self.req("GET", "/api/v1/water/state", port=self.health_port)
-        self.assertEqual(st, 404)
+        # Home Assistant only over MQTT (the REST API and its port are gone)
         st, js, _ = self.req("GET", "/api/mqtt", headers=h)
         self.assertEqual((st, js["configured"]), (200, False))
 

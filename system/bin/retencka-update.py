@@ -18,8 +18,8 @@ Install steps:
   3. verify the Ed25519 signature with /etc/retencka/release.pub (openssl)
   4. unpack into  /var/lib/retencka/app/releases/<ver>  (path-traversal safe)
   5. atomically switch the 'current' symlink, restart retencka.service
-  6. wait up to 120 s for http://127.0.0.1:<RETENCKA_HEALTH_PORT>/health to report the
-     new version, otherwise switch back (application AND systemd units), restart
+  6. wait up to 120 s for health.json (written by the app at start, no network port)
+     to report the new version from the running service's main process, otherwise switch back (application AND systemd units), restart
      and blacklist the broken version
 
 Progress goes to update-status.json ("state"): checking → available | up_to_date | error,
@@ -63,6 +63,7 @@ STATUS = DATA / "update-status.json"
 REQUEST = DATA / "update-request"
 PREFS = DATA / "update-prefs.json"
 BAD = DATA / "update-bad-versions.json"
+HEALTH = DATA / "health.json"
 PUBKEY = Path("/etc/retencka/release.pub")
 MAX_DOWNLOAD = 30 * 1024 * 1024
 MAX_CHANGELOG = 512 * 1024
@@ -85,16 +86,34 @@ def env(name: str, default: str) -> str:
     return os.environ.get(name, vals.get(name, default))
 
 
-def health_url() -> str:
-    """Local health endpoint; port and bind come from /etc/default/retencka
-    (RETENCKA_HA_PORT is the name used until 1.21)."""
-    port = env("RETENCKA_HEALTH_PORT", env("RETENCKA_HA_PORT", "8081"))
-    host = env("RETENCKA_BIND", "127.0.0.1").strip()
-    if host in ("", "0.0.0.0", "::", "[::]"):
-        host = "127.0.0.1"
-    elif ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    return f"http://{host}:{port}/health"
+def parse_health(raw: Optional[bytes]) -> Optional[dict]:
+    """health.json written by the app at start: {"version", "pid", "radio", "ts"}.
+
+    >>> parse_health(b'{"version": "1.23.0", "pid": 812, "radio": true, "ts": 1700000000}')["pid"]
+    812
+    >>> parse_health(b'{"version": "x; y", "pid": 812, "ts": 1}') is None
+    True
+    """
+    try:
+        h = json.loads((raw or b"").decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(h, dict):
+        return None
+    ver, pid, ts = h.get("version"), h.get("pid"), h.get("ts")
+    if not (isinstance(ver, str) and VERSION_RE.match(ver) and type(pid) is int and pid > 1
+            and isinstance(ts, (int, float))):
+        return None
+    return {"version": ver, "pid": pid, "ts": ts}
+
+
+def main_pid() -> int:
+    try:
+        out = subprocess.run(["systemctl", "show", "-p", "MainPID", "--value", "retencka.service"],
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+        return int(out or 0)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return 0
 
 
 def vtuple(v: str) -> tuple:
@@ -443,22 +462,20 @@ def switch(target: Path) -> None:
     subprocess.run(["sync"], check=False)
 
 
-def healthy(expected: str, timeout: int = 120) -> bool:
+def healthy(expected: str, since: float, timeout: int = 120) -> bool:
+    """The new version runs: health.json written after the restart by the service's main
+    process, and that process is still the same 10 s later (no crash loop)."""
     end = time.time() + timeout
     while time.time() < end:
         time.sleep(5)
-        try:
-            with urllib.request.urlopen(health_url(), timeout=5) as r:
-                body = json.loads(r.read())
-        except urllib.error.HTTPError as e:     # 503 = running but radio degraded
-            try:
-                body = json.loads(e.read())
-            except ValueError:
-                continue
-        except Exception:
+        h = parse_health(read_small(HEALTH))
+        if not h or h["version"] != expected or h["ts"] < since - 2:
             continue
-        if body.get("version") == expected:
-            return True
+        pid = main_pid()
+        if pid and pid == h["pid"]:
+            time.sleep(10)
+            if main_pid() == pid:
+                return True
     return False
 
 
@@ -621,8 +638,9 @@ def install(rel: dict, cur: str, bad: set, st: Status) -> int:
         sync_units(RELEASES / ver, units_backup)
     except OSError as e:
         print(f"unit sync failed: {e}", flush=True)
+    restarted = time.time()
     subprocess.run(["systemctl", "restart", "retencka.service"], check=False)
-    if healthy(ver):
+    if healthy(ver, restarted):
         db_snap.unlink(missing_ok=True)
         st("done", f"Aktualizováno {cur} → {ver}", current=ver)
         keep = sorted((p for p in RELEASES.iterdir() if p.is_dir()), key=lambda p: vtuple(p.name))[-KEEP:]

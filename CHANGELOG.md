@@ -9,7 +9,11 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 - **Home Assistant přes MQTT:** v *Nastavení → Obecné → Home Assistant* se zadá adresa Home Assistantu (doplněk Mosquitto), jméno a heslo. Každá nádrž se v Home Assistantu objeví sama jako zařízení (MQTT Discovery): hladina, výška, objem, teplota, vlhkost, baterie, slabá baterie, spotřeba dnes (lze do *Energie*), očekávaný déšť, diagnostika. Nádrž s ventilem má navíc stav dopouštění a tlačítka *Dopustit* / *Zastavit dopouštění* (vypnutelné). Stavy chodí hned po změně, nedostupnost čidla i hubu Home Assistant pozná. Přejmenovaná nádrž se přejmenuje, odebraná zmizí; *Odpojit* odebere všechna zařízení. Návod: [docs/home_assistant.md](docs/home_assistant.md).
 
 ### Odebráno
-- REST API pro Home Assistant na portu 8081 (token, generovaný YAML). Starou konfiguraci `rest:` v Home Assistantu smažte a propojte ho přes MQTT. Port 8081 zůstává jen pro místní kontrolu stavu (`/health`, jen 127.0.0.1) – updater i aktualizace ze starších verzí dál fungují. Proměnná `RETENCKA_HA_PORT` se přejmenovala na `RETENCKA_HEALTH_PORT` (stará platí dál).
+- REST API pro Home Assistant na portu 8081 (token, generovaný YAML) **i celý port 8081**. Hub kromě webu (80) neotevírá žádný port. Starou konfiguraci `rest:` v Home Assistantu smažte a propojte ho přes MQTT.
+
+### Změněno
+- Updater ověřuje novou verzi bez sítě: aplikace po startu zapíše `health.json` (verze, PID), updater ho porovná s hlavním procesem služby a počká 10 s, jestli proces vydrží (dřív HTTP dotaz na `/health`). Stejně kontroluje start `install.sh`. Proměnná `RETENCKA_HA_PORT` zmizela (instalace ji z `/etc/default/retencka` odebere).
+- **Přechod z 1.21 a starších:** jejich updater se po aktualizaci ptá na port 8081, který už neexistuje, a verzi by vrátil zpět. Na tuto verzi proto aktualizujte jednou ručně: `cd /opt/retencka-src && sudo git pull && sudo ./system/install.sh`.
 
 ## [1.21.2] - 2026-10-26
 

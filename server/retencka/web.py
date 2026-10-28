@@ -1,4 +1,4 @@
-"""HTTP layer (retencka.httpserver): web application on :80 and a local health check (:8081)."""
+"""HTTP layer (retencka.httpserver): web application on :80."""
 
 from __future__ import annotations
 
@@ -1535,18 +1535,4 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_get("/api/backup/download", api_backup_download)
     r.add_post("/api/backup/import", api_backup_import)
     app.stream_paths["/api/backup/import"] = 1024 * 1024 * 1024
-    return app
-
-
-# ============================================================== health app
-def build_health_app(core: Core) -> web.Application:
-    """Health check for the updater and install.sh (RETENCKA_HEALTH_PORT, local only)."""
-    app = web.Application(client_max_size=4096, middlewares=[security_headers])
-
-    async def health(request):
-        radio_ok = bool(core.radio and core.radio.alive())
-        return jresp({"status": "ok" if radio_ok else "degraded", "version": __version__,
-                      "radio": getattr(core.radio, "mode", None)}, 200 if radio_ok else 503)
-
-    app.router.add_get("/health", health)
     return app

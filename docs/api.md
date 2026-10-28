@@ -2,11 +2,13 @@
 
 ## Home Assistant
 Přes MQTT (Discovery), ne přes HTTP – viz [home_assistant.md](home_assistant.md). REST API na portu 8081
-(do verze 1.21) bylo odstraněno.
+(do verze 1.21) bylo odstraněno; hub kromě webu (80) neotevírá žádný port.
 
-## Kontrola stavu – port 8081 (jen 127.0.0.1)
-`GET /health` → `{"status":"ok","version":"1.0.0","radio":"gdo0"}`; 503 = rádio nepracuje. Používá ho
-updater (ověření nové verze) a `install.sh`; port `RETENCKA_HEALTH_PORT` (dříve `RETENCKA_HA_PORT`).
+## Kontrola, že aplikace běží (updater, `install.sh`)
+Bez sítě: aplikace po startu zapíše `/var/lib/retencka/data/health.json`
+`{"version": "1.22.0", "pid": 812, "radio": true, "ts": 1761640000}` (znovu jen při změně stavu rádia).
+Updater bere novou verzi za funkční, když soubor po restartu zapsal hlavní proces služby (`MainPID`)
+s očekávanou verzí a ten proces běží ještě 10 s; jinak do 120 s rollback.
 
 ## Webová aplikace – port 80
 Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `export.csv`). Vše pod `/api/` vyžaduje přihlášení (cookie session). Změnové požadavky navíc hlavičku

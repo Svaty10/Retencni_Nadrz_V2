@@ -25,7 +25,7 @@ and [`docs/architektura.md`](../docs/architektura.md):
   - The main daemon (`retencka.service`) runs as an unprivileged user (`retencka`) with `ProtectSystem=strict` and `DevicePolicy=closed`.
   - Root helper scripts (`retencka-control.py`, `retencka-update.py`, `retencka-identity.sh`) enforce `O_NOFOLLOW`, regular-file checks, strict regex validation, and atomic rename operations.
 - **OTA Updates:**
-  - Release tarballs are signed with Ed25519 (`system/keys/release.pub`), verified prior to extraction, and automatically rolled back if `/health` fails after restart.
+  - Release tarballs are signed with Ed25519 (`system/keys/release.pub`), verified prior to extraction, and automatically rolled back if the new version does not report itself in `health.json` after restart.
 - **Web UI & HTTP Server:**
   - Custom dependency-free asyncio HTTP/1.1 server rejecting `Transfer-Encoding` smuggling, enforcing per-IP connection limits, `scrypt` password hashing, SHA-256 hashed session tokens, `Origin` + `X-CSRF-Token` validation, and strict `Content-Security-Policy`.
 

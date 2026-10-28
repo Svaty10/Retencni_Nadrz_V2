@@ -162,10 +162,9 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
 | Port | Kdo | Přístup |
 |---|---|---|
 | 80 | web aplikace (login) | LAN + Cloudflare Tunnel |
-| 8081 | Home Assistant API | jen LAN, `Authorization: Bearer <token>`, **nikdy do tunelu** |
 | 80 (jen v AP režimu) | captive portál | jen klienti hotspotu |
 
-Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný uživatel s `CAP_NET_BIND_SERVICE`.
+Jeden proces `retencka` (asyncio, 1 listener; Home Assistant přes MQTT jako klient), běží jako neprivilegovaný uživatel s `CAP_NET_BIND_SERVICE`.
 
 ### 2.3 Rádio (CC1101 přes spidev)
 - Stejná konfigurace jako uzel (proměnná délka), append status (RSSI, LQI, CRC_OK). Na PAIR_REQ hub
@@ -351,7 +350,7 @@ Jeden proces `retencka` (asyncio, 2 listenery), běží jako neprivilegovaný u�
 - Updater (oneshot, systemd timer 1× denně + tlačítko v adminu) stáhne nejnovější **GitHub Release**,
   ověří **Ed25519 podpis** (`openssl`, veřejný klíč v zařízení), rozbalí do `/opt/retencka/releases/<ver>`,
   přepne symlink `current` atomicky, restartuje službu.
-- Pokud do 120 s neodpoví `/health`, **automatický rollback** na předchozí verzi.
+- Pokud do 120 s nová verze nezapíše `health.json` (hlavní proces služby, běží i 10 s poté), **automatický rollback** na předchozí verzi.
 - Kanály `stable` / `beta`, migrace DB jsou dopředně kompatibilní.
 
 ### 3.3 Wi-Fi provisioning (NetworkManager)
