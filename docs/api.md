@@ -1,21 +1,12 @@
 # REST API
 
-## Home Assistant – port 8081 (jen LAN)
-Hlavička `Authorization: Bearer <token>` (token: *Nastavení → Obecné → Home Assistant*).
+## Home Assistant
+Přes MQTT (Discovery), ne přes HTTP – viz [home_assistant.md](home_assistant.md). REST API na portu 8081
+(do verze 1.21) bylo odstraněno.
 
-`GET /api/v1/water/state?node=3F2A` (bez `node` = první čidlo) · `GET /api/v1/nodes` (seznam čidel)
-```json
-{
-  "node_id": "3F2A", "name": "Retenční nádrž",
-  "water_level_cm": 54.4, "water_level_percent": 59.2, "volume_liters": 5933, "max_liters": 10028,
-  "temperature": 12.0, "humidity": 93.0, "battery_voltage": 4.95, "battery_percent": 100.0,
-  "battery_low": false, "rssi": -71.5, "last_seen_seconds_ago": 12, "status": "online",
-  "is_refilling": false, "consumption_today": 182, "expected_rain_mm": 3.4
-}
-```
-`status`: `online` (paket < 16 min), `stale` (< 30 min, nastavitelné), `offline`.
-
-`GET /health` (bez tokenu) → `{"status":"ok","version":"1.0.0","radio":"gdo0"}`; 503 = rádio nepracuje.
+## Kontrola stavu – port 8081 (jen 127.0.0.1)
+`GET /health` → `{"status":"ok","version":"1.0.0","radio":"gdo0"}`; 503 = rádio nepracuje. Používá ho
+updater (ověření nové verze) a `install.sh`; port `RETENCKA_HEALTH_PORT` (dříve `RETENCKA_HA_PORT`).
 
 ## Webová aplikace – port 80
 Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `export.csv`). Vše pod `/api/` vyžaduje přihlášení (cookie session). Změnové požadavky navíc hlavičku
@@ -52,7 +43,7 @@ Data vybraného čidla: parametr `node=XXXX` (`state`, `history`, `flows`, `expo
 | GET | `/api/pairing` · POST `/api/pairing/start` · `/api/pairing/cancel` | admin | párování (`node_id` hex, `name`); stav: `requests` (+ `archived`), `targets`, `pending` (klíč odeslán, čeká na první data ≤ 24 h); `cancel` zruší i čekající klíč |
 | GET | `/api/users` · POST `/api/users/{add,role,delete,password}` | admin | správa uživatelů: `role` `{username, role: user\|admin}`, `password` `{username, password}` (nové heslo jinému uživateli, odhlásí ho), `delete` `{username}`; nejde na vlastním účtu a nikdy nezůstane žádný administrátor („Musí zůstat alespoň jeden administrátor.“) |
 | GET | `/api/audit?page=&category=&who=&q=&from=&to=` | admin | log: `category` = login/users/settings/refill/sensors/system/problems, `who` = people/system/jméno, `q` = text. Výsledky root updateru zapisuje aplikace podle `update-status.json`: `UPDATE_AVAILABLE`, `UPDATE_INSTALLED`, `UPDATE_ROLLED_BACK`, `UPDATE_ERROR` (stejná chyba jen jednou), `UPDATE_UP_TO_DATE` (jen po ruční kontrole); dále `TLS_CERT_ISSUED`, `FACTORY_RESET`, `NODE_PAIRING_CANCELLED` |
-| GET | `/api/ha` · POST `/api/ha/rotate` | admin | token pro HA |
+| GET | `/api/mqtt` | admin | Home Assistant (MQTT): `configured`, `connected`, `error`, `base_topic`; nastavení `mqtt_*` přes `/api/settings` |
 | GET | `/api/system` | admin | stav systému; `hostnames`, `ips` (IPv4 hubu: výchozí cesta + adresa, na kterou se připojil prohlížeč), `cpu_pct`, `ram_used_mb`, `ram_total_mb`, `ram_pct`, `rss_kb`, `db_mb`, `disk_free_mb`, `disk_low`, `low_disk_mb` (300), `update` = poslední `update-status.json`, `update_prefs` |
 | POST | `/api/system/factory-reset` | admin | `{"password": "heslo přihlášeného admina", "confirm": "OBNOVIT"}` – obnova továrního nastavení: zapíše `data/factory-reset` a restartuje aplikaci, ta před otevřením databáze smaže obsah datového adresáře kromě `setup_code` (heslo ze štítku); 403 při špatném hesle |
 | POST | `/api/system/restart` · `/api/system/reboot` · `/api/system/poweroff` | admin | restart aplikace (SIGTERM, systemd ji spustí znovu) / restart zařízení / vypnutí zařízení (root helper `retencka-control`: `control-reboot`, `control-poweroff`); zapíše se do auditu |

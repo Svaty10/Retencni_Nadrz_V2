@@ -1,4 +1,4 @@
-"""HTTP layer (retencka.httpserver): web application on :80 and Home Assistant API on :8081."""
+"""HTTP layer (retencka.httpserver): web application on :80 and a local health check (:8081)."""
 
 from __future__ import annotations
 
@@ -52,6 +52,8 @@ FIELD_LABELS = {
     "latitude": "poloha", "longitude": "poloha", "location_name": "poloha", "battery_capacity_mah": "kapacita baterie", "battery_capacity_alk_mah": "kapacita alkalické baterie",
     "retention_days": "mazání starých dat", "stale_timeout_s": "limit zpoždění dat",
     "telegram_token": "Telegram bot", "notify_low_pct": "upozornit pod",
+    "mqtt_host": "MQTT broker", "mqtt_port": "MQTT port", "mqtt_tls": "MQTT TLS", "mqtt_username": "MQTT jméno",
+    "mqtt_password": "MQTT heslo", "mqtt_control": "ovládání z Home Assistantu",
 }
 
 
@@ -594,6 +596,8 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         if changed:
             core.invalidate()
             core.audit("SETTINGS_CHANGED", "Obecné: " + labels(changed), *user_of(request))
+            if core.mqtt is not None and any(k.startswith("mqtt_") for k in changed):
+                core.mqtt.reconfigure()
         return jresp({"ok": True, "changed": changed, "settings": settings.public()})
 
     # ---------------------------------------------------- nodes (sensors)
@@ -1029,19 +1033,11 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         return jresp({"logs": [dict(r) for r in rows], "total": total, "page": page,
                       "total_pages": max(1, (total + per - 1) // per), "users": users})
 
-    # --------------------------------------------------------- HA & system
+    # ------------------------------------------------- Home Assistant & system
     @need("admin")
-    async def api_ha(request):
-        return jresp({"token": settings.get("ha_token"), "port": request.app["ha_port"],
-                      "hostnames": core.hostnames(),
-                      "nodes": [{"id": n["id"], "name": n["name"]} for n in core.node_summaries()]})
-
-    @need("admin")
-    async def api_ha_rotate(request):
-        settings.update({"ha_token": secrets.token_urlsafe(32)}, allow_internal=True)
-        core.audit("SETTINGS_CHANGED", "Vygenerován nový token pro Home Assistant",
-                   request["session"]["username"], request["ip"])
-        return jresp({"ok": True, "token": settings.get("ha_token")})
+    async def api_mqtt(request):
+        bridge = core.mqtt
+        return jresp(bridge.status() if bridge else {"configured": False, "connected": False, "error": None})
 
     _cpu_prev: list[Optional[tuple[float, float]]] = [None]
 
@@ -1516,8 +1512,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/users/delete", api_users_delete)
     r.add_post("/api/users/password", api_users_password)
     r.add_get("/api/audit", api_audit)
-    r.add_get("/api/ha", api_ha)
-    r.add_post("/api/ha/rotate", api_ha_rotate)
+    r.add_get("/api/mqtt", api_mqtt)
     r.add_get("/api/system", api_system)
     r.add_post("/api/system/update", api_system_update)
     r.add_post("/api/system/restart", api_system_restart)
@@ -1543,59 +1538,15 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     return app
 
 
-# ================================================================== HA app
-def build_ha_app(core: Core) -> web.Application:
-    """Port 8081 – LAN only, never routed through the tunnel."""
+# ============================================================== health app
+def build_health_app(core: Core) -> web.Application:
+    """Health check for the updater and install.sh (RETENCKA_HEALTH_PORT, local only)."""
     app = web.Application(client_max_size=4096, middlewares=[security_headers])
-
-    def authorized(request: web.Request) -> bool:
-        h = request.headers.get("Authorization", "")
-        token = core.settings.get("ha_token") or ""
-        return h.startswith("Bearer ") and bool(token) and hmac.compare_digest(h[7:].strip().encode("utf-8"),
-                                                                              token.encode("utf-8"))
-
-    async def state(request):
-        if not authorized(request):
-            await asyncio.sleep(1.0)            # slow down token guessing
-            return jerr("Unauthorized", 401)
-        nid = core.resolve_node(request.query.get("node"))
-        if nid is None:
-            return jerr("Unknown node", 404)
-        st = await core.state(nid)
-        b = st["battery"]
-        return jresp({
-            "node_id": st["node"]["id"],
-            "name": st["node"]["name"],
-            "water_level_cm": st["water_level_cm"],
-            "water_level_percent": st["water_level_percent"],
-            "volume_liters": st["volume_liters"],
-            "max_liters": st["max_liters"],
-            "temperature": st["temperature"],
-            "humidity": st["humidity"],
-            "battery_voltage": b["voltage"],
-            "battery_percent": b["percent"],
-            "battery_low": b["low"],
-            "rssi": st["node"]["rssi"],
-            "last_seen_seconds_ago": st["last_seen_seconds_ago"],
-            "status": st["status"],
-            "is_refilling": st["refill"]["active"],
-            "consumption_today": st["consumption_today"],
-            "expected_rain_mm": st["expected_rain_mm"],
-        })
 
     async def health(request):
         radio_ok = bool(core.radio and core.radio.alive())
         return jresp({"status": "ok" if radio_ok else "degraded", "version": __version__,
                       "radio": getattr(core.radio, "mode", None)}, 200 if radio_ok else 503)
 
-    async def nodes(request):
-        if not authorized(request):
-            await asyncio.sleep(1.0)
-            return jerr("Unauthorized", 401)
-        return jresp([{"node_id": n["id"], "name": n["name"], "status": n["status"]}
-                      for n in core.node_summaries()])
-
-    app.router.add_get("/api/v1/water/state", state)
-    app.router.add_get("/api/v1/nodes", nodes)
     app.router.add_get("/health", health)
     return app

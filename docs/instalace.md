@@ -118,7 +118,7 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
   zapíše to do Historie událostí, pošle zprávu do Telegramu a administrátorovi ukáže varování na přehledu.
 - **Obnova (např. nová karta):** nainstalovat podle bodu 2, přihlásit se, *Nastavení → Obecné → Záloha a data → Nahrát zálohu*
   (zaškrtnout „včetně nastavení a uživatelů“). Data se přidají k současným, duplicity se přeskočí – import
-  lze bezpečně opakovat. Vrátí se měření, čidla i s klíči (hned pokračují), nastavení, token HA a uživatelé.
+  lze bezpečně opakovat. Vrátí se měření, čidla i s klíči (hned pokračují), nastavení (i Home Assistant) a uživatelé.
 - Data se nemažou (8GB karta vystačí na desítky let); retenci lze nastavit v *Záloha a data →
   Uchovávání dat*.
 - **Smazat naměřená data** (např. po zkušební montáži): *Nastavení → Obecné → Záloha a data → Smazat
@@ -130,13 +130,17 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 ### Obnova továrního nastavení
 *Nastavení → Obecné → Systém → Obnovit tovární nastavení…* (jen administrátor). Dialog nejdřív nabídne
 stažení zálohy, pak chce napsat **OBNOVIT** a vaše heslo. Smaže se vše: měření, nastavení nádrží, uživatelé,
-klíče čidel včetně archivu klíčů, Telegram, token HA, zálohy na kartě; vzdálený servis se vypne. Zůstane
+klíče čidel včetně archivu klíčů, Telegram, propojení s Home Assistantem, zálohy na kartě; vzdálený servis se vypne. Zůstane
 identita zařízení (název `retencka-xxxx`, **heslo ze štítku** pro hotspot i první přihlášení). Aplikace se
 restartuje a čeká na první přihlášení `admin` + heslo ze štítku jako po instalaci.
 Ze zálohy jde vše vrátit (*Nahrát zálohu* s „včetně nastavení a uživatelů“) – **včetně klíčů čidel**, která pak
 hned pokračují. Bez zálohy hub klíče čidel nezná a čidla ukáže jako cizí: znovu spárovat je jde jen po smazání
 párování přes UPDI ([programovani_uzlu.md](programovani_uzlu.md#smazání-párování-4-smazat-parovanicmd)).
 Proto si zálohu před obnovou stáhněte.
+
+### Home Assistant
+Přes MQTT (doplněk Mosquitto v Home Assistantu): *Nastavení → Obecné → Home Assistant* – adresa,
+jméno a heslo, nádrže se v Home Assistantu objeví samy. Postup krok za krokem: [home_assistant.md](home_assistant.md).
 
 ### Restart a vypnutí
 V menu účtu (vpravo nahoře, jen administrátor): **Restartovat aplikaci** (asi 10–30 s, měření se neztratí),
@@ -306,7 +310,7 @@ Pro vlastní nasazení s doménou (adresa typu `https://nadrz.mojedomena.cz`).
 
 1. Cloudflare Zero Trust → *Networks → Tunnels* → vytvořit tunel, zkopírovat token.
 2. `cd /opt/retencka-src && sudo ./system/install.sh --cloudflare-token <TOKEN>`
-3. *Public hostname* → `http://localhost:80`. **Port 8081 (Home Assistant) do tunelu nedávejte.**
+3. *Public hostname* → `http://localhost:80`.
 4. **Doporučeno:** *Access → Applications* → aplikace pro stejný hostname s politikou
    „e-mail je jeden z …“ (jednorázový kód e-mailem). Útočník se pak k přihlašovací stránce vůbec nedostane.
 
@@ -343,7 +347,7 @@ sudo sqlite3 /var/lib/retencka/data/retencka.db "DELETE FROM users"  # tovární
 ## 11. Vývoj bez hardwaru
 ```bash
 cd server
-RETENCKA_DATA=/tmp/rt RETENCKA_WEB_PORT=8080 RETENCKA_HA_PORT=8081 RETENCKA_MOCK=1 python3 -m retencka
+RETENCKA_DATA=/tmp/rt RETENCKA_WEB_PORT=8080 RETENCKA_HEALTH_PORT=8081 RETENCKA_MOCK=1 python3 -m retencka
 RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30      # 30 dní ukázkových dat
 RETENCKA_DATA=/tmp/rt python3 tools/seed_demo.py 30 A1C3 --name "Garáž"   # další nádrž
 python3 -m unittest discover -s tests

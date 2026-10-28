@@ -19,7 +19,7 @@ from retencka.core import Core  # noqa: E402
 from retencka.db import Database  # noqa: E402
 from retencka.httpserver import Server  # noqa: E402
 from retencka.settings import Settings  # noqa: E402
-from retencka.web import build_ha_app, build_web_app  # noqa: E402
+from retencka.web import build_health_app, build_web_app  # noqa: E402
 
 
 class FakeNode:
@@ -74,7 +74,7 @@ class ServerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        cls.web_port, cls.ha_port = free_port(), free_port()
+        cls.web_port, cls.health_port = free_port(), free_port()
         ready = threading.Event()
 
         def run():
@@ -89,10 +89,9 @@ class ServerTest(unittest.TestCase):
                 with open(os.path.join(cls.tmp.name, "setup_code"), "w") as f:
                     f.write("Label-Pass9\n")
                 web_app = build_web_app(cls.core, os.path.join(os.path.dirname(__file__), "..", "static"))
-                web_app["ha_port"] = cls.ha_port
                 cls.web_app = web_app
                 await Server(web_app).start("127.0.0.1", cls.web_port)
-                await Server(build_ha_app(cls.core)).start("127.0.0.1", cls.ha_port)
+                await Server(build_health_app(cls.core)).start("127.0.0.1", cls.health_port)
                 ready.set()
             loop.run_until_complete(start())
             loop.run_forever()
@@ -327,14 +326,14 @@ class ServerTest(unittest.TestCase):
         st, js, _ = self.req("GET", "/api/backup", headers=h)
         self.assertEqual(len(js["backups"]), 1)
 
-        # HA token
-        st, js, _ = self.req("GET", "/api/v1/water/state", port=self.ha_port)
-        self.assertEqual(st, 401)
-        token = self.core.settings.get("ha_token")
-        st, js, _ = self.req("GET", "/api/v1/water/state", headers={"Authorization": "Bearer " + token},
-                             port=self.ha_port)
-        self.assertEqual(st, 200)
-        self.assertEqual(js["status"], "online")
+        # health check (updater); the REST API for Home Assistant is gone (MQTT instead)
+        st, js, _ = self.req("GET", "/health", port=self.health_port)
+        self.assertIn(st, (200, 503))
+        self.assertIn("version", js)
+        st, _, _ = self.req("GET", "/api/v1/water/state", port=self.health_port)
+        self.assertEqual(st, 404)
+        st, js, _ = self.req("GET", "/api/mqtt", headers=h)
+        self.assertEqual((st, js["configured"]), (200, False))
 
         # user role cannot change settings
         st, js, _ = self.req("POST", "/api/users/add",
@@ -673,9 +672,8 @@ class ServerTest(unittest.TestCase):
         out = self.raw(f"GET /api/me HTTP/1.1\r\nHost: x\r\nCookie: other=1\r\nCookie: {h['Cookie']}\r\n\r\n".encode())
         self.assertTrue(out.startswith(b"HTTP/1.1 200"), out[:40])
 
-    def test_5_ha_token_non_ascii(self):
-        out = self.raw("GET /api/v1/water/state HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer héslo\r\n\r\n".encode("latin-1"),
-                       port=self.ha_port)
+    def test_5_non_ascii_header(self):
+        out = self.raw("GET /api/me HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer héslo\r\n\r\n".encode("latin-1"))
         self.assertTrue(out.startswith(b"HTTP/1.1 401"), out[:40])
 
     def test_6_reserved_usernames_and_huge_numbers(self):

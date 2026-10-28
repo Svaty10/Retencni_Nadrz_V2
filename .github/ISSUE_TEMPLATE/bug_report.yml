@@ -13,7 +13,7 @@ body:
         - Hub Backend / Radio / Refill (server/retencka)
         - System Scripts / OTA Updater / Wi-Fi Portal (system)
         - Sensor Node Firmware (uzel)
-        - Home Assistant Integration (:8081 API)
+        - Home Assistant Integration (MQTT)
         - Documentation
     validations:
       required: true

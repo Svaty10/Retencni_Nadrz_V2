@@ -18,7 +18,7 @@ Install steps:
   3. verify the Ed25519 signature with /etc/retencka/release.pub (openssl)
   4. unpack into  /var/lib/retencka/app/releases/<ver>  (path-traversal safe)
   5. atomically switch the 'current' symlink, restart retencka.service
-  6. wait up to 120 s for http://127.0.0.1:<RETENCKA_HA_PORT>/health to report the
+  6. wait up to 120 s for http://127.0.0.1:<RETENCKA_HEALTH_PORT>/health to report the
      new version, otherwise switch back (application AND systemd units), restart
      and blacklist the broken version
 
@@ -86,8 +86,9 @@ def env(name: str, default: str) -> str:
 
 
 def health_url() -> str:
-    """Health endpoint on the HA port; port and bind come from /etc/default/retencka."""
-    port = env("RETENCKA_HA_PORT", "8081")
+    """Local health endpoint; port and bind come from /etc/default/retencka
+    (RETENCKA_HA_PORT is the name used until 1.21)."""
+    port = env("RETENCKA_HEALTH_PORT", env("RETENCKA_HA_PORT", "8081"))
     host = env("RETENCKA_BIND", "127.0.0.1").strip()
     if host in ("", "0.0.0.0", "::", "[::]"):
         host = "127.0.0.1"

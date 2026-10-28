@@ -18,13 +18,13 @@ flowchart LR
       R[radio.py<br/>vlákno CC1101/spidev] --> C[core.py<br/>asyncio smyčka]
       C <--> D[(SQLite WAL<br/>/var/lib/retencka)]
       C --> W[web.py :80<br/>dashboard + JSON API]
-      C --> H[web.py :8081<br/>Home Assistant API]
+      C --> H[mqtt.py<br/>MQTT klient]
       SYS[system/<br/>NetworkManager, Avahi,<br/>updater, watchdog]
     end
     C -- HTTPS --> OM[Open-Meteo]
     C -- HTTPS --> HW[Hunter Hydrawise<br/>ventil dopouštění]
     W -- Cloudflare Tunnel --> Prohlížeč
-    H --> HA[Home Assistant v LAN]
+    H -- "MQTT Discovery + stavy,<br/>tlačítka dopouštění" --> HA[Mosquitto / Home Assistant]
 ```
 
 | Část | Jazyk | Kde běží | Úkol |
@@ -83,7 +83,7 @@ Odhad výdrže na hubu počítá s tolika kontrolami denně, kolik probuzení zb
 
 | Modul | Odpovědnost |
 |---|---|
-| `__main__.py` | start, otevření DB (při poškození automatická obnova z noční zálohy; zrcadlení klíčů do `<db>.keys`), spuštění rádia a dvou HTTP listenerů, periodické úlohy, systemd `READY`/`WATCHDOG` |
+| `__main__.py` | start, otevření DB (při poškození automatická obnova z noční zálohy; zrcadlení klíčů do `<db>.keys`), spuštění rádia, webu, lokální kontroly stavu (`/health`), MQTT a Telegramu, periodické úlohy, systemd `READY`/`WATCHDOG` |
 | `radio.py` | `Receiver` – vlastní vlákno: konfigurace CC1101, příjem (GDO0 hrana přes gpiod, jinak polling), okamžitá odpověď na PAIR_REQ, samoopravy (kontrola registrů každých 30 s, reset po tichu) |
 | `crypto.py` | čistý Python: AES-128, AES-CMAC, X25519, formát rámců v3 |
 | `core.py` | `Core` – mozek: příjem rámců, párování, ukládání, živý stav, dopouštění, historie, údržba, zálohy |
@@ -92,7 +92,8 @@ Odhad výdrže na hubu počítá s tolika kontrolami denně, kolik probuzení zb
 | `db.py` | SQLite (WAL, `synchronous=NORMAL`), připojení na vlákno, verzované migrace |
 | `external.py` | HTTPS klient přes `urllib` ve worker vlákně; `Weather` (Open-Meteo, cache 1 h), `Hydrawise` (REST `setzone.php`) |
 | `httpserver.py` | minimální striktní HTTP/1.1 server nad asyncio (limity hlaviček, bez chunked požadavků) |
-| `web.py` | routy webu a HA API, kontrola rolí, CSRF, bezpečnostní hlavičky |
+| `web.py` | routy webu a `/health`, kontrola rolí, CSRF, bezpečnostní hlavičky |
+| `mqtt.py` | Home Assistant: minimální MQTT 3.1.1 klient na asyncio smyčce, Discovery každé nádrže, stavy při změně (aspoň 1× za minutu), příkazy dopouštění, úklid entit odebraných nádrží |
 | `auth.py` | uživatelé (scrypt), session v DB, rate limiting |
 | `telegram.py` | Telegram bot: propojení chatů s účty, příkazy, upozornění (long polling ve vlastním vlákně) |
 | `pngchart.py` | graf hladiny do PNG jen se standardní knihovnou (pro Telegram) |
@@ -102,7 +103,7 @@ Odhad výdrže na hubu počítá s tolika kontrolami denně, kolik probuzení zb
 
 | Vlákno | Co dělá | Komunikace |
 |---|---|---|
-| hlavní (asyncio) | HTTP, `Core`, periodické úlohy | – |
+| hlavní (asyncio) | HTTP, `Core`, MQTT, periodické úlohy | – |
 | `radio` | SPI/GPIO, čtení FIFO, odpověď na párování | `loop.call_soon_threadsafe(core._on_frame)`; `core.responder()` volá přímo pod `_pair_lock` |
 | `worker` ×3 | HTTPS volání, agregace, údržba, přepočet historie, import zálohy | `asyncio.to_thread` |
 
@@ -228,7 +229,7 @@ nezmizí ani při úplném zničení databáze.
 ### 3.8 Nastavení
 
 Globální (`settings.SCHEMA`): poloha (`latitude`, `longitude`, `location_name` z hledání obce),
-Hydrawise API klíč účtu, energetický model čidla (spotřeba měření/spánku/ohřevu), `stale_timeout_s`,
+Hydrawise API klíč účtu, Telegram, MQTT broker pro Home Assistant (`mqtt_*`), energetický model čidla (spotřeba měření/spánku/ohřevu), `stale_timeout_s`,
 `retention_days`.
 
 Každé čidlo (`settings.NODE_SCHEMA`): geometrie nádrže, kalibrace a přesnost sondy, střecha,

@@ -47,7 +47,7 @@ class Base(unittest.TestCase):
             x.execute("INSERT INTO refills(start_ts, end_ts, node_id, mode, target_pct) VALUES(?,?,?,'manual',50)",
                       (T0 + 3600, T0 + 4000, A))
             x.execute("INSERT INTO users(username, pw_hash, role, created, pw_changed) VALUES('pepa','h','admin',1,1)")
-        c.settings.update({"ha_token": "tok-from-backup"}, allow_internal=True)
+        c.settings.update({"mqtt_uid": "tok-from-backup"}, allow_internal=True)
         c._save_ctr(A, 47)                              # as the receiver does for every frame
         c.aggregate_hours(since=0)
         c.audit("LOGIN_SUCCESS", "v záloze", "pepa")
@@ -73,7 +73,7 @@ class RestoreTest(Base):
         self.assertTrue(st["settings"])
         self.assertEqual(new.nodes.keys(A), (K_ENC, K_MAC))           # paired sensor keeps working
         self.assertEqual(new.nodes.get(A)["name"], "Zahrada")
-        self.assertEqual(new.settings.get("ha_token"), "tok-from-backup")
+        self.assertEqual(new.settings.get("mqtt_uid"), "tok-from-backup")
         self.assertEqual(new.db.scalar("SELECT role FROM users WHERE username='pepa'"), "admin")
         self.assertEqual(new.db.scalar("SELECT COUNT(*) FROM hourly WHERE node_id=?", (A,)), 24)
         self.assertEqual(new._last_ctr[A], 47)                         # replays of old frames refused
@@ -88,11 +88,11 @@ class RestoreTest(Base):
     def test_data_only_import_keeps_users_and_settings(self):
         snap = self.gz_snapshot(self.source_hub())
         new = self.hub("new")
-        new.settings.update({"ha_token": "mine"}, allow_internal=True)
+        new.settings.update({"mqtt_uid": "mine"}, allow_internal=True)
         st = new.import_backup(snap)
         self.assertEqual(st["measurements"], 48)
         self.assertFalse(st["settings"])
-        self.assertEqual(new.settings.get("ha_token"), "mine")
+        self.assertEqual(new.settings.get("mqtt_uid"), "mine")
         self.assertIsNone(new.db.one("SELECT 1 FROM users WHERE username='pepa'"))
 
     def test_nightly_local_copy_restores(self):

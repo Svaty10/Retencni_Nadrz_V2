@@ -367,6 +367,7 @@
         calpoints: 'Dvojice „napětí sondy – výška vody nad sondou“. Z nich hub počítá přímku, která mění napětí na hladinu. Body se doplňují tlačítkem Přidat bod výše; ručně je upravujte jen výjimečně.',
         recompute: 'Po uložení kalibrace nebo parametrů nádrže (výška sondy, tvar a rozměry, přesnost a rozsah sondy) se uložená měření přepočítají samy. Tlačítko spustí přepočet ručně.',
         battrim: 'Změřte napětí baterií voltmetrem a zadejte ho. Hub z toho spočítá korekci (násobek), aby údaj souhlasil. Korekce 1,0000 = bez úpravy.',
+        mqttcontrol: 'V Home Assistantu přibudou u nádrže s ventilem tlačítka Dopustit (na cíl automatického dopouštění) a Zastavit dopouštění. Kdo smí do Home Assistantu, smí pak i dopouštět.',
         servis: 'Na 24 hodin se přístup sám vypne, „Trvale“ zůstane zapnutý, dokud ho nevypnete. Technik se připojí přes šifrovanou síť NetBird, jen když to povolíte.',
         outlook: 'Výhled je odhad. Výdrž vychází ze změřené průměrné denní spotřeby za poslední týden. Srážky (48 h) jsou úhrn předpovězený na nejbližší 2 dny. Dopouštění (jen se zapnutou automatikou) spojuje změřenou spotřebu s předpovědí deště ze střechy a odhadne, kdy hladina klesne pod spouštěcí mez a kolik litrů se pak dopustí. Čekání automatiky na déšť se řídí oknem „Výhled deště“ v nastavení nádrže.',
         measured: 'Skutečné objemy z čidla hladiny, ne z předpovědi. Pokles hladiny je spotřeba, vzestup mimo dopouštění je přítok deštěm, vzestup během dopouštění je dopuštěná voda.',
@@ -2093,10 +2094,10 @@
     }
 
     async function loadSettingsTab() {
-        const [st, nodes, ha, sys, bk, tg, sv, defs] = await Promise.all([
+        const [st, nodes, mq, sys, bk, tg, sv, defs] = await Promise.all([
             api('GET', '/api/settings').catch(() => null),
             api('GET', '/api/nodes').catch(() => null),
-            api('GET', '/api/ha').catch(() => null),
+            api('GET', '/api/mqtt').catch(() => null),
             api('GET', '/api/system').catch(() => null),
             api('GET', '/api/backup').catch(() => null),
             api('GET', '/api/telegram').catch(() => null),
@@ -2111,7 +2112,7 @@
         renderServis(sv);
         if (nodes) { nodesCache = nodes; renderNodes(nodes); if (!calDirty) applyNode(currentNodeCfg()); fillDeleteNodes(); }
         if (st) applySettings(st.settings);
-        if (ha) renderHa(ha);
+        renderMqtt(mq);
         if (sys) renderSystem(sys);
         if (!CURRENT_NODE && SET_SCOPE === 'tank') setSettingsScope('general');
         layoutSettingsColumns();
@@ -2216,6 +2217,7 @@
                 toast(r.changed.length ? 'Nastavení uloženo.' : 'Beze změn.');
                 pollState();
                 if (r.changed.includes('telegram_token')) setTimeout(loadSettingsTab, 4000);   // bot se připojuje
+                if (r.changed.some((k) => k.startsWith('mqtt_'))) { setTimeout(loadMqtt, 2000); setTimeout(loadMqtt, 8000); }
             });
         }));
         $('calForm').elements.namedItem('refill_provider').addEventListener('change', () => { syncValve(); layoutSettingsColumns(); });
@@ -2290,19 +2292,10 @@
         });
         $('addNodeBtn').addEventListener('click', () => pairDialog(null));
         $('factoryBtn').addEventListener('click', factoryReset);
-        $('haShow').addEventListener('click', () => {
-            const t = $('haToken');
-            t.type = t.type === 'password' ? 'text' : 'password';
-            $('haShow').textContent = t.type === 'password' ? 'Zobrazit' : 'Skrýt';
-        });
-        $('haCopy').addEventListener('click', () => {
-            const txt = $('haYaml').textContent.replace('<TOKEN>', $('haToken').value);
-            navigator.clipboard.writeText(txt).then(() => toast('YAML zkopírován (včetně tokenu).'),
-                () => toast('Kopírování selhalo – označte text ručně.', true));
-        });
-        $('haRotate').addEventListener('click', async () => {
-            if (!await confirmDialog({ title: 'Vygenerovat nový token?', body: ['Starý token přestane v Home Assistantu fungovat; v jeho konfiguraci ho bude nutné nahradit novým.'], confirm: 'Nový token', danger: true })) return;
-            action(() => api('POST', '/api/ha/rotate', {}), 'Nový token vygenerován.').then(loadSettingsTab);
+        $('mqttOff').addEventListener('click', async () => {
+            if (!await confirmDialog({ title: 'Odpojit Home Assistant?', body: ['Nádrže z Home Assistantu zmizí (jejich historie v Home Assistantu zůstane).'], confirm: 'Odpojit', danger: true })) return;
+            action(() => api('POST', '/api/settings', { mqtt_host: '' }), 'Home Assistant odpojen.')
+                .then((r) => { if (r) { applySettings(r.settings); setTimeout(loadMqtt, 1500); } });
         });
     }
 
@@ -2352,7 +2345,7 @@
             title: 'Obnovit tovární nastavení?',
             body: [para('Hub se vrátí do stavu po první instalaci. Nejde to vzít zpět.'),
                 para('Smaže se:', true),
-                list(['všechna naměřená data a historie', 'nastavení (poloha, klíč Hydrawise, Home Assistant)', 'všichni uživatelé včetně vás',
+                list(['všechna naměřená data a historie', 'nastavení (poloha, klíč Hydrawise, Telegram, Home Assistant)', 'všichni uživatelé včetně vás',
                     'klíče čidel – čidla půjde znovu spárovat jen po nahrání zálohy, jinak smazáním párování v čidle přes UPDI', 'Telegram (token a propojené chaty)', 'zálohy uložené na kartě']),
                 para('Zůstane:', true),
                 list(['identita zařízení a heslo ze štítku']),
@@ -2565,46 +2558,22 @@
     }
     let pairDone = 0;
 
-    function slug(s) {
-        return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    function renderMqtt(m) {
+        const pill = $('mqttStatus');
+        if (!pill) return;
+        let txt = 'nenastaveno', cls = '';
+        if (m && m.configured) {
+            txt = m.connected ? 'připojeno' : (m.error || 'připojuji…');
+            cls = m.connected ? 'online' : 'stale';
+        }
+        pill.textContent = 'MQTT: ' + txt;
+        pill.className = 'status-pill ' + cls;
+        $('mqttOff').classList.toggle('hidden', !(m && m.configured));
+        if (m && !m.configured) $('mqttHelp').open = true;
     }
 
-    function haYaml(host, port, nodes) {
-        const avail = `        availability: "{{ value_json is defined and value_json.status != 'offline' }}"\n`;
-        const S = [
-            ['hladina', 'water_level_percent', '        unit_of_measurement: "%"\n        state_class: measurement\n        icon: mdi:water-percent\n'],
-            ['hladina cm', 'water_level_cm', '        unit_of_measurement: "cm"\n        device_class: distance\n        state_class: measurement\n'],
-            ['objem', 'volume_liters', '        unit_of_measurement: "L"\n        device_class: volume_storage\n        state_class: measurement\n'],
-            ['teplota', 'temperature', '        unit_of_measurement: "°C"\n        device_class: temperature\n        state_class: measurement\n'],
-            ['vlhkost', 'humidity', '        unit_of_measurement: "%"\n        device_class: humidity\n        state_class: measurement\n'],
-            ['baterie', 'battery_percent', '        unit_of_measurement: "%"\n        device_class: battery\n        state_class: measurement\n'],
-            ['baterie napeti', 'battery_voltage', '        unit_of_measurement: "V"\n        device_class: voltage\n        state_class: measurement\n'],
-            ['signal', 'rssi', '        unit_of_measurement: "dBm"\n        device_class: signal_strength\n        state_class: measurement\n        entity_category: diagnostic\n']
-        ];
-        let y = '# configuration.yaml – Retenční nádrž (platforma REST, 1 dotaz na čidlo → více entit)\nrest:\n';
-        (nodes.length ? nodes : [{ id: '', name: '' }]).forEach((n, i) => {
-            // první čidlo: sensor.retencka_hladina, …; další: sensor.retencka_<nazev>_hladina, …
-            const pre = i === 0 ? 'Retencka' : `Retencka ${slug(n.name) || n.id.toLowerCase()}`;
-            const uid = i === 0 ? 'retencka' : `retencka_${n.id.toLowerCase()}`;
-            y += `  # ${n.name || 'čidlo'} (${n.id || '?'})\n  - resource: http://${host}:${port}/api/v1/water/state${n.id ? '?node=' + n.id : ''}\n`;
-            y += '    headers:\n      Authorization: "Bearer <TOKEN>"\n    scan_interval: 60\n    timeout: 10\n    sensor:\n';
-            S.forEach(([nm, key, extra]) => {
-                y += `      - name: "${pre} ${nm}"\n        unique_id: ${uid}_${slug(nm)}\n        value_template: "{{ value_json.${key} }}"\n${extra}${avail}`;
-            });
-            y += `      - name: "${pre} stav"\n        unique_id: ${uid}_stav\n        value_template: "{{ value_json.status }}"\n        icon: mdi:access-point\n`;
-            y += `    binary_sensor:\n      - name: "${pre} baterie slaba"\n        unique_id: ${uid}_baterie_slaba\n        value_template: "{{ value_json.battery_low }}"\n        device_class: battery\n`;
-            // senzor dopouštění jen pro nádrž s vlastním ventilem
-            const sum = nodesCache && (nodesCache.summaries || []).find((x) => x.id === n.id);
-            if (sum && sum.refill_configured) {
-                y += `      - name: "${pre} dopousti"\n        unique_id: ${uid}_dopousti\n        value_template: "{{ value_json.is_refilling }}"\n        device_class: running\n`;
-            }
-        });
-        return y;
-    }
-
-    function renderHa(d) {
-        $('haToken').value = d.token;
-        $('haYaml').textContent = haYaml((d.hostnames || [])[0] || location.hostname, d.port, d.nodes || []);
+    async function loadMqtt() {
+        renderMqtt(await api('GET', '/api/mqtt').catch(() => null));
     }
 
     function renderSystem(d) {

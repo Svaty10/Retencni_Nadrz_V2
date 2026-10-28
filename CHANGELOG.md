@@ -3,6 +3,14 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.22.0] - 2026-10-28
+
+### Přidáno
+- **Home Assistant přes MQTT:** v *Nastavení → Obecné → Home Assistant* se zadá adresa Home Assistantu (doplněk Mosquitto), jméno a heslo. Každá nádrž se v Home Assistantu objeví sama jako zařízení (MQTT Discovery): hladina, výška, objem, teplota, vlhkost, baterie, slabá baterie, spotřeba dnes (lze do *Energie*), očekávaný déšť, diagnostika. Nádrž s ventilem má navíc stav dopouštění a tlačítka *Dopustit* / *Zastavit dopouštění* (vypnutelné). Stavy chodí hned po změně, nedostupnost čidla i hubu Home Assistant pozná. Přejmenovaná nádrž se přejmenuje, odebraná zmizí; *Odpojit* odebere všechna zařízení. Návod: [docs/home_assistant.md](docs/home_assistant.md).
+
+### Odebráno
+- REST API pro Home Assistant na portu 8081 (token, generovaný YAML). Starou konfiguraci `rest:` v Home Assistantu smažte a propojte ho přes MQTT. Port 8081 zůstává jen pro místní kontrolu stavu (`/health`, jen 127.0.0.1) – updater i aktualizace ze starších verzí dál fungují. Proměnná `RETENCKA_HA_PORT` se přejmenovala na `RETENCKA_HEALTH_PORT` (stará platí dál).
+
 ## [1.21.2] - 2026-10-26
 
 ### Změněno

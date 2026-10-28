@@ -66,7 +66,6 @@ class UsernameServerTest(unittest.TestCase):
                     db.execute("INSERT INTO users(username, pw_hash, role, created, pw_changed) VALUES(?,?,?,?,?)",
                                (u, auth.hash_password(PW), role, now, now))
                 app = build_web_app(core, os.path.join(os.path.dirname(__file__), "..", "static"))
-                app["ha_port"] = 0
                 await Server(app).start("127.0.0.1", cls.port)
                 ready.set()
             loop.run_until_complete(start())

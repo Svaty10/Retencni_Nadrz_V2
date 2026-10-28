@@ -4,8 +4,8 @@ Environment (systemd EnvironmentFile=/etc/default/retencka):
   RETENCKA_DATA      data directory           (/var/lib/retencka)
   RETENCKA_STATIC    static files directory   (<package>/../static)
   RETENCKA_WEB_PORT  web UI port              (80)
-  RETENCKA_HA_PORT   Home Assistant API port  (8081)
-  RETENCKA_BIND      bind address             (0.0.0.0)
+  RETENCKA_BIND      bind address of the web (0.0.0.0)
+  RETENCKA_HEALTH_PORT  local health check port for the updater (8081; old name RETENCKA_HA_PORT)
   RETENCKA_SPI_BUS / RETENCKA_SPI_DEV / RETENCKA_SPI_HZ / RETENCKA_GDO0_GPIO
   RETENCKA_MOCK=1    synthetic radio for development
 """
@@ -33,7 +33,8 @@ from .radio import Receiver
 from .settings import Settings
 from .telegram import TelegramBot
 from .httpserver import Server
-from .web import build_ha_app, build_web_app
+from .mqtt import MqttBridge
+from .web import build_health_app, build_web_app
 
 log = logging.getLogger("retencka")
 
@@ -154,18 +155,23 @@ async def main_async() -> None:
     core.telegram = bot
     bot.start(core.loop)
 
+    mqtt = MqttBridge(core)
+    core.mqtt = mqtt
+    mqtt.start(core.loop)
+
     bind = env("RETENCKA_BIND", "0.0.0.0")
-    web_port, ha_port = int(env("RETENCKA_WEB_PORT", "80")), int(env("RETENCKA_HA_PORT", "8081"))
-    web_app = build_web_app(core, static_dir)
-    web_app["ha_port"] = ha_port
-    ha_app = build_ha_app(core)
+    web_port = int(env("RETENCKA_WEB_PORT", "80"))
+    health_port = int(env("RETENCKA_HEALTH_PORT", env("RETENCKA_HA_PORT", "8081")))
+    # the health check only for this device (the updater asks 127.0.0.1, or the bind address)
+    health_bind = "127.0.0.1" if bind in ("", "0.0.0.0", "::") else bind
 
     runners = []
-    for app, port in ((web_app, web_port), (ha_app, ha_port)):
+    for app, host, port in ((build_web_app(core, static_dir), bind, web_port),
+                            (build_health_app(core), health_bind, health_port)):
         srv = Server(app)
-        await srv.start(bind, port)
+        await srv.start(host, port)
         runners.append(srv)
-    log.info("Retencka %s: web :%d, Home Assistant :%d, data %s", __version__, web_port, ha_port, data_dir)
+    log.info("Retencka %s: web :%d, health %s:%d, data %s", __version__, web_port, health_bind, health_port, data_dir)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -216,6 +222,7 @@ async def main_async() -> None:
     log.info("Shutting down")
     sd_notify("STOPPING=1")
     task.cancel()
+    await mqtt.stop()
     bot.stop()
     radio.stop()
     for r in runners:

@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.21.2-1b5e8a)
+![verze](https://img.shields.io/badge/verze-1.22.0-1b5e8a)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -22,7 +22,7 @@ flowchart LR
     subgraph D["Dům"]
         H["Hub Raspberry Pi + CC1101"]
         W[":80 web – dashboard, grafy"]
-        A[":8081 Home Assistant (LAN, token)"]
+        A["MQTT → Home Assistant<br/>(zařízení se objeví samo)"]
         T["Wi-Fi hotspot + portál, mDNS,<br/>podepsané aktualizace"]
         H --- W
         H --- A
@@ -67,7 +67,7 @@ flowchart LR
   v liště **Uložit změny**, která se objeví po úpravě. Telegram bot i vzdálený servis (NetBird) se nastaví z webu.
 - Klidný „vodohospodářský“ vzhled s výraznou měrkou nádrže (vodočetná lať), světlý i tmavý režim
   podle systému nebo volby v menu; využívá celou šířku monitoru a je plně funkční na mobilu.
-- Home Assistant přes REST (YAML se vygeneruje sám), CSV export.
+- Home Assistant přes MQTT: nádrže se objeví samy (MQTT Discovery) včetně tlačítek dopouštění; CSV export.
 - Záloha i obnova přes web (nahraná data se sloučí bez duplicit), noční zálohy. Podrobná data se ve výchozím stavu nemažou (~10 MB na čidlo a rok, retenci lze nastavit).
 - Wi-Fi hotspot s portálem pro první nastavení, `retencka.local`, aktualizace z GitHubu s podpisem a rollbackem
   – na webu v okně se seznamem změn a průběhem, instalace po potvrzení nebo automaticky v noci.
@@ -119,8 +119,8 @@ Podrobně v [docs/instalace.md](docs/instalace.md).
 | [Oponentura architektury](docs/oponentura.md) | nezávislé posouzení architektury: silné stránky, nálezy, doporučené pořadí oprav |
 | [Bezpečnostní kontrola 2026-10](docs/bezpecnostni-kontrola-2026-10.md) | hloubková bezpečnostní kontrola nad verzí 1.12.1: nálezy, zpevnění, co prošlo |
 | [Posudek frontendu](docs/posudek-frontendu.md) | návrh a srozumitelnost webového rozhraní: silné stránky, nálezy, doporučené pořadí úprav |
-| [API](docs/api.md) | REST API webu a Home Assistantu, rádiový protokol |
-| [Home Assistant](docs/home_assistant.yaml) | vzorová konfigurace (aktuální YAML vygeneruje web) |
+| [API](docs/api.md) | REST API webu, rádiový protokol |
+| [Home Assistant](docs/home_assistant.md) | propojení přes MQTT (Mosquitto), entity, témata |
 | [Vydání verze](docs/vydani.md) | číslování, kontrola, tag, ověření aktualizace |
 | [Changelog](CHANGELOG.md) | historie verzí |
 

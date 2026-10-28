@@ -738,19 +738,55 @@
             <section class="card col-card scope-general" id="genHa" data-nav="Home Assistant" data-group="Propojení">
                 <div class="card-title">
                     <span class="card-ico" aria-hidden="true"><svg class="ico"><use href="#i-list"/></svg></span>
-                    <div><h2>Home Assistant</h2><p class="card-desc">Token a hotová konfigurace pro integraci do Home Assistantu.</p></div>
+                    <div><h2>Home Assistant</h2><p class="card-desc">Nádrže se v Home Assistantu objeví samy (MQTT), včetně tlačítek dopouštění.</p></div>
                 </div>
 
-                <div class="token-row">
-                    <input type="password" id="haToken" class="unified-input" readonly aria-label="Token">
-                    <button class="btn btn-outline" id="haShow" type="button">Zobrazit</button>
-                    <button class="btn btn-outline" id="haCopy" type="button">Kopírovat YAML</button>
-                    <button class="btn btn-danger" id="haRotate" type="button">Nový token</button>
-                </div>
-                <details class="yaml-box">
-                    <summary>Konfigurace (YAML)</summary>
-                    <pre class="yaml" id="haYaml"></pre>
+                <div class="tg-state"><span class="status-pill" id="mqttStatus">–</span></div>
+                <details class="yaml-box" id="mqttHelp">
+                    <summary>Jak propojit</summary>
+                    <ol class="setup-steps">
+                        <li>V Home Assistantu: <i>Nastavení → Doplňky → Obchod s doplňky</i> → <b>Mosquitto broker</b> → <i>Instalovat</i> a <i>Spustit</i>.</li>
+                        <li><i>Nastavení → Zařízení a služby</i>: u nalezené integrace <b>MQTT</b> klikněte na <i>Přidat</i>.</li>
+                        <li><i>Nastavení → Lidé → Uživatelé</i>: přidejte uživatele, např. <code>retencka</code>, s heslem (hub se jím přihlásí).</li>
+                        <li>Sem zadejte adresu Home Assistantu, jméno a heslo a uložte. Nádrže najdete v <i>Nastavení → Zařízení a služby → MQTT</i>.</li>
+                    </ol>
                 </details>
+                <form id="mqttForm" class="config-form settings-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mqttHost">Adresa Home Assistantu (brokeru)</label>
+                            <input type="text" id="mqttHost" name="mqtt_host" class="unified-input" placeholder="homeassistant.local" autocomplete="off" maxlength="253">
+                        </div>
+                        <div class="form-group adv">
+                            <label for="mqttPort">Port</label>
+                            <input type="number" id="mqttPort" name="mqtt_port" min="1" max="65535" step="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mqttUser">Uživatel</label>
+                            <input type="text" id="mqttUser" name="mqtt_username" class="unified-input" autocomplete="off" maxlength="128">
+                        </div>
+                        <div class="form-group">
+                            <label for="mqttPass">Heslo</label>
+                            <input type="password" id="mqttPass" name="mqtt_password" class="unified-input" autocomplete="new-password" maxlength="256">
+                        </div>
+                    </div>
+                    <div class="field-grid g2 toggles">
+                        <label class="toggle">
+                            <span class="toggle-text">Dopouštění z Home Assistantu <button type="button" class="help-tip" data-help="mqttcontrol"></button></span>
+                            <span class="switch"><input type="checkbox" name="mqtt_control"><span class="slider"></span></span>
+                        </label>
+                        <label class="toggle adv">
+                            <span class="toggle-text">Šifrovat (TLS, port 8883)</span>
+                            <span class="switch"><input type="checkbox" name="mqtt_tls"><span class="slider"></span></span>
+                        </label>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Uložit a připojit</button>
+                        <button type="button" class="btn btn-outline hidden" id="mqttOff">Odpojit</button>
+                    </div>
+                </form>
             </section>
 
             <section class="card col-card scope-general" id="genData" data-nav="Záloha a data" data-group="Data a systém">
