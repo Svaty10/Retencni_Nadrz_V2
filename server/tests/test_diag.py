@@ -67,12 +67,12 @@ class DiagTest(unittest.TestCase):
         self.assertIn("pokles napětí", detail)
 
     def test_off_detected_under_load(self):
-        # 3.04 V at rest, 60 mV drop under TX load -> 2.98 V: the node switched off
-        self.feed(self.frame(1, flags=model.FLAG_BAT_LOW, vbat=3040, sag=12))
+        # 3.04 V at rest, 360 mV drop under TX load -> 2.68 V: the node switched off
+        self.feed(self.frame(1, flags=model.FLAG_BAT_LOW, vbat=3040, sag=72))
         self.core.last[NID]["ts"] -= 3600
         b = self.core.battery(NID)
         self.assertTrue(b["off"])
-        self.assertEqual(b["sag_mv"], 60)
+        self.assertEqual(b["sag_mv"], 360)
 
     def test_heater_in_battery_model(self):
         s = self.core.settings.all()
