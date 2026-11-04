@@ -1115,8 +1115,9 @@ class Core:
         sag = last.get("vbat_sag_mv")
         # the node switches itself off below the cut-off (at rest or under TX load)
         # after sending a last packet
-        worst_mv = last["vbat_mv"] - (sag or 0)
-        off = worst_mv < model.BATTERY_CUTOFF_MV and self.status(nid) != "online"
+        empty = (last["vbat_mv"] < model.BATTERY_CUTOFF_MV
+                 or last["vbat_mv"] - (sag or 0) < model.BATTERY_CUTOFF_LOAD_MV)
+        off = empty and self.status(nid) != "online"
         return {"voltage": round(v, 3), "percent": round(pct, 1), "low": low or off,
                 "days_left": 0 if off else (None if days is None else round(days)), "off": off,
                 "sag_mv": sag, "heats_per_day": round(heats, 2), "type": kind}

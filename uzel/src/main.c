@@ -25,7 +25,8 @@
  *    until some hub pairs it.
  *
  * Battery: below BATTERY_LOW_MV the packets carry PKT_FLAG_BAT_LOW; below
- * BATTERY_CUTOFF_MV (1.0 V/cell, confirmed over several hours, not in frost) the
+ * BATTERY_CUTOFF_MV at rest (1.0 V/cell) or BATTERY_CUTOFF_LOAD_MV under TX load
+ * (0.9 V/cell), confirmed over several hours, not in frost, the
  * node sends a last packet and switches itself off for good (cell reversal
  * protection) – a new battery starts it again.
  *
@@ -270,18 +271,18 @@ static void measure_and_send(void)
         }
     }
 
-    /* ---------------- battery end of life (hourly, the worse of rest / TX load) ---- */
+    /* ---------------- battery end of life (hourly, at rest or under TX load) ---- */
     if (bat_now) {
-        uint16_t worst = g.vbat_mv;
+        bool empty = g.vbat_mv < BATTERY_CUTOFF_MV;
         if (g.load_ok) {
             uint16_t drop = (g.vbat_mv > g.vbat_load_mv) ? (uint16_t)(g.vbat_mv - g.vbat_load_mv) : 0U;
             drop = (uint16_t)((drop + SAG_UNIT_MV / 2U) / SAG_UNIT_MV);
             g.sag = (drop > 254U) ? 254U : (uint8_t)drop;
-            if (g.vbat_load_mv < worst) {
-                worst = g.vbat_load_mv;
+            if (g.vbat_load_mv < BATTERY_CUTOFF_LOAD_MV) {
+                empty = true;
             }
         }
-        if (worst < BATTERY_CUTOFF_MV) {
+        if (empty) {
             if (g.low_count < 255U) {
                 g.low_count++;
             }

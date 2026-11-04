@@ -245,7 +245,8 @@ _ALKALINE_CELL = [
 BATTERY_CURVES = {"lifes2": _LIFES2_CELL, "alkaline": _ALKALINE_CELL}
 BATTERY_SELF_DISCHARGE = {"lifes2": 0.02, "alkaline": 0.03}   # share of capacity per year
 BATTERY_LOW_PCT = 5.0
-BATTERY_CUTOFF_MV = 3000          # node switches itself off below this (uzel/include/config.h)
+BATTERY_CUTOFF_MV = 3000          # node switches itself off below this at rest (uzel/include/config.h)
+BATTERY_CUTOFF_LOAD_MV = 2700     # ... or below this under TX load
 QUICK_CHECK_FW = 11               # firmware from which the node checks the probe between transmissions
 
 

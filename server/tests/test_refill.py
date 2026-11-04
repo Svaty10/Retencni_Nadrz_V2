@@ -156,6 +156,10 @@ class BatteryOffTest(unittest.TestCase):
             self.assertEqual(b["days_left"], 0)
             core.last[0x3333]["vbat_mv"] = 3400                  # just offline, battery fine
             self.assertFalse(core.battery(0x3333)["off"])
+            core.last[0x3333].update(vbat_mv=3050, vbat_sag_mv=200)   # sags to 2.85 V under TX: still fine
+            self.assertFalse(core.battery(0x3333)["off"])
+            core.last[0x3333]["vbat_sag_mv"] = 400               # 2.65 V under TX: switched off
+            self.assertTrue(core.battery(0x3333)["off"])
 
 
 if __name__ == "__main__":

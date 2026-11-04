@@ -130,7 +130,8 @@ Odpárování tedy vyžaduje **přihlášení do hubu i fyzický přístup k či
 10. Stavy a všechny okrajové případy (ztracené rámce, restart hubu, cizí hub): `docs/architektura.md` 3.9.
 
 ### 1.7 Baterie
-- Pod 3,3 V flag BAT_LOW (varování, ~1 % kapacity). **Pod 3,0 V (1,0 V/článek, v klidu nebo při vysílání)** potvrzeno 3 hodinovými měřeními
+- Pod 3,3 V flag BAT_LOW (varování, ~1 % kapacity). **Pod 3,0 V v klidu (1,0 V/článek) nebo pod 2,7 V při vysílání (0,9 V/článek; vybitá
+  alkalická baterie při vysílání klesá víc než Li-FeS2)** potvrzeno 3 hodinovými měřeními
   po sobě a ne v mrazu (studené články dočasně klesnou) čidlo pošle poslední paket a **trvale se vypne**
   (power-down bez probouzení, ~1,5 µA) – ochrana proti přepólování nejslabšího článku v sérii. Znovu ho
   spustí až nová baterie (power-on reset); se zjevně vybitými články se po vložení vůbec nespustí.

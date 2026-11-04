@@ -76,13 +76,18 @@
 /** Below this the packet carries PKT_FLAG_BAT_LOW (warning, ~1 % left). */
 #define BATTERY_LOW_MV          3300U
 
-/** End of life: 1.0 V per cell. Below this (CUTOFF_CONFIRM hourly readings in a
- *  row, not in frost – cold cells sag temporarily) the node sends its last packet
- *  and switches itself off for good (power-down without wake-up sources, ~1.5 uA
- *  incl. the LDO) – only a new battery (power-on reset) starts it again. Draining
- *  a series pack further could drive the weakest cell into reversal. The BOD fuse
- *  (1.8 V) stays only as the last resort for the MCU. */
+/** End of life: 1.0 V per cell at rest. Below this (CUTOFF_CONFIRM hourly readings
+ *  in a row, not in frost – cold cells sag temporarily) the node sends its last
+ *  packet and switches itself off for good (power-down without wake-up sources,
+ *  ~1.5 uA incl. the LDO) – only a new battery (power-on reset) starts it again.
+ *  Draining a series pack further could drive the weakest cell into reversal (and
+ *  an alkaline cell into leaking). The BOD fuse (1.8 V) stays only as the last
+ *  resort for the MCU. */
 #define BATTERY_CUTOFF_MV       3000U
+/** The same under TX load (~30 mA): 0.9 V per cell. A worn alkaline cell sags more
+ *  than Li-FeS2 during the short pulse; the rest threshold decides the cell state,
+ *  this one only stops a pack that can no longer carry the transmission. */
+#define BATTERY_CUTOFF_LOAD_MV  2700U
 #define CUTOFF_CONFIRM          3U
 #define CUTOFF_MIN_TEMP_X100    0       /**< no cut-off decision below 0 degC */
 /** Pairing (X25519) at 10 MHz only above this battery voltage at boot, else 5 MHz. */
