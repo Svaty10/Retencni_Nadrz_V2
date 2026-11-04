@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.22.2] - 2026-11-04
+
+### Změněno
+- **Firmware čidla 15:** čidlo se vypne pod 3,0 V v klidu (1,0 V/článek, jako dřív) nebo pod **2,7 V při vysílání** (0,9 V/článek; dřív i tady 3,0 V). Vybité alkalické články při vysílání klesají víc než Li-FeS2, takže se dřív vypínaly s 5–10 % kapacity v zásobě. Hub pozná vypnuté čidlo podle stejných dvou hranic. Nový firmware je potřeba do čidla nahrát ručně ([docs/programovani_uzlu.md](docs/programovani_uzlu.md)).
+
 ## [1.22.1] - 2026-10-28
 
 ### Změněno

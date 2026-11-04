@@ -1,6 +1,6 @@
 # 💧 Retenční nádrž – bezdrátové měření hladiny
 
-![verze](https://img.shields.io/badge/verze-1.22.1-1b5e8a)
+![verze](https://img.shields.io/badge/verze-1.22.2-1b5e8a)
 ![hub](https://img.shields.io/badge/hub-Raspberry%20Pi%20Zero%202%20W%20%7C%203%20%7C%204-c51a4a)
 ![čidlo](https://img.shields.io/badge/čidlo-ATtiny1624%20%2B%20CC1101-0f172a)
 ![python](https://img.shields.io/badge/Python-3.11%2B%2C%20jen%20stdlib-3776ab)
@@ -37,7 +37,7 @@ flowchart LR
 
 **Čidlo**
 - Měření hladiny (hydrostatická sonda), teploty a vlhkosti v šachtě; baterie 1× za hodinu.
-- Výdrž s firmwarem 14 odhadem ~8 let na 3× AA Li-FeS2 a ~5 let na 3× AA alkalických (typ baterie se nastavuje u nádrže, viz [energetický rozpočet](#energetický-rozpočet-odhad)); při nízké baterii varuje a na konci životnosti článků (1,0 V/článek) se samo vypne, aby se nejslabší článek nepřepóloval.
+- Výdrž s firmwarem 14 odhadem ~8 let na 3× AA Li-FeS2 a ~5 let na 3× AA alkalických (typ baterie se nastavuje u nádrže, viz [energetický rozpočet](#energetický-rozpočet-odhad)); při nízké baterii varuje a na konci životnosti článků (1,0 V/článek v klidu, 0,9 V/článek při vysílání) se samo vypne, aby se nejslabší článek nepřepóloval.
 - Šifrované a podepsané pakety (AES-128-CTR + CMAC, klíč z párování X25519), ochrana proti přehrání.
 - **Čidlo patří svému hubu** – cizí hub ho nepřevezme; odpárovat jde jen z hubu + vložením baterie.
 
