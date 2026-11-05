@@ -187,6 +187,7 @@ async def main_async() -> None:
     wd_period = max(1.0, wd_usec / 2e6) if wd_usec else 10.0
 
     async def periodic():
+        nonlocal radio_ok                 # reassigned below; without this the first pass raises
         next_hour = next_day = 0.0
         next_refill = next_watch = 0.0
         core.aggregate_hours(since=int(time.time()) - 48 * 3600)
@@ -197,10 +198,10 @@ async def main_async() -> None:
                 sd_notify("WATCHDOG=1")
             else:
                 log.error("Radio thread stalled – withholding watchdog ping")
-            if radio.alive() != radio_ok:
-                radio_ok = radio.alive()
-                write_health(data_dir, radio_ok)
             try:
+                if radio.alive() != radio_ok:
+                    radio_ok = radio.alive()
+                    write_health(data_dir, radio_ok)
                 if now >= next_refill:
                     next_refill = now + 30
                     await core.refill_tick()

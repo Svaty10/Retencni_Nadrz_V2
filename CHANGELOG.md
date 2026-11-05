@@ -3,6 +3,11 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [1.22.3] - 2026-11-05
+
+### Opraveno
+- **Pravidelné úlohy aplikace ve verzích 1.22.1 a 1.22.2 neběžely:** smyčka spadla hned při prvním průchodu. Nezapisovaly se výsledky aktualizací do *Historie událostí* (např. automatická aktualizace), nechodila upozornění (hladina, tiché čidlo, baterie), nespouštělo se automatické dopouštění ani hodinové souhrny a systemd watchdog aplikaci průběžně restartoval. Aktualizace na tuto verzi proběhne sama a už se do historie zapíše.
+
 ## [1.22.2] - 2026-11-04
 
 ### Změněno
