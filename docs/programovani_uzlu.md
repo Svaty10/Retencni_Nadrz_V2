@@ -126,6 +126,29 @@ a stačí **Spárovat znovu** ([instalace.md](instalace.md#odpárování--přesu
 3. Na hubu *Nastavení → Obecné → Čidla → Přidat čidlo…*, u jeho ID klikněte **Spárovat** (nebo ID zadejte
    ručně), doplňte název a **Čekat na čidlo**.
 
+### Měření klidového proudu (`5-test-spanku.cmd`)
+Testovací firmware čidlo jen uspí, stejně jako mezi dvěma měřeními: rádio spí, 5 V pro sondu a dělič baterie
+jsou vypnuté, čip je v hlubokém spánku a jednou za sekundu se na okamžik probudí časovač. Nic neměří ani
+nevysílá, párování v čidle zůstane. Nastavení čipu (fuses) zapíše sám, takže funguje i na novém čipu.
+
+Místo Arduina stačí **USB-TTL převodník přepnutý na 3,3 V** (skript ho pozná sám):
+
+```
+ Převodník                                Čidlo
+ TX ─────────[ 4,7 kΩ ]──────┬─────────── UPDI   (pin 10 čipu ATtiny1624)
+ RX ─────────────────────────┘
+ GND ──────────────────────────────────── GND    (pin 14)
+```
+
+1. Zapojte převodník, čidlo napájejte z baterie (bod 3), dvojklik na **`5-test-spanku.cmd`**.
+2. **Odpojte převodník úplně** (UPDI i GND). Jeho TX drží na UPDI napětí a zkreslil by měření.
+3. Ampérmetr zapojte do série s baterií. **Rozsah µA má vysoký vnitřní odpor:** rozběh čidla s ním nemusí
+   proběhnout, proto ampérmetr po zapnutí nejdřív překlenujte drátem a drát sundejte až po pár sekundách.
+4. Zpět na normální firmware: převodník zapojit, dvojklik na **`3-aktualizace-firmwaru.cmd`**.
+
+Hodnota v řádu desítek µA a víc znamená problém s některou součástkou. Stovky µA až mA obvykle znamenají
+probuzené rádio (např. špatně osazený CC1101), protože tento firmware chybu nijak nehlásí.
+
 ## 6. Když to nejde
 
 | Co vidíte | Co zkusit |

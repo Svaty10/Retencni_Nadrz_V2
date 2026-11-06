@@ -14,6 +14,7 @@
   .\nahraj.ps1 -Port COM5  # port zadaný ručně (když je připojeno víc zařízení)
   .\nahraj.ps1 -Build      # firmware přeložit z této složky (potřebuje avr-gcc v PATH nebo C:\avr)
   .\nahraj.ps1 -PripravArduino   # z Arduina Uno/Nano udělá programátor jtag2updi (pin 6)
+  .\nahraj.ps1 -TestSpanku       # testovací firmware, který jen spí (měření klidového proudu)
 
   Programátor se pozná sám: Arduino/převodník na pinech 0/1 (SerialUPDI), nebo Arduino
   s jtag2updi (pin 6). Ručně: -Programmer serialupdi | jtag2updi.
@@ -25,6 +26,7 @@ param(
     [switch]$Build,
     [switch]$PripravArduino,
     [switch]$SmazatParovani,
+    [switch]$TestSpanku,
     [int]$Baud = 115200,
     [string]$Programmer = "auto",
     [string]$ToolsDir = "C:\avr"
@@ -229,13 +231,23 @@ if ($SmazatParovani) {
     return
 }
 
-$Port = Get-Port               # programmer first: no firmware download without one
-$hex = Get-Firmware
 # fuse1 BODCFG 0x04 = BOD 1,8 V v běhu, ve spánku vypnutý
 # fuse2 OSCCFG 0x02 = interní 20 MHz (firmware si dělí na 3,33 MHz)
 # fuse5 SYSCFG0 0xC5 = PA0 zůstává UPDI, EEPROM (klíče párování) přežije přehrání – NEMĚNIT
+$FuseArgs = @("-U", "fuse1:w:0x04:m", "-U", "fuse2:w:0x02:m", "-U", "fuse5:w:0xC5:m")
+
+if ($TestSpanku) {
+    # Hotový hex je v repozitáři (make spanek); fuses kvůli BOD, který by ve spánku bral ~20 uA.
+    Invoke-Avrdude ($FuseArgs + @("-U", "flash:w:tools\test_spanku.hex:i"))
+    Write-Host "Hotovo. Čidlo teď jen spí: nic neměří a nevysílá, párování zůstalo." -ForegroundColor Green
+    Write-Host "Před měřením ODPOJTE převodník (UPDI i GND). Zpět: 3-aktualizace-firmwaru.cmd" -ForegroundColor Green
+    return
+}
+
+$Port = Get-Port               # programmer first: no firmware download without one
+$hex = Get-Firmware
 $extra = @()
-if ($Fuses) { $extra += @("-U", "fuse1:w:0x04:m", "-U", "fuse2:w:0x02:m", "-U", "fuse5:w:0xC5:m") }
+if ($Fuses) { $extra += $FuseArgs }
 $extra += @("-U", "flash:w:${hex}:i")
 Invoke-Avrdude $extra
 Write-Host "Hotovo. Čidlo se restartovalo a 10 minut nabízí párování (hub: Nastavení → Čidla)." -ForegroundColor Green
