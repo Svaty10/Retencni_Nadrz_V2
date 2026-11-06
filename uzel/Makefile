@@ -8,6 +8,7 @@
 #   make            build build/firmware.hex
 #   make flash      flash via SerialUPDI (PORT=COM3 or PORT=/dev/ttyUSB0)
 #   make fuses      write fuses (once per chip)
+#   make spanek     build tools/test_spanku.hex (sleep-only firmware, 5-test-spanku.cmd)
 # ==============================================================================
 
 MCU        = attiny1624
@@ -44,7 +45,7 @@ else
   RUN   = ./$(1)
 endif
 
-.PHONY: all clean flash fuses size test
+.PHONY: all clean flash fuses size test spanek
 
 all: $(BUILD_DIR)/firmware.hex $(BUILD_DIR)/firmware.lss size
 
@@ -63,6 +64,15 @@ $(BUILD_DIR)/firmware.lss: $(BUILD_DIR)/firmware.elf
 
 size: $(BUILD_DIR)/firmware.elf
 	$(SIZE) $<
+
+# Sleep-only test firmware: shares power.c and cc1101.c with the real one
+SPANEK_SRCS = tools/test_spanku.c src/power.c src/cc1101.c
+
+spanek:
+	@$(MKDIR)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(SPANEK_SRCS) -o $(BUILD_DIR)/test_spanku.elf
+	$(OBJCOPY) -O ihex -R .eeprom -R .fuse -R .lock -R .signature $(BUILD_DIR)/test_spanku.elf tools/test_spanku.hex
+	$(SIZE) $(BUILD_DIR)/test_spanku.elf
 
 flash: $(BUILD_DIR)/firmware.hex
 	$(AVRDUDE) -c $(PROGRAMMER) -p t1624 -P $(PORT) -b $(BAUD) -U flash:w:$<:i

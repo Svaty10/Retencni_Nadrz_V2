@@ -40,3 +40,6 @@ demo/
 
 # hotový programátor jtag2updi pro Arduino (nahrává 0-priprav-arduino.cmd)
 !uzel/tools/jtag2updi/*.hex
+
+# hotový testovací firmware, který jen spí (nahrává 5-test-spanku.cmd)
+!uzel/tools/test_spanku.hex
