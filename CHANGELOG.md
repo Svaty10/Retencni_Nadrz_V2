@@ -3,6 +3,12 @@
 Formát dle [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), verze dle [SemVer](https://semver.org/).
 Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
+## [Unreleased]
+
+### Přidáno
+- **Firmware čidla 16: smazání párování bez programátoru.** Při vložení baterie propojit drátkem piny 5 V a signál na konektoru sondy (sonda odpojená) a nechat aspoň 10 s: čidlo zapomene párování a nabízí ho jako nové. Postup: [docs/programovani_uzlu.md](docs/programovani_uzlu.md). Nový firmware je potřeba do čidla nahrát ručně.
+- Testovací firmware, který jen spí (`uzel/5-test-spanku.cmd`), pro měření klidového proudu čidla.
+
 ## [1.22.3] - 2026-11-05
 
 ### Opraveno

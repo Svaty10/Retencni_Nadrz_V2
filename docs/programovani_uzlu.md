@@ -126,6 +126,27 @@ a stačí **Spárovat znovu** ([instalace.md](instalace.md#odpárování--přesu
 3. Na hubu *Nastavení → Obecné → Čidla → Přidat čidlo…*, u jeho ID klikněte **Spárovat** (nebo ID zadejte
    ručně), doplňte název a **Čekat na čidlo**.
 
+### Smazání párování bez programátoru (firmware 16 a novější)
+Stejný výsledek jako `4-smazat-parovani.cmd`, jen drátkem na konektoru sondy:
+
+```
+ Konektor sondy (Senzor_J2)
+ pin 1  GND     ── nezapojovat
+ pin 2  5 V    ─┐
+ pin 3  signál ─┘ drátek
+```
+
+1. Vyndejte baterii a **odpojte sondu**.
+2. Propojte drátkem **pin 2 a pin 3**. Pin 1 (GND) nechte volný, se zemí nic nespojujte.
+3. Vložte baterii a **drátek nechte zapojený aspoň 15 sekund** (čidlo kontroluje 10 s), pak ho vytáhněte.
+4. Čidlo zapomene párování a 10 minut ho nabízí jako nové. Zapojte sondu a na hubu ho spárujte
+   (*Nastavení → Obecné → Čidla → Přidat čidlo…*).
+
+Když drátek vytáhnete dřív než po 10 s, nic se nesmaže a čidlo běží normálně – stačí to zopakovat.
+Napětí na vstupu čipu je přitom 3,44 V a proud omezuje odpor 100 kΩ na jednotky µA – čipu to neublíží.
+Pozor: kdyby vlhkost v konektoru sondy spojila signál s 5 V, čidlo by při výměně baterie párování
+smazalo samo – pak ho stačí znovu spárovat.
+
 ### Měření klidového proudu (`5-test-spanku.cmd`)
 Testovací firmware čidlo jen uspí, stejně jako mezi dvěma měřeními: rádio spí, 5 V pro sondu a dělič baterie
 jsou vypnuté, čip je v hlubokém spánku a jednou za sekundu se na okamžik probudí časovač. Nic neměří ani
