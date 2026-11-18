@@ -86,7 +86,8 @@
         "UPDATE_UP_TO_DATE": "Up to date",
         "FACTORY_RESET": "Factory reset",
         "TLS_CERT_ISSUED": "HTTPS certificate",
-        "NODE_PAIRING_CANCELLED": "Pairing cancelled"
+        "NODE_PAIRING_CANCELLED": "Pairing cancelled",
+        "NODES_REORDERED": "Tank order"
 };
 
     const DICT = {
