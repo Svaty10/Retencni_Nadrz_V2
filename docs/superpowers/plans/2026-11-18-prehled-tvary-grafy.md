@@ -214,7 +214,7 @@ def test_no_overflow_unchanged(self):
 
 - [ ] **Step 1: Implementovat:**
   - Smazat mapu (HTML, JS, CSS).
-  - `#overviewGrid`: `grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))`.
+  - Kompaktní karty (doplněno uživatelem): `#overviewGrid` `repeat(auto-fill, minmax(220px, 1fr))`, menší kruh a písmo, aby se 2–4 nádrže vešly na jeden řádek od ~1000 px.
   - `#fnHub` změnit na `<button type="button">` se stejným vzhledem, `aria-label="Zpět na všechny nádrže"`, a `title` se stejným textem. Zobrazit ho jako klikatelný (kurzor, hover kruhu) jen při ≥ 2 nádržích, jinak je to obyčejný neaktivní uzel.
 - [ ] **Step 2: Ověřit v preview** (2 demo nádrže):
   - přehled nemá mapu, karty vyplní šířku na 1440 px i na mobilu (375 px),
@@ -224,6 +224,18 @@ def test_no_overflow_unchanged(self):
 - [ ] **Step 3: Commit** `"Overview: drop the hub map, hub link returns to all tanks"`
 
 ---
+
+### Task 5b: Pořadí nádrží (doplněno uživatelem)
+
+**Files:** `server/retencka/settings.py` (`Nodes.set_order`), `server/retencka/web.py` (`POST /api/nodes/order`, admin), `server/static/js/app.js` (`renderNodeBar`, `renderOverview`), CSS; test `server/tests/test_server.py`.
+
+**Interfaces:**
+- `Nodes.set_order(ids: list[int]) -> None` – zapíše sloupec `nodes.sort` (0…n-1), `reload()`. Seznam musí obsahovat přesně všechna ID, jinak `SettingsError("Pořadí musí obsahovat všechna čidla.")`.
+- `POST /api/nodes/order {"order": ["BF1C", "F618"]}` → `{"ok": true}`, audit `NODES_REORDERED` „Pořadí nádrží: A, B“.
+
+- [ ] Test `test_node_order`: dvě čidla, POST pořadí obráceně → `/api/state` `nodes` v novém pořadí; chybějící ID → 400; uživatel bez admin → 403.
+- [ ] Implementace; UI: admin může přetáhnout pilulku v liště nahoře i kartu na přehledu (pointer events, funguje i dotykem po podržení 300 ms); klávesnice: Alt+←/→ na pilulce/kartě. Po puštění POST a překreslení.
+- [ ] Commit `"Tanks can be reordered in the top bar and the overview"`
 
 ### Task 6: Formulář tvaru – nová pole, tabulka, přepad, obrázky
 
