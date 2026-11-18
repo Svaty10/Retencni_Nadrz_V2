@@ -1991,17 +1991,12 @@
     }
 
     function renderBackups(d) {
-        const body = $('backupBody');
-        body.textContent = '';
         const list = (d && d.backups) || [];
         if (d && d.keep) $('bkKeep').textContent = String(d.keep);
         if (d && d.dir) $('bkDir').textContent = d.dir;
-        if (!list.length) body.innerHTML = '<tr><td colspan="2" class="muted">Zatím žádná – první vznikne do 24 h od spuštění.</td></tr>';
-        list.forEach((b) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${fmtDateTime(b.ts * 1000)}</td><td>${num(b.size_mb, 1, ' MB')}</td>`;
-            body.appendChild(tr);
-        });
+        const last = list.reduce((a, b) => (!a || b.ts > a.ts ? b : a), null);
+        $('bkLast').textContent = last ? `${fmtDateTime(last.ts * 1000)} · ${num(last.size_mb, 1, ' MB')}`
+            : 'Zatím žádná – první vznikne do 24 h od spuštění.';
     }
 
     function tgStatusText(t) {

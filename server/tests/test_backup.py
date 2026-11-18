@@ -167,5 +167,20 @@ class BadFileTest(Base):
         self.assertEqual(os.listdir(new.backup_dir()), [])
 
 
+
+
+class KeepTest(Base):
+    def test_keeps_three_backups(self):
+        c = self.hub("keep")
+        d = c.backup_dir()
+        for day in range(1, 6):                       # older nightly copies already on the card
+            with open(os.path.join(d, f"retencka-2026-01-0{day}.db.gz"), "wb") as f:
+                f.write(b"x")
+        c.backup_local()
+        files = sorted(f for f in os.listdir(d) if f.startswith("retencka-") and f.endswith(".db.gz"))
+        self.assertEqual(len(files), 3)
+        self.assertEqual(files[:2], ["retencka-2026-01-04.db.gz", "retencka-2026-01-05.db.gz"])
+
+
 if __name__ == "__main__":
     unittest.main()
