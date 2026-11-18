@@ -293,6 +293,28 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .is-sorting { user-select: none; -webkit-user-select: none; }
 .is-sorting, .is-sorting * { cursor: grabbing !important; }
 .sorting { outline: 2px dashed var(--accent); outline-offset: 2px; opacity: 0.85; }
+/* Obrázek tvaru nádrže v nastavení */
+.shape-row { align-items: end; }
+.shape-fig { position: relative; max-width: 220px; width: 100%; justify-self: center; color: var(--ink-2); }
+.shape-fig svg { display: block; width: 100%; height: auto; overflow: visible; }
+symbol[id^="shape-"] .dim { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+symbol[id^="shape-"] text { fill: var(--accent); stroke: none; font: 700 14px var(--font-num); }
+.shape-overflow {
+    position: absolute; left: 4%; right: 4%; height: 0;
+    border-top: 2px dashed var(--accent);
+}
+.shape-overflow > span {
+    position: absolute; right: 0; bottom: 2px; padding: 0 4px; border-radius: 4px;
+    font-size: 11px; color: var(--accent); background: var(--surface);
+}
+.dim-tag {
+    display: inline-block; min-width: 18px; padding: 0 4px; margin-left: 4px; border-radius: 4px;
+    font: 600 11px/16px var(--font-num, inherit); text-align: center; color: var(--accent); background: var(--accent-soft, transparent);
+    border: 1px solid var(--accent);
+}
+.tank-table { margin-bottom: 14px; }
+.tank-table .input-unit { min-width: 110px; }
+.tank-table .btn { margin-top: 8px; }
 .node-pill {
     display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
     min-height: 38px; padding: 0 14px;

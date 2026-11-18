@@ -341,7 +341,9 @@
     // Jeden popover pro všechny: hover / focus (klávesnice) ho ukáže, klepnutí / klik připne,
     // druhé klepnutí, Esc nebo klik mimo ho zavře. Zůstává uvnitř okna (i na telefonu).
     const HELP = {
-        shape: 'Tvar nádrže určuje výpočet objemu z výšky hladiny. U ležatého válce se objem i procenta počítají podle kruhového průřezu (ve spodní a horní části přibývá objem pomaleji než uprostřed).',
+        shape: 'Tvar nádrže určuje výpočet objemu z výšky hladiny. U ležatých válců, oválu a koule přibývá objem ve spodní a horní části pomaleji než uprostřed – procenta se proto počítají z objemu, ne z výšky. Na nádrž, která do žádného tvaru nepasuje, použijte vlastní tabulku od výrobce.',
+        dome: 'Jak daleko vystupuje jedno klenuté dno za válcovou část. Polokulové dno = polovina průměru, běžné klenuté dno zhruba čtvrtina průměru (to se použije, když pole necháte prázdné).',
+        overflow: 'Výška spodní hrany přepadu nade dnem. Nádrž se nikdy nenaplní výš, takže 100 % = hladina u přepadu a procenta i plný objem se počítají z objemu po přepad. Prázdné = přepad u horní hrany nádrže.',
         notify: 'Když hladina klesne pod tuto hodnotu, pošle bot zprávu do propojených chatů v Telegramu. 0 = upozornění je vypnuté.',
         battery_type: 'Podle typu baterií se z napětí počítá zbývající kapacita a výdrž. Lithiové drží napětí téměř až do vybití, alkalické klesá postupně.',
         capacity: 'Skutečná kapacita sady baterií v mAh (z jejich datasheetu). Ovlivní jen odhad výdrže, ne měření hladiny.',
@@ -1627,7 +1629,8 @@
 
     function fillForm(form, s) {
         const isCalForm = form && form.id === 'calForm';
-        const BLANK_ZERO = new Set(['max_depth_cm', 'tank_area_m2', 'tank_diameter_cm', 'tank_length_cm', 'tank_width_cm', 'catchment_area_m2', 'flow_rate_lpm']);
+        const BLANK_ZERO = new Set(['max_depth_cm', 'tank_area_m2', 'tank_diameter_cm', 'tank_length_cm', 'tank_width_cm', 'catchment_area_m2', 'flow_rate_lpm',
+            'tank_dome_cm', 'tank_cone_cm', 'overflow_cm']);
         Array.from(form.elements).forEach((el) => {
             if (!el.name || !(el.name in s)) return;
             if (el.type === 'checkbox') el.checked = s[el.name] === true || s[el.name] === 'true';   // přepínač
@@ -1642,8 +1645,9 @@
     }
     function formData(form) {
         const isCalForm = form && form.id === 'calForm';
-        const NUMERIC_CAL = new Set(['max_depth_cm', 'tank_area_m2', 'tank_diameter_cm', 'tank_length_cm', 'tank_width_cm', 'catchment_area_m2', 'flow_rate_lpm']);
-        const OPTIONAL_CAL = new Set(['catchment_area_m2', 'flow_rate_lpm']);
+        const NUMERIC_CAL = new Set(['max_depth_cm', 'tank_area_m2', 'tank_diameter_cm', 'tank_length_cm', 'tank_width_cm', 'catchment_area_m2', 'flow_rate_lpm',
+            'tank_dome_cm', 'tank_cone_cm', 'overflow_cm']);
+        const OPTIONAL_CAL = new Set(['catchment_area_m2', 'flow_rate_lpm', 'overflow_cm', 'tank_dome_cm']);
         const out = {};
         Array.from(form.elements).forEach((el) => {
             if (!el.name || el.disabled) return;
@@ -1701,15 +1705,73 @@
         const sel = scopeRoot.querySelector('select[name="tank_shape"]');
         if (!sel) return;
         const shape = sel.value || 'area';
-        scopeRoot.querySelectorAll('.form-group[data-shapes]').forEach((group) => {
+        scopeRoot.querySelectorAll('[data-shapes]').forEach((group) => {
             const show = group.dataset.shapes.split(',').includes(shape);
             group.classList.toggle('hidden', !show);
             group.querySelectorAll('input').forEach((input) => {
-                input.required = show && scopeRoot.id === 'tkTank';
+                input.required = show && scopeRoot.id === 'tkTank' && !group.dataset.optional;
             });
         });
+        scopeRoot.querySelectorAll('[data-label-for]').forEach((l) => l.classList.toggle('hidden', !l.dataset.labelFor.split(',').includes(shape)));
+        syncShapeFig();
         layoutSettingsColumns();
     }
+
+    // Obrázek tvaru nádrže + čárkovaná čára přepadu (nádrž je v obrázku vždy mezi y=20 a y=100 z 120)
+    function shapeHeightCm() {
+        const f = $('calForm').elements;
+        const val = (n) => parseFloat((f.namedItem(n) || {}).value) || 0;
+        const shape = f.namedItem('tank_shape').value;
+        if (['cyl_h', 'cyl_h_dished', 'sphere'].includes(shape)) return val('tank_diameter_cm');
+        if (shape === 'table') return tankTableRows().reduce((m, r) => Math.max(m, r[0]), 0);
+        return val('max_depth_cm');
+    }
+    function syncShapeFig() {
+        const f = $('calForm').elements;
+        const shape = f.namedItem('tank_shape').value || 'area';
+        $('shapeUse').setAttribute('href', '#shape-' + shape);
+        const h = shapeHeightCm();
+        const ov = parseFloat(f.namedItem('overflow_cm').value) || 0;
+        const show = ov > 0 && h > 0;
+        $('shapeOverflow').classList.toggle('hidden', !show);
+        if (show) $('shapeOverflow').style.top = ((100 - 80 * Math.min(1, ov / h)) / 120 * 100) + '%';
+        const dome = f.namedItem('tank_dome_cm');
+        const d = parseFloat(f.namedItem('tank_diameter_cm').value) || 0;
+        dome.placeholder = d > 0 ? String(Math.round(d / 4 * 10) / 10) : '';
+    }
+
+    // Vlastní tabulka výška → objem (tvar „table“)
+    function tankTableRow(cm, l) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><div class="input-unit"><input type="number" step="0.1" min="0" class="tt-cm" aria-label="Výška hladiny"><span class="unit">cm</span></div></td>
+            <td><div class="input-unit"><input type="number" step="1" min="0" class="tt-l" aria-label="Objem"><span class="unit">L</span></div></td>
+            <td class="td-actions"><button type="button" class="btn btn-outline btn-danger-text" aria-label="Odebrat řádek">${ico('close')}</button></td>`;
+        tr.querySelector('.tt-cm').value = cm == null ? '' : cm;
+        tr.querySelector('.tt-l').value = l == null ? '' : l;
+        tr.querySelector('button').addEventListener('click', () => { tr.remove(); setCalDirty(true); syncShapeFig(); });
+        return tr;
+    }
+    function renderTankTable(rows) {
+        const body = $('tankTable');
+        body.textContent = '';
+        (rows && rows.length ? rows : [[0, 0], [null, null]]).forEach((r) => body.appendChild(tankTableRow(r[0], r[1])));
+    }
+    function tankTableRows() {
+        return Array.from($('tankTable').querySelectorAll('tr'))
+            .map((tr) => [tr.querySelector('.tt-cm').value, tr.querySelector('.tt-l').value])
+            .filter((r) => r[0] !== '' || r[1] !== '')
+            .map((r) => [parseFloat(r[0]), parseFloat(r[1])]);
+    }
+    $('tankTableAdd').addEventListener('click', () => {
+        if ($('tankTable').children.length >= 30) { toast('Tabulka může mít nejvýše 30 řádků.', true); return; }
+        const tr = tankTableRow(null, null);
+        $('tankTable').appendChild(tr);
+        tr.querySelector('.tt-cm').focus();
+        setCalDirty(true);
+    });
+    ['max_depth_cm', 'tank_diameter_cm', 'overflow_cm'].forEach((n) => {
+        $('calForm').elements.namedItem(n).addEventListener('input', syncShapeFig);
+    });
 
     // Zóna a pravidla dopouštění mají smysl jen s ventilem
     function syncValve() {
@@ -1734,6 +1796,7 @@
                 tank_area_m2: Math.round((n.tank_length_cm || 0) * (n.tank_width_cm || 0) / 100) / 100 });
         }
         fillForm($('calForm'), n);
+        renderTankTable(n.tank_table);
         syncValve();
         syncBattery();
         renderInheritTags($('calForm'), n);
@@ -2220,6 +2283,14 @@
             });
             if (bad || pts.length < 2) { toast('Vyplňte oba kalibrační body (napětí i výšku).', true); return; }
             data.cal_points = pts;
+            if (data.tank_shape === 'table') {
+                const rows = tankTableRows();
+                if (rows.some((r) => isNaN(r[0]) || isNaN(r[1]))) { toast('Vyplňte v tabulce u každého řádku výšku i objem.', true); return; }
+                data.tank_table = rows;
+            }
+            if (data.tank_shape === 'cyl_h_dished' && !(parseFloat(data.tank_dome_cm) > 0)) {
+                data.tank_dome_cm = Math.round((parseFloat(data.tank_diameter_cm) || 0) / 4 * 10) / 10;
+            }
             action(() => api('POST', '/api/node?' + nq(), data)).then((r) => {
                 if (!r) return;
                 setCalDirty(false);
