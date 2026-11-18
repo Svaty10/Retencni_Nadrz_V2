@@ -63,7 +63,7 @@ UNPAIR_SETTLE_S = 20              # no paired request for this long after it -> 
 CTR_MAX_STEP = 4096               # jump > 4x CTR_RESERVE needs a 2nd frame to rule out a 1:2^32 MAC hit
 STOP_RETRY_MARGIN_S = 60          # refill row closed this long after the planned end at latest
 LOW_DISK_MB = 300                 # below this, the oldest raw data are thinned out
-BACKUP_KEEP = 7                   # nightly local backups kept
+BACKUP_KEEP = 3                   # nightly local backups kept
 IMPORT_MAX_BYTES = 4 << 30        # an imported backup, uncompressed (years of data are < 1 GiB)
 SERVIS_24H_S = 24 * 3600
 # same rules as system/bin/retencka-control.py (the root helper validates again)

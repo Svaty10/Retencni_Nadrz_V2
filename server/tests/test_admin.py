@@ -216,7 +216,7 @@ class AdminServerTest(unittest.TestCase):
         self.assertEqual(st, 200)
         self.assertIn("disk_low", js)
         st, js, _, _ = self.req("GET", "/api/backup", headers=h)
-        self.assertEqual(js["keep"], 7)
+        self.assertEqual(js["keep"], 3)
         self.assertTrue(js["dir"].endswith("backup"))
 
     def test_9_factory_reset(self):

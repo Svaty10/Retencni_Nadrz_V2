@@ -81,7 +81,7 @@ Migrace přitom nejsou jen přidávání sloupců: v9 a v11 přepisují JSON v n
 
 `open_database` při poškození DB soubor dříve odsunula stranou a začala s prázdnou. V DB jsou ale i klíče čidel –
 všechna čidla jsou pak pro hub „cizí“ a obnova vede jen přes ruční import zálohy, jinak přes smazání
-párování přes UPDI. Noční zálohy (`BACKUP_KEEP` = 7) leží na stejné SD kartě.
+párování přes UPDI. Noční zálohy (`BACKUP_KEEP` = 3) leží na stejné SD kartě.
 
 **Návrh:**
 

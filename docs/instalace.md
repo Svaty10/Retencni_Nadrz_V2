@@ -110,7 +110,7 @@ párování přes UPDI (`uzel/4-smazat-parovani.cmd`, viz
 **Znovu spárovat** – název, nastavení i historie zůstanou.
 
 ### Záloha a obnova
-- Hub dělá sám jednou denně zálohu databáze na kartu (`/var/lib/retencka/data/backup/`, posledních 7, seznam
+- Hub dělá sám jednou denně zálohu databáze na kartu (`/var/lib/retencka/data/backup/`, poslední 3, poslední
   v *Záloha a data*). Pomůže při poškozené databázi nebo nepovedené aktualizaci, **ne** při odumření karty
   nebo ztrátě zařízení: *Nastavení → Obecné → Záloha a data → Stáhnout zálohu* a soubor uložit do PC / cloudu
   (občas, např. po přidání čidla).

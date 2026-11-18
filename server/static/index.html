@@ -797,7 +797,7 @@
 
                 <div class="alert-info backup-note">
                     <p><strong>Automatické zálohy.</strong> Jednou denně hub sám uloží kopii databáze na kartu zařízení
-                        (<code id="bkDir">/var/lib/retencka/data/backup</code>) a ponechá posledních <b id="bkKeep">7</b>.</p>
+                        (<code id="bkDir">/var/lib/retencka/data/backup</code>) a ponechá poslední <b id="bkKeep">3</b>.</p>
                     <p>Chrání před poškozenou databází nebo nepovedenou aktualizací, <b>ne</b> před zničenou kartou či ztrátou zařízení.
                         Proto si zálohu pravidelně stáhněte do jiného zařízení.</p>
                 </div>
@@ -809,12 +809,7 @@
                     <label class="check"><input type="checkbox" id="importFull"> včetně nastavení a uživatelů</label>
                 </div>
                 <p class="muted small mt-15">Nahraná data se přidají k současným, duplicity se přeskočí.</p>
-                <div class="table-responsive mt-20">
-                    <table class="user-table">
-                        <thead><tr><th>Automatické zálohy na kartě</th><th>Velikost</th></tr></thead>
-                        <tbody id="backupBody"></tbody>
-                    </table>
-                </div>
+                <dl class="kv mt-20"><dt>Poslední automatická záloha</dt><dd id="bkLast">–</dd></dl>
                 <form id="dataForm" class="config-form settings-form sub">
                     <h3>Uchovávání dat</h3>
                     <div class="form-group">
