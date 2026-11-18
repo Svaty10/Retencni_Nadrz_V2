@@ -748,6 +748,8 @@
         "načítám": "loading",
         "Z řadu dnes": "From mains today",
         "Spojení s hubem": "Link to the hub",
+        "Zpět na všechny nádrže": "Back to all tanks",
+        "Spojení s hubem – zpět na všechny nádrže": "Link to the hub – back to all tanks",
         "Změřeno čidlem": "Measured by the sensor",
         "Přítok deštěm dnes": "Rain inflow today",
         "Dopuštěno dnes": "Refilled today",
