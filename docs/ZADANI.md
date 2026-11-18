@@ -311,7 +311,9 @@ Jeden proces `retencka` (asyncio, 1 listener; Home Assistant přes MQTT jako kli
   Formuláře jednotně: **jedno pole** (klíč Hydrawise, token Telegramu, hledání polohy, uchovávání dat,
   kalibrační bod) má tlačítka hned vedle pole na stejném řádku; textový klíč/token je přes celou šířku, číslo
   krátké. **Více polí** (souřadnice, mazání dat, NetBird, Home Assistant / MQTT) má tlačítko pod nimi.
-- Nádrž: tvar **Kvádr** (plocha dna × hloubka), **Válec nastojato** (průměr × hloubka), **Válec naležato** (průměr × délka);
+- Nádrž: tvar **Kvádr** (plocha dna × hloubka), **Válec nastojato** (i s kuželovým dnem), **Válec naležato** (i s klenutými dny),
+  **Ležatý ovál**, **Koule** nebo **Vlastní tabulka** výrobce (výška → objem); u tvaru obrázek s kótami, volitelná výška přepadu
+  (100 % = hladina u přepadu, procenta z objemu);
   plocha střechy i odtokový součinitel (výchozí 0,8) jsou vidět bez pokročilých. Zóna a pravidla dopouštění
   (automatika, čekání na déšť, prahy) se ukážou jen s nastaveným ventilem. Mazání dat má výchozí rozsah *Vše*.
 - Baterie: typ (alkalické / lithiové) a jedno pole *Kapacita baterie* pro zvolený typ v pokročilých, ve stejném řádku vedle typu (výchozí 2500 / 3000 mAh, každý typ si pamatuje svou hodnotu).
