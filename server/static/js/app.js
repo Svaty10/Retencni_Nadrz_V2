@@ -1294,6 +1294,7 @@
             const c = document.createElement('button');
             c.type = 'button';
             c.className = 'card ov-card' + (n.status !== 'online' ? ' is-stale' : '');
+            c.dataset.id = n.id;
             const pct = n.level_pct == null ? 0 : Math.max(0, Math.min(100, n.level_pct));
             const b = n.battery || {};
             const st = { online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status;
@@ -1316,6 +1317,92 @@
         lastTs = null;
         pollState().then(() => { if ($('dashboard').classList.contains('active')) loadAllCharts(); });
     }
+
+    // Pořadí nádrží: admin přetáhne pilulku v liště nebo kartu na přehledu (myší hned,
+    // prstem po podržení), klávesnicí Alt+←/→. Během tažení se lišta ani karty nepřekreslují.
+    const SORT = { active: false, suppressClick: false };
+    function sortable(container, itemSel) {
+        let drag = null;
+        const items = () => Array.from(container.querySelectorAll(itemSel));
+        const order = () => items().map((e) => e.dataset.id);
+        async function save(before) {
+            const now = order();
+            if (now.join() === before.join()) return;
+            try {
+                await api('POST', '/api/nodes/order', { order: now });
+                await pollState();
+            } catch (e) { toast(e.message, true); pollState(); }
+        }
+        function end() {
+            if (!drag) return;
+            const d = drag;
+            drag = null;
+            clearTimeout(d.timer);
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', end);
+            d.el.classList.remove('sorting');
+            container.classList.remove('is-sorting');
+            SORT.active = false;
+            if (d.started) { SORT.suppressClick = true; setTimeout(() => { SORT.suppressClick = false; }, 0); save(d.before); }
+        }
+        function begin(d) {
+            d.started = true;
+            SORT.active = true;
+            d.el.classList.add('sorting');
+            container.classList.add('is-sorting');
+        }
+        function move(e) {
+            const d = drag;
+            if (!d || e.pointerId !== d.id) return;
+            const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
+            if (!d.started) {
+                if (d.touch) { if (dist > 8) end(); return; }        // prst se posunul dřív = scroll
+                if (dist < 6) return;
+                begin(d);
+            }
+            e.preventDefault();
+            const hit = document.elementFromPoint(e.clientX, e.clientY);
+            const over = hit && hit.closest(itemSel);
+            if (!over || over === d.el || !container.contains(over)) return;
+            const r = over.getBoundingClientRect();
+            const after = e.clientX > r.left + r.width / 2;
+            container.insertBefore(d.el, after ? over.nextSibling : over);
+        }
+        function up(e) { if (drag && e.pointerId === drag.id) end(); }
+        container.addEventListener('pointerdown', (e) => {
+            if (ME.role !== 'admin' || e.button !== 0 || drag) return;
+            if (container.dataset.mode && container.dataset.mode !== 'dash') return;    // lišta v Nastavení
+            const el = e.target.closest(itemSel);
+            if (!el || !container.contains(el) || items().length < 2) return;
+            drag = { el, id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse', started: false, before: order() };
+            if (drag.touch) drag.timer = setTimeout(() => { if (drag) { begin(drag); if (navigator.vibrate) navigator.vibrate(15); } }, 300);
+            window.addEventListener('pointermove', move, { passive: false });
+            window.addEventListener('pointerup', up);
+            window.addEventListener('pointercancel', end);
+        });
+        // prst: po podržení už stránka nesmí scrollovat
+        container.addEventListener('touchmove', (e) => { if (drag && drag.started) e.preventDefault(); }, { passive: false });
+        container.addEventListener('contextmenu', (e) => { if (drag) e.preventDefault(); });
+        container.addEventListener('click', (e) => { if (SORT.suppressClick) { e.stopPropagation(); e.preventDefault(); } }, true);
+        container.addEventListener('keydown', (e) => {
+            if (ME.role !== 'admin' || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+            if (container.dataset.mode && container.dataset.mode !== 'dash') return;
+            const el = e.target.closest(itemSel);
+            if (!el) return;
+            const list = items();
+            const i = list.indexOf(el);
+            const j = e.key === 'ArrowLeft' ? i - 1 : i + 1;
+            if (i < 0 || j < 0 || j >= list.length) return;
+            e.preventDefault();
+            const before = order();
+            container.insertBefore(el, e.key === 'ArrowLeft' ? list[j] : list[j].nextSibling);
+            el.focus();
+            save(before);
+        });
+    }
+    sortable($('nodeBar'), '.node-pill:not(.all)');
+    sortable($('overviewGrid'), '.ov-card');
 
     function showAllTanks(nodes) {
         if (!$('dashboard').classList.contains('active')) showTab('dashboard', document.querySelector('.tab-btn[data-tab="dashboard"]'));
@@ -1356,6 +1443,7 @@
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'node-pill' + (n.id === CURRENT_NODE && !allActive ? ' active' : '');
+            b.dataset.id = n.id;
             b.setAttribute('role', 'tab');
             b.setAttribute('aria-selected', n.id === CURRENT_NODE && !allActive ? 'true' : 'false');
             b.innerHTML = `<span class="dot ${esc(n.status)}"></span>${nm(n.name)} <span class="pct">${num(n.level_pct, 0, ' %')}</span>`;
@@ -1452,8 +1540,10 @@
             }
             lastState = s;
             renderDiskBanner(s);
-            renderNodeBar(s.nodes || []);
-            if (VIEW_ALL) renderOverview(s.nodes || []);
+            if (!SORT.active) {
+                renderNodeBar(s.nodes || []);
+                if (VIEW_ALL) renderOverview(s.nodes || []);
+            }
             if (!s.node) {
                 $('statusPill').className = 'status-pill offline';
                 $('statusPill').textContent = 'Čeká se na první čidlo';
@@ -2941,7 +3031,8 @@
         UPDATE_ROLLED_BACK: ['restart', 'Aktualizace vrácena', 'bad'], UPDATE_ERROR: ['alert', 'Chyba aktualizace', 'bad'],
         UPDATE_UP_TO_DATE: ['check', 'Bez aktualizace', ''], FACTORY_RESET: ['restart', 'Tovární nastavení', 'warn'],
         TLS_CERT_ISSUED: ['lock', 'Certifikát HTTPS', ''],          // jen staré záznamy (1.7–1.9)
-        NODE_PAIRING_CANCELLED: ['antenna', 'Párování zrušeno', '']
+        NODE_PAIRING_CANCELLED: ['antenna', 'Párování zrušeno', ''],
+        NODES_REORDERED: ['list', 'Pořadí nádrží', '']
     };
     const LOG = { page: 1, cat: '', items: 0 };
     const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];

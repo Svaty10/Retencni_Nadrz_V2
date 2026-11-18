@@ -562,6 +562,22 @@ class ServerTest(unittest.TestCase):
         row = self.core.db.one("SELECT detail FROM audit WHERE action='DATA_DELETED' ORDER BY id DESC")
         self.assertIn(node, row["detail"])
 
+    def test_1g_node_order_api(self):
+        h = self.login()
+        if len(self.core.nodes.ids()) < 2:
+            self.core.nodes.add(0x0B0B, "Druhá")
+        ids = [f"{i:04X}" for i in self.core.nodes.ids()]
+        st, js, _ = self.req("POST", "/api/nodes/order", {"order": list(reversed(ids))}, headers=h)
+        self.assertEqual(st, 200, js)
+        st, js, _ = self.req("GET", "/api/state", headers=h)
+        self.assertEqual([n["id"] for n in js["nodes"]], list(reversed(ids)))
+        st, js, _ = self.req("POST", "/api/nodes/order", {"order": ids[:1]}, headers=h)
+        self.assertEqual(st, 400)
+        st, js, _ = self.req("POST", "/api/nodes/order", {"order": ids}, headers={"Cookie": h["Cookie"]})
+        self.assertEqual(st, 403)                                         # CSRF
+        self.assertTrue(self.core.db.scalar("SELECT COUNT(*) FROM audit WHERE action='NODES_REORDERED'", (), 0))
+        self.core.nodes.set_order([int(i, 16) for i in ids])
+
     def test_1c_node_defaults_api(self):
         h = self.login()
         st, js, _ = self.req("GET", "/api/node-defaults", headers=h)

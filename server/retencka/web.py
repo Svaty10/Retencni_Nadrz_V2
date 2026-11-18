@@ -72,7 +72,7 @@ def labels(keys: list[str]) -> str:
 AUDIT_CATEGORIES = {
     "login":    ["LOGIN_SUCCESS", "LOGIN_FAILED", "LOGOUT", "SETUP_LOGIN", "SETUP_FAILED", "PASSWORD_CHANGED"],
     "users":    ["USER_ADDED", "USER_DELETED", "USER_ROLE_CHANGED"],
-    "settings": ["SETTINGS_CHANGED", "CALIBRATION"],
+    "settings": ["SETTINGS_CHANGED", "CALIBRATION", "NODES_REORDERED"],
     "refill":   ["MANUAL_REFILL", "AUTO_REFILL", "REFILL_ERROR", "REFILL_FAULT", "RAIN_WAIT"],
     "sensors":  ["NODE_PAIRED", "NODE_PAIRING", "NODE_REMOVED", "NODE_UNPAIR_REQUESTED", "NODE_UNPAIRED",
                  "NODE_UNPAIR_CANCELLED", "NODE_BOOT", "NODE_PAIRING_CANCELLED"],
@@ -694,6 +694,23 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jresp({"ok": True, "removed": True})
         core.request_unpair(nid, *user_of(request))
         return jresp({"ok": True, "removed": False})
+
+    @need("admin")
+    async def api_nodes_order(request):
+        """New display order of the tanks (top bar, overview)."""
+        data = await read_json(request)
+        raw = data.get("order")
+        if not isinstance(raw, list):
+            return jerr("Chybí pořadí čidel.")
+        ids = [parse_node_id(x) for x in raw]
+        try:
+            core.nodes.set_order(ids)
+        except SettingsError as e:
+            return jerr(str(e))
+        core.audit("NODES_REORDERED", "Pořadí nádrží: " + ", ".join(core.nodes.get(i)["name"] for i in ids),
+                   *user_of(request))
+        core.invalidate()
+        return jresp({"ok": True})
 
     @need("admin")
     async def api_nodes_unpair_cancel(request):
@@ -1509,6 +1526,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/pairing/cancel", api_pairing_cancel)
     r.add_post("/api/nodes/remove", api_nodes_remove)
     r.add_post("/api/nodes/unpair/cancel", api_nodes_unpair_cancel)
+    r.add_post("/api/nodes/order", api_nodes_order)
     r.add_get("/api/users", api_users)
     r.add_post("/api/users/add", api_users_add)
     r.add_post("/api/users/role", api_users_role)
