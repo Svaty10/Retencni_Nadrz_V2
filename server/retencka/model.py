@@ -101,66 +101,115 @@ class Level:
     max_volume_l: float
 
 
+def _f(s: dict, key: str) -> float:
+    return float(s.get(key) or 0.0)
+
+
+def _table(s: dict) -> list[tuple[float, float]]:
+    return sorted((float(a), float(b)) for a, b in (s.get("tank_table") or []))
+
+
 def tank_height_cm(s: dict) -> float:
-    if s.get("tank_shape") == "cyl_h":
-        return max(0.0, float(s.get("tank_diameter_cm") or 0.0))
-    return max(0.0, float(s.get("max_depth_cm") or 0.0))
-
-
-def _volume_and_max_l(level_cm: float, s: dict) -> tuple[float, float]:
+    """Height of the whole tank shape (bottom to top)."""
     shape = s.get("tank_shape") or "area"
+    if shape in ("cyl_h", "cyl_h_dished", "sphere"):
+        return max(0.0, _f(s, "tank_diameter_cm"))
+    if shape == "table":
+        t = _table(s)
+        return max(0.0, t[-1][0]) if t else 0.0
+    return max(0.0, _f(s, "max_depth_cm"))
+
+
+def full_level_cm(s: dict) -> float:
+    """Level of a full tank: the overflow height when set (and below the top), else the top."""
+    h = tank_height_cm(s)
+    ov = _f(s, "overflow_cm")
+    return min(ov, h) if ov > 0.0 else h
+
+
+def _circle_segment_cm2(r: float, h: float) -> float:
+    """Area of a circle (radius r) filled to height h from its bottom."""
+    if r <= 0.0:
+        return 0.0
+    h = max(0.0, min(2.0 * r, h))
+    u = max(-1.0, min(1.0, (r - h) / r))
+    return r * r * math.acos(u) - (r - h) * math.sqrt(max(0.0, 2.0 * r * h - h * h))
+
+
+def _sphere_cap_cm3(r: float, h: float) -> float:
+    """Volume of a sphere (radius r) filled to height h from its bottom."""
+    h = max(0.0, min(2.0 * r, h))
+    return math.pi * h * h * (3.0 * r - h) / 3.0
+
+
+def volume_l(level_cm: float, s: dict) -> float:
+    """Water volume [L] at a level [cm above the bottom] for the configured tank shape."""
+    shape = s.get("tank_shape") or "area"
+    h = max(0.0, min(tank_height_cm(s), level_cm))
     if shape == "cyl_h":
-        d = float(s.get("tank_diameter_cm") or 0.0)
-        length = float(s.get("tank_length_cm") or 0.0)
-        if d <= 0.0 or length <= 0.0:
-            return 0.0, 0.0
-        r = d / 2.0
-        h = max(0.0, min(d, level_cm))
-        u = max(-1.0, min(1.0, (r - h) / r)) if r > 0 else 1.0
-        seg_cm2 = (r * r * math.acos(u) - (r - h) * math.sqrt(max(0.0, 2.0 * r * h - h * h))) if r > 0 else 0.0
-        max_cm2 = math.pi * r * r
-        return seg_cm2 * length / 1000.0, max_cm2 * length / 1000.0
+        return _circle_segment_cm2(_f(s, "tank_diameter_cm") / 2.0, h) * _f(s, "tank_length_cm") / 1000.0
+    if shape == "cyl_h_dished":
+        # cylinder + two dished ends; together the ends form an ellipsoid with semi-axes R, R, a,
+        # i.e. a sphere of radius R scaled by a/R along the tank axis
+        r = _f(s, "tank_diameter_cm") / 2.0
+        a = max(0.0, min(r, _f(s, "tank_dome_cm")))
+        if r <= 0.0:
+            return 0.0
+        return (_circle_segment_cm2(r, h) * _f(s, "tank_length_cm") + a / r * _sphere_cap_cm3(r, h)) / 1000.0
+    if shape == "sphere":
+        return _sphere_cap_cm3(_f(s, "tank_diameter_cm") / 2.0, h) / 1000.0
+    if shape == "oval_h":
+        w, hh = _f(s, "tank_width_cm"), _f(s, "max_depth_cm")
+        if hh <= 0.0:
+            return 0.0
+        return w / hh * _circle_segment_cm2(hh / 2.0, h) * _f(s, "tank_length_cm") / 1000.0
+    if shape == "cyl_v_cone":
+        r = _f(s, "tank_diameter_cm") / 2.0
+        hc = max(0.0, min(tank_height_cm(s), _f(s, "tank_cone_cm")))
+        if hc > 0.0 and h <= hc:
+            return math.pi * (r * h / hc) ** 2 * h / 3.0 / 1000.0
+        return (math.pi * r * r * hc / 3.0 + math.pi * r * r * (h - hc)) / 1000.0
+    if shape == "table":
+        t = _table(s)
+        if len(t) < 2:
+            return 0.0
+        if h <= t[0][0]:
+            return t[0][1]
+        for (x0, y0), (x1, y1) in zip(t, t[1:]):
+            if h <= x1:
+                return y0 + (h - x0) * (y1 - y0) / (x1 - x0) if x1 > x0 else y1
+        return t[-1][1]
     if shape == "cyl_v":
-        d = float(s.get("tank_diameter_cm") or 0.0)
-        max_d = float(s.get("max_depth_cm") or 0.0)
-        if d <= 0.0 or max_d <= 0.0:
-            return 0.0, 0.0
-        h = max(0.0, min(max_d, level_cm))
-        area_m2 = math.pi * ((d / 100.0) / 2.0) ** 2
-        return area_m2 * h * 10.0, area_m2 * max_d * 10.0
-    if shape == "rect":
-        length = float(s.get("tank_length_cm") or 0.0)
-        width = float(s.get("tank_width_cm") or 0.0)
-        max_d = float(s.get("max_depth_cm") or 0.0)
-        if length <= 0.0 or width <= 0.0 or max_d <= 0.0:
-            return 0.0, 0.0
-        h = max(0.0, min(max_d, level_cm))
-        area_m2 = (length / 100.0) * (width / 100.0)
-        return area_m2 * h * 10.0, area_m2 * max_d * 10.0
-    max_d = float(s.get("max_depth_cm") or 0.0)
-    area_m2 = float(s.get("tank_area_m2") or 0.0)
-    if max_d <= 0.0 or area_m2 <= 0.0:
-        return 0.0, 0.0
-    h = max(0.0, min(max_d, level_cm))
-    return area_m2 * h * 10.0, area_m2 * max_d * 10.0
+        area_cm2 = math.pi * (_f(s, "tank_diameter_cm") / 2.0) ** 2
+    elif shape == "rect":
+        area_cm2 = _f(s, "tank_length_cm") * _f(s, "tank_width_cm")
+    else:
+        area_cm2 = _f(s, "tank_area_m2") * 10000.0
+    return max(0.0, area_cm2) * h / 1000.0
+
+
+def max_volume_l(s: dict) -> float:
+    """Volume of a full tank – filled up to the overflow, see full_level_cm."""
+    return volume_l(full_level_cm(s), s)
+
+
+def _level(level: float, s: dict) -> tuple[float, float, float, float]:
+    level = max(0.0, min(full_level_cm(s), level))
+    vol, max_vol = volume_l(level, s), max_volume_l(s)
+    pct = vol / max_vol * 100.0 if max_vol > 0 else 0.0
+    return level, vol, max_vol, pct
 
 
 def compute_level(probe_100uv: float, s: dict) -> Level:
     mv = probe_100uv / 10.0
     col = column_cm(mv, s["cal_points"])
-    max_d = tank_height_cm(s)
-    level = max(0.0, min(max_d, col + float(s["sensor_offset_cm"])))
-    vol, max_vol = _volume_and_max_l(level, s)
-    pct = vol / max_vol * 100.0 if max_vol > 0 else 0.0
+    level, vol, max_vol, pct = _level(col + float(s["sensor_offset_cm"]), s)
     return Level(col, level, pct, vol, max_vol)
 
 
 def level_from_mm(level_mm: float, s: dict) -> Level:
     """Level object from an already computed (filtered) height above the bottom."""
-    max_d = tank_height_cm(s)
-    level = max(0.0, min(max_d, level_mm / 10.0))
-    vol, max_vol = _volume_and_max_l(level, s)
-    pct = vol / max_vol * 100.0 if max_vol > 0 else 0.0
+    level, vol, max_vol, pct = _level(level_mm / 10.0, s)
     return Level(level - float(s["sensor_offset_cm"]), level, pct, vol, max_vol)
 
 
@@ -170,22 +219,16 @@ def deadband_mm(s: dict) -> float:
 
 
 def deadband_l(s: dict) -> float:
-    shape = s.get("tank_shape") or "area"
-    if shape == "cyl_h":
-        d = float(s.get("tank_diameter_cm") or 0.0)
-        length = float(s.get("tank_length_cm") or 0.0)
-        eff_area_m2 = (d / 100.0) * (length / 100.0)
-    elif shape == "cyl_v":
-        d = float(s.get("tank_diameter_cm") or 0.0)
-        eff_area_m2 = math.pi * ((d / 100.0) / 2.0) ** 2
-    elif shape == "rect":
-        length = float(s.get("tank_length_cm") or 0.0)
-        width = float(s.get("tank_width_cm") or 0.0)
-        eff_area_m2 = (length / 100.0) * (width / 100.0)
-    else:
-        eff_area_m2 = float(s.get("tank_area_m2") or 0.0)
-    eff_area_m2 = max(0.0, eff_area_m2)
-    return deadband_mm(s) / 10.0 * eff_area_m2 * 10.0
+    """Probe dead band in litres at the widest part of the tank (largest volume per cm)."""
+    top = full_level_cm(s)
+    d = 0.005                           # central difference: exact at the widest point of a circle
+    widest = 0.0
+    for i in range(int(top * 2) + 1):
+        h = min(top, i * 0.5)
+        lo, hi = max(0.0, h - d), min(top, h + d)
+        if hi > lo:
+            widest = max(widest, (volume_l(hi, s) - volume_l(lo, s)) / (hi - lo))
+    return deadband_mm(s) / 10.0 * widest
 
 
 class LevelFilter:
@@ -218,10 +261,6 @@ class LevelFilter:
         else:
             self.value += self.ALPHA * (med - self.value)
         return self.value
-
-
-def max_volume_l(s: dict) -> float:
-    return _volume_and_max_l(tank_height_cm(s), s)[1]
 
 
 # ------------------------------------------------------------------------- battery

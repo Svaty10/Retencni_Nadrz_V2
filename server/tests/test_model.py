@@ -29,6 +29,97 @@ class LevelTest(unittest.TestCase):
         self.assertEqual(model.compute_level(60000, self.S).level_cm, 150)
 
 
+def _cfg(**kw):
+    base = {"tank_shape": "area", "cal_points": [[0, 0], [1000, 100]], "sensor_offset_cm": 0.0,
+            "probe_accuracy_pct": 0.5, "probe_range_cm": 200.0, "overflow_cm": 0.0}
+    base.update(kw)
+    return base
+
+
+# (config, [(percent, volume_l) at 0/370/1000/1500 mm], max_l, deadband_l, percent at 700 mV) – before overflow support
+OLD_RESULTS = [
+    (dict(tank_shape="area", tank_area_m2=1.5, max_depth_cm=150.0),
+     [(0.0, 0.0), (24.666667, 555.0), (66.666667, 1500.0), (100.0, 2250.0)], 2250.0, 15.0, 46.666667),
+    (dict(tank_shape="cyl_h", tank_diameter_cm=200.0, tank_length_cm=300.0),
+     [(0.0, 0.0), (12.732019, 1199.964545), (50.0, 4712.38898), (80.449889, 7582.223413)], 9424.777961, 60.0, 31.191883),
+    (dict(tank_shape="cyl_v", tank_diameter_cm=150.0, max_depth_cm=200.0),
+     [(0.0, 0.0), (18.5, 653.843971), (50.0, 1767.145868), (75.0, 2650.718801)], 3534.291735, 17.671459, 35.0),
+    (dict(tank_shape="rect", tank_length_cm=200.0, tank_width_cm=100.0, max_depth_cm=150.0),
+     [(0.0, 0.0), (24.666667, 740.0), (66.666667, 2000.0), (100.0, 3000.0)], 3000.0, 20.0, 46.666667),
+]
+
+
+class TankShapesTest(unittest.TestCase):
+    def test_sphere_half_full(self):
+        s = _cfg(tank_shape="sphere", tank_diameter_cm=200.0)
+        self.assertAlmostEqual(model.max_volume_l(s), 4 / 3 * math.pi * 1000, delta=1)
+        self.assertAlmostEqual(model.level_from_mm(1000, s).percent, 50.0, places=3)
+        self.assertEqual(model.tank_height_cm(s), 200.0)
+
+    def test_dished_hemispherical_equals_cylinder_plus_sphere(self):
+        s = _cfg(tank_shape="cyl_h_dished", tank_diameter_cm=200.0, tank_length_cm=300.0, tank_dome_cm=100.0)
+        self.assertAlmostEqual(model.max_volume_l(s), (math.pi * 3.0 + 4 / 3 * math.pi) * 1000, delta=1)
+        self.assertAlmostEqual(model.level_from_mm(1000, s).percent, 50.0, places=3)
+
+    def test_oval_is_scaled_cylinder(self):
+        s = _cfg(tank_shape="oval_h", tank_width_cm=200.0, max_depth_cm=100.0, tank_length_cm=100.0)
+        self.assertAlmostEqual(model.max_volume_l(s), math.pi * 1.0 * 0.5 * 1000, delta=1)
+        self.assertAlmostEqual(model.level_from_mm(500, s).percent, 50.0, places=3)
+
+    def test_cone_bottom(self):
+        s = _cfg(tank_shape="cyl_v_cone", tank_diameter_cm=100.0, max_depth_cm=200.0, tank_cone_cm=60.0)
+        r = 0.5
+        cone = math.pi * r * r * 0.6 / 3
+        cyl = math.pi * r * r * 1.4
+        self.assertAlmostEqual(model.max_volume_l(s), (cone + cyl) * 1000, delta=1)
+        self.assertAlmostEqual(model.volume_l(30.0, s), math.pi * (r / 2) ** 2 * 0.3 / 3 * 1000, delta=0.5)
+
+    def test_table_interpolates(self):
+        s = _cfg(tank_shape="table", tank_table=[[0, 0], [100, 1000], [200, 3000]])
+        self.assertEqual(model.tank_height_cm(s), 200)
+        self.assertAlmostEqual(model.volume_l(150.0, s), 2000.0)
+        self.assertAlmostEqual(model.max_volume_l(s), 3000.0)
+
+    def test_table_empty_is_zero(self):
+        s = _cfg(tank_shape="table", tank_table=[])
+        self.assertEqual(model.max_volume_l(s), 0.0)
+        self.assertEqual(model.level_from_mm(500, s).percent, 0.0)
+
+    def test_overflow_horizontal_cylinder(self):
+        s = _cfg(tank_shape="cyl_h", tank_diameter_cm=200.0, tank_length_cm=100.0, overflow_cm=180.0)
+        full = model.volume_l(180.0, s)
+        self.assertAlmostEqual(model.max_volume_l(s), full)
+        self.assertAlmostEqual(model.level_from_mm(1800, s).percent, 100.0)
+        half = model.level_from_mm(1000, s).percent
+        self.assertAlmostEqual(half, model.volume_l(100.0, s) / full * 100)
+        self.assertAlmostEqual(half, 52.7, delta=0.2)
+
+    def test_above_overflow_clamped(self):
+        s = _cfg(tank_shape="cyl_h", tank_diameter_cm=200.0, tank_length_cm=100.0, overflow_cm=180.0)
+        lv = model.level_from_mm(1900, s)
+        self.assertAlmostEqual(lv.percent, 100.0)
+        self.assertAlmostEqual(lv.volume_l, model.max_volume_l(s))
+        self.assertAlmostEqual(model.compute_level(19000, s).percent, 100.0)
+
+    def test_overflow_above_height_ignored(self):
+        s = _cfg(tank_shape="cyl_v", tank_diameter_cm=100.0, max_depth_cm=100.0, overflow_cm=150.0)
+        self.assertEqual(model.full_level_cm(s), 100.0)
+
+    def test_no_overflow_unchanged(self):
+        for c, rows, max_l, db_l, pct700 in OLD_RESULTS:
+            for key in ({}, {"overflow_cm": 0.0}):
+                s = dict(_cfg(**c), **key)
+                if not key:
+                    s.pop("overflow_cm")
+                for mm, (pct, vol) in zip((0, 370, 1000, 1500), rows):
+                    lv = model.level_from_mm(mm, s)
+                    self.assertAlmostEqual(lv.percent, pct, places=5, msg=(c, mm))
+                    self.assertAlmostEqual(lv.volume_l, vol, places=5, msg=(c, mm))
+                self.assertAlmostEqual(model.max_volume_l(s), max_l, places=5)
+                self.assertAlmostEqual(model.compute_level(7000, s).percent, pct700, places=5)
+                self.assertAlmostEqual(model.deadband_l(s), db_l, delta=db_l * 0.01)
+
+
 class FilterTest(unittest.TestCase):
     def test_noise_smoothed_jump_followed(self):
         f = model.LevelFilter()
