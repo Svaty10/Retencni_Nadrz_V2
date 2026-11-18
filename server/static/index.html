@@ -48,6 +48,15 @@
         <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7 6.5a7.5 7.5 0 1 0 10 0"/></symbol>
         <symbol id="i-tap" viewBox="0 0 24 24"><path d="M3.5 8.5h9a3 3 0 0 1 3 3v1.5"/><path d="M3.5 12h7.5a1 1 0 0 1 1 1v0"/><path d="M8 8.5V6M5.5 6h5"/><path d="M15.5 16.5c-.9 1.2-1.4 2-1.4 2.6a1.4 1.4 0 0 0 2.8 0c0-.6-.5-1.4-1.4-2.6z"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+        <!-- Tvary nádrží (obrázky v nastavení nádrže): nádrž vždy od y=20 (vrch) do y=100 (dno) -->
+        <symbol id="shape-area" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M50 20h100v80H50z"/><path d="M50 20l18-12h100v80l-18 12M150 20l18-12" stroke-opacity=".5"/></g><path class="dim" d="M184 20v80"/><text x="190" y="64">H</text></symbol>
+        <symbol id="shape-cyl_v" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="100" cy="20" rx="45" ry="8"/><path d="M55 20v80a45 8 0 0 0 90 0V20"/></g><path class="dim" d="M55 4h90M162 20v80"/><text x="100" y="2" text-anchor="middle" dominant-baseline="hanging">D</text><text x="168" y="64">H</text></symbol>
+        <symbol id="shape-cyl_v_cone" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="100" cy="20" rx="45" ry="8"/><path d="M55 20v48l45 32 45-32V20"/></g><path class="dim" d="M55 4h90M162 20v80M40 68v32"/><text x="100" y="2" text-anchor="middle" dominant-baseline="hanging">D</text><text x="168" y="64">H</text><text x="28" y="88">k</text></symbol>
+        <symbol id="shape-cyl_h" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="45" cy="60" rx="12" ry="40"/><path d="M45 20h110a12 40 0 0 1 0 80H45"/></g><path class="dim" d="M20 20v80M45 112h110"/><text x="8" y="64">D</text><text x="100" y="109" text-anchor="middle">L</text></symbol>
+        <symbol id="shape-cyl_h_dished" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M60 20h80M60 100h80M60 20c-34 0-34 80 0 80M140 20c34 0 34 80 0 80"/><path d="M60 20v80M140 20v80" stroke-opacity=".4" stroke-dasharray="3 3"/></g><path class="dim" d="M14 20v80M60 112h80M34 10h26"/><text x="2" y="64">D</text><text x="100" y="109" text-anchor="middle">L</text><text x="44" y="7">a</text></symbol>
+        <symbol id="shape-oval_h" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="100" cy="60" rx="70" ry="40"/></g><path class="dim" d="M30 112h140M184 20v80"/><text x="100" y="109" text-anchor="middle">W</text><text x="190" y="64">H</text><text x="100" y="64" text-anchor="middle">L</text></symbol>
+        <symbol id="shape-sphere" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><circle cx="100" cy="60" r="40"/><ellipse cx="100" cy="60" rx="40" ry="9" stroke-opacity=".4"/></g><path class="dim" d="M152 20v80"/><text x="158" y="64">D</text></symbol>
+        <symbol id="shape-table" viewBox="0 0 200 120"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M55 20h90c8 30 8 50 0 80H55c-8-30-8-50 0-80z"/></g><path class="dim" d="M60 40h80M60 60h80M60 80h80" stroke-dasharray="3 4"/><text x="152" y="44">L</text><text x="152" y="64">L</text><text x="152" y="84">L</text></symbol>
     </defs>
 </svg>
 
@@ -367,32 +376,69 @@
                         <input type="text" id="calNodeId" class="unified-input" disabled>
                     </div>
                 </div>
-                <div class="form-row">
+                <div class="form-row shape-row">
                     <div class="form-group">
                         <label>Tvar nádrže <button type="button" class="help-tip" data-help="shape"></button></label>
                         <select name="tank_shape" class="unified-select" form="calForm">
                             <option value="area">Kvádr</option>
                             <option value="cyl_v">Válec nastojato</option>
+                            <option value="cyl_v_cone">Válec nastojato s kuželovým dnem</option>
                             <option value="cyl_h">Válec naležato</option>
+                            <option value="cyl_h_dished">Válec naležato s klenutými dny</option>
+                            <option value="oval_h">Ležatý ovál</option>
+                            <option value="sphere">Koule</option>
+                            <option value="table">Vlastní tabulka (výška → objem)</option>
                         </select>
                     </div>
-                    <div class="form-group" data-shapes="area,cyl_v">
-                        <label>Hloubka nádrže</label>
-                        <div class="input-unit"><input type="number" step="0.1" name="max_depth_cm" form="calForm"><span class="unit">cm</span></div>
-                    </div>
-                    <div class="form-group" data-shapes="cyl_h,cyl_v">
-                        <label>Průměr nádrže</label>
-                        <div class="input-unit"><input type="number" step="0.1" name="tank_diameter_cm" form="calForm"><span class="unit">cm</span></div>
+                    <div class="shape-fig" id="shapeFig" aria-hidden="true">
+                        <svg viewBox="0 0 200 120" focusable="false"><use id="shapeUse" href="#shape-area"/></svg>
+                        <span class="shape-overflow hidden" id="shapeOverflow"><span>přepad</span></span>
                     </div>
                 </div>
                 <div class="form-row">
+                    <div class="form-group" data-shapes="area,cyl_v,cyl_v_cone,oval_h">
+                        <label>Hloubka nádrže <span class="dim-tag">H</span></label>
+                        <div class="input-unit"><input type="number" step="0.1" name="max_depth_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
+                    <div class="form-group" data-shapes="cyl_h,cyl_v,cyl_v_cone,cyl_h_dished,sphere">
+                        <label>Průměr nádrže <span class="dim-tag">D</span></label>
+                        <div class="input-unit"><input type="number" step="0.1" name="tank_diameter_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
+                    <div class="form-group" data-shapes="oval_h">
+                        <label>Šířka nádrže <span class="dim-tag">W</span></label>
+                        <div class="input-unit"><input type="number" step="0.1" name="tank_width_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
                     <div class="form-group" data-shapes="area">
                         <label>Plocha dna</label>
                         <div class="input-unit"><input type="number" step="0.01" name="tank_area_m2" form="calForm"><span class="unit">m²</span></div>
                     </div>
-                    <div class="form-group" data-shapes="cyl_h">
-                        <label>Délka nádrže</label>
+                    <div class="form-group" data-shapes="cyl_h,cyl_h_dished,oval_h">
+                        <label><span data-label-for="cyl_h,oval_h">Délka nádrže</span><span data-label-for="cyl_h_dished">Délka válcové části</span> <span class="dim-tag">L</span></label>
                         <div class="input-unit"><input type="number" step="0.1" name="tank_length_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
+                    <div class="form-group" data-shapes="cyl_h_dished" data-optional="1">
+                        <label>Hloubka jednoho dna <span class="dim-tag">a</span> <button type="button" class="help-tip" data-help="dome"></button></label>
+                        <div class="input-unit"><input type="number" step="0.1" name="tank_dome_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
+                    <div class="form-group" data-shapes="cyl_v_cone">
+                        <label>Výška kužele <span class="dim-tag">k</span></label>
+                        <div class="input-unit"><input type="number" step="0.1" name="tank_cone_cm" form="calForm"><span class="unit">cm</span></div>
+                    </div>
+                </div>
+                <div class="tank-table" data-shapes="table">
+                    <p class="muted small">Tabulka od výrobce: objem nádrže při dané výšce hladiny ode dna. Mezi řádky se počítá lineárně, první řádek bývá 0 cm = 0 L.</p>
+                    <div class="table-responsive">
+                        <table class="user-table">
+                            <thead><tr><th>Výška hladiny</th><th>Objem</th><th></th></tr></thead>
+                            <tbody id="tankTable"></tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-outline" id="tankTableAdd">Přidat řádek</button>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Výška přepadu <span class="muted">(volitelné)</span> <button type="button" class="help-tip" data-help="overflow"></button></label>
+                        <div class="input-unit"><input type="number" step="0.1" name="overflow_cm" form="calForm" placeholder="u horní hrany"><span class="unit">cm</span></div>
                     </div>
                     <div class="form-group">
                         <label>Plocha střechy</label>
