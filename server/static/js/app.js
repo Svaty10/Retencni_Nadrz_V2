@@ -904,11 +904,12 @@
             });
             ctx.restore();
             const box = chart.canvas.parentNode;
-            let bub = box.querySelector('.scrub-bubble');
-            if (!bub) {
+            // bublina nad grafem (mimo plátno) – nepřekrývá legendu ani křivky
+            let bub = box.previousElementSibling;
+            if (!bub || !bub.classList.contains('scrub-bubble')) {
                 bub = document.createElement('div');
                 bub.className = 'scrub-bubble';
-                box.appendChild(bub);
+                box.parentNode.insertBefore(bub, box);
             }
             const lines = opts.text ? opts.text(ms) : [];
             const key = opts.key;
@@ -1120,7 +1121,9 @@
         }
     };
 
-    const pctAxis = () => ({ min: 0, max: 100, ticks: { callback: (v) => v + ' %', maxTicksLimit: 6 } });
+    // popisek osy: česky a bez binárního šumu (22.400000000000004 → 22,4)
+    const axisNum = (v, unit) => num(v, Math.abs(v - Math.round(v)) < 1e-6 ? 0 : 1, unit);
+    const pctAxis = () => ({ min: 0, max: 100, ticks: { callback: (v) => axisNum(v, ' %'), maxTicksLimit: 6 } });
     const baseOpts = () => ({ responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', axis: 'x', intersect: false } });
 
     async function loadLevelChart() {
@@ -1206,8 +1209,8 @@
                 },
                 scales: {
                     x: timeScale(viewRange('klima', r)),
-                    y: { position: 'left', ticks: { callback: (v) => v + ' °C', maxTicksLimit: 6 } },
-                    y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' %', maxTicksLimit: 6 } }
+                    y: { position: 'left', ticks: { callback: (v) => axisNum(v, ' °C'), maxTicksLimit: 6 } },
+                    y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { callback: (v) => axisNum(v, ' %'), maxTicksLimit: 6 } }
                 }
             })
         });
@@ -1313,8 +1316,8 @@
                 responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
                 scales: {
                     x: { grid: { display: false }, ticks: { maxRotation: 0 } },
-                    y: { position: 'left', beginAtZero: true, ticks: { callback: (v) => v + ' mm', maxTicksLimit: 6 } },
-                    y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + ' °C', maxTicksLimit: 6 } }
+                    y: { position: 'left', beginAtZero: true, ticks: { callback: (v) => axisNum(v, ' mm'), maxTicksLimit: 6 } },
+                    y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => axisNum(v, ' °C'), maxTicksLimit: 6 } }
                 }
             }
         });
