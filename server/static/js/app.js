@@ -809,10 +809,14 @@
     // délky (každé okno má svoje plné rozlišení), do budoucnosti se jde jen tak, aby „teď“
     // dojelo pod čáru.
     const SCRUB = {};      // key -> { offset (s, + = do minulosti), chunks, exhausted, first (ms), loading }
-    function scrubState(key) { return SCRUB[key] || (SCRUB[key] = { offset: 0, chunks: 1, exhausted: false, first: null, loading: false }); }
+    function scrubState(key) { return SCRUB[key] || (SCRUB[key] = { offset: null, chunks: 1, exhausted: false, first: null, loading: false }); }
+    // výchozí poloha: nejnovější data pod čarou (živý rozsah), u vlastního rozsahu jeho konec u pravého okraje
+    function homeOffset(r) { return r && r.live ? -(r.to - r.from) / 2 : 0; }
     function resetScrub(key) { delete SCRUB[key]; }
     function viewRange(key, r) {
-        const o = scrubState(key).offset;
+        const s = scrubState(key);
+        if (s.offset == null) s.offset = homeOffset(r);
+        const o = s.offset;
         return { from: r.from - o, to: r.to - o };
     }
     function mergeHist(a, b) {
@@ -908,12 +912,12 @@
             }
             const lines = opts.text ? opts.text(ms) : [];
             const key = opts.key;
-            const away = key && Math.abs(scrubState(key).offset) > 1;
+            const away = key && SCRUB_RANGE[key] && Math.abs(scrubState(key).offset - homeOffset(SCRUB_RANGE[key])) > 1;
             bub.innerHTML = `<b>${esc(fmtDateTime(ms))}</b>` +
                 (lines.length ? lines.map((l) => `<span>${esc(l)}</span>`).join('') : `<span class="muted">${esc(tr('bez dat'))}</span>`) +
-                (away ? `<button type="button" class="scrub-now">${esc(tr('↩ Zpět na teď'))}</button>` : '');
+                (away ? `<button type="button" class="scrub-now">${esc(tr('Aktuální →'))}</button>` : '');
             const now = bub.querySelector('.scrub-now');
-            if (now) now.addEventListener('click', () => scrubTo(key, 0));
+            if (now) now.addEventListener('click', () => scrubTo(key, homeOffset(SCRUB_RANGE[key])));
         }
     };
     const SCRUB_RANGE = {};     // key -> poslední zobrazený rozsah (rangeOf) pro tažení
@@ -949,7 +953,7 @@
         const canvas = $(canvasId), box = canvas.parentNode;
         box.classList.add('scrub');
         canvas.tabIndex = 0;
-        canvas.setAttribute('aria-label', tr('Graf – šipkami vlevo a vpravo posunete čas, Home = teď'));
+        canvas.setAttribute('aria-label', tr('Graf – šipkami vlevo a vpravo posunete čas, Home = aktuální data'));
         let drag = null;
         box.addEventListener('pointerdown', (e) => {
             if (e.button !== 0 || e.target.closest('button') || !charts[key] || !SCRUB_RANGE[key]) return;
@@ -970,14 +974,14 @@
         };
         box.addEventListener('pointerup', up);
         box.addEventListener('pointercancel', up);
-        box.addEventListener('dblclick', () => scrubTo(key, 0));
+        box.addEventListener('dblclick', () => scrubTo(key, homeOffset(SCRUB_RANGE[key])));
         canvas.addEventListener('keydown', (e) => {
             const r = SCRUB_RANGE[key];
             if (!r) return;
             const step = (r.to - r.from) / 10, o = scrubState(key).offset;
             if (e.key === 'ArrowLeft') scrubTo(key, o + step);
             else if (e.key === 'ArrowRight') scrubTo(key, o - step);
-            else if (e.key === 'Home') scrubTo(key, 0);
+            else if (e.key === 'Home') scrubTo(key, homeOffset(r));
             else return;
             e.preventDefault();
         });
