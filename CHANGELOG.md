@@ -7,7 +7,20 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
 ### Přidáno
 - **Firmware čidla 16: smazání párování bez programátoru.** Při vložení baterie propojit drátkem piny 5 V a signál na konektoru sondy (sonda odpojená) a nechat aspoň 10 s: čidlo zapomene párování a nabízí ho jako nové. Postup: [docs/programovani_uzlu.md](docs/programovani_uzlu.md). Nový firmware je potřeba do čidla nahrát ručně.
+
+## [1.23.0] - 2026-11-18
+
+### Přidáno
+- **Nové tvary nádrže:** válec naležato s klenutými dny, válec nastojato s kuželovým dnem, ležatý ovál, koule a **vlastní tabulka** výrobce (výška hladiny → objem, 2–30 řádků). U výběru tvaru je obrázek s kótami, které odpovídají polím formuláře.
+- **Výška přepadu** (volitelná): nádrž se nikdy nenaplní výš, takže 100 % = hladina u přepadu a procenta i plný objem se počítají z objemu po přepad (u ležatého válce o průměru 2 m s přepadem na 1,8 m je plná nádrž 8 934 L, ne 9 425 L). Platí i pro dopouštění, předpověď deště a Home Assistant. Prázdné pole = přepad u horní hrany jako dřív.
+- **Posouvání grafů** hladiny, všech nádrží, klimatu a baterie: graf se táhne myší nebo prstem pod pevnou čárou uprostřed, bublina ukazuje čas a hodnotu pod čárou. Starší data se dotahují postupně až k prvnímu měření, šipky / Home / dvojklik / *Teď* fungují taky.
+- **Pořadí nádrží:** administrátor přetáhne pilulku v liště nahoře nebo kartu na přehledu (na telefonu po podržení), klávesnicí Alt+←/→. API `POST /api/nodes/order`.
 - Testovací firmware, který jen spí (`uzel/5-test-spanku.cmd`), pro měření klidového proudu čidla.
+
+### Změněno
+- Přehled *Všechny nádrže* bez mapy hubu, menší karty – 2 až 4 nádrže se vejdou na jeden řádek. Klik na *Spojení s hubem* v detailu nádrže vrátí na přehled.
+- *Historie událostí* píše u čidla jméno i ID, např. „Retencka-V1 (BF1C)“.
+- Automatické zálohy na kartě: uchovávají se poslední **3** (dřív 7), v nastavení se ukazuje jen ta poslední.
 
 ## [1.22.3] - 2026-11-05
 
