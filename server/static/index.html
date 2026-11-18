@@ -122,12 +122,7 @@
         <div id="diskBanner" class="banner disk-banner hidden" role="alert"></div>
         <!-- Přehled všech nádrží (volba „Všechny nádrže“ v liště nádrží) -->
         <div id="overview" class="hidden">
-            <!-- Mapa systému: hub uprostřed, nádrže kolem; cesta = rádiové spojení čidla
-                 (zelená online, oranžová zpožděná data, červená offline) -->
-            <section class="card hubmap-card" aria-label="Mapa systému">
-                <div class="hubmap" id="hubMap"></div>
-            </section>
-            <div class="overview-grid mt-20" id="overviewGrid"></div>
+            <div class="overview-grid" id="overviewGrid"></div>
             <section class="card chart-card span-all mt-20">
                 <div class="card-head">
                     <div class="card-head-text"><h2>Hladina všech nádrží</h2><p class="card-desc">Hladiny všech nádrží v jednom grafu, aby šly porovnat.</p></div>
@@ -156,7 +151,7 @@
                         </svg>
                         <div class="fnode fn-tl" id="fnRain"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-rain"/></svg></span><span class="fn-val" id="txtRainToday">–</span><span class="fn-lbl">Déšť dnes</span></div>
                         <div class="fnode fn-tr" id="fnMains"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-tap"/></svg></span><span class="fn-val" id="txtRefillToday">–</span><span class="fn-lbl">Z řadu dnes</span></div>
-                        <div class="fnode fn-bl" id="fnHub"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-antenna"/></svg></span><span class="fn-val" id="txtHubLink">–</span><span class="fn-lbl">Spojení s hubem</span></div>
+                        <button type="button" class="fnode fn-bl fnode-btn" id="fnHub" title="Zpět na všechny nádrže" aria-label="Spojení s hubem – zpět na všechny nádrže"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-antenna"/></svg></span><span class="fn-val" id="txtHubLink">–</span><span class="fn-lbl">Spojení s hubem</span></button>
                         <div class="fnode fn-br" id="fnUse"><span class="fn-ring"><svg class="ico" aria-hidden="true"><use href="#i-bars"/></svg></span><span class="fn-val" id="txtUseToday">–</span><span class="fn-lbl">Spotřeba dnes</span></div>
                         <div class="ftank" id="gauge">
                             <div class="water-level" id="waterLevel">

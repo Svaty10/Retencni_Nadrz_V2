@@ -1288,7 +1288,6 @@
     }
 
     function renderOverview(nodes) {
-        renderHubMap(nodes);
         const g = $('overviewGrid');
         g.textContent = '';
         nodes.forEach((n) => {
@@ -1310,47 +1309,6 @@
         });
     }
 
-    // Mapa systému: hub uprostřed, nádrže na elipse kolem. Tečky na cestě = data z čidla (online).
-    function renderHubMap(nodes) {
-        const m = $('hubMap');
-        const key = JSON.stringify(nodes.map((n) => [n.id, n.name, n.status, Math.round(n.level_pct || 0), n.refilling]));
-        if (m.dataset.key === key) return;                       // 10 s poll: bez zbytečného překreslení
-        m.dataset.key = key;
-        m.textContent = '';
-        const ns = 'http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(ns, 'svg');
-        svg.setAttribute('class', 'flow-lines');
-        svg.setAttribute('viewBox', '0 0 100 100');
-        svg.setAttribute('preserveAspectRatio', 'none');
-        svg.setAttribute('aria-hidden', 'true');
-        m.appendChild(svg);
-        const hub = document.createElement('div');
-        hub.className = 'hm-hub';
-        const on = nodes.filter((n) => n.status === 'online').length;
-        hub.innerHTML = `<span class="fn-ring">${ico('antenna')}</span><span class="fn-val">Hub</span><span class="fn-lbl">${on}/${nodes.length} online</span>`;
-        m.appendChild(hub);
-        const st = { online: 'ok', stale: 'warn', offline: 'bad' };
-        nodes.forEach((n, i) => {
-            const a = -Math.PI / 2 + (2 * Math.PI * i) / nodes.length;
-            const x = 50 + 38 * Math.cos(a), y = 50 + 36 * Math.sin(a);
-            const line = document.createElementNS(ns, 'path');
-            line.setAttribute('d', `M${x.toFixed(2)} ${y.toFixed(2)}L50 50`);
-            line.setAttribute('class', `fl ${st[n.status] || 'bad'}${n.status === 'online' ? ' flowing' : ''}`);
-            svg.appendChild(line);
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = `hm-tank ${st[n.status] || 'bad'}`;
-            b.style.left = x + '%';                               // CSSOM (CSP bez inline stylů)
-            b.style.top = y + '%';
-            const pct = n.level_pct == null ? 0 : Math.max(0, Math.min(100, n.level_pct));
-            b.innerHTML = `<span class="hm-circle"><span class="water-level"></span><span class="hm-pct">${num(n.level_pct, 0, ' %')}</span></span>
-                <span class="hm-name">${nm(n.name)}</span>${n.refilling ? `<span class="hm-note">${ico('drop', 'ico-sm')} dopouští</span>` : ''}`;
-            b.querySelector('.water-level').style.height = pct + '%';
-            b.addEventListener('click', () => { setViewAll(false); selectNode(n.id, true); renderNodeBar(nodes); });
-            m.appendChild(b);
-        });
-    }
-
     function selectNode(id, force) {
         if (!id || (id === CURRENT_NODE && !force)) return;
         CURRENT_NODE = id;
@@ -1359,11 +1317,24 @@
         pollState().then(() => { if ($('dashboard').classList.contains('active')) loadAllCharts(); });
     }
 
+    function showAllTanks(nodes) {
+        if (!$('dashboard').classList.contains('active')) showTab('dashboard', document.querySelector('.tab-btn[data-tab="dashboard"]'));
+        setViewAll(true); renderNodeBar(nodes); renderOverview(nodes); loadAllCharts();
+    }
+    // „Spojení s hubem“ na detailu nádrže vrací na přehled (při 2 a více nádržích)
+    $('fnHub').addEventListener('click', () => {
+        const nodes = (lastState && lastState.nodes) || [];
+        if (nodes.length >= 2) showAllTanks(nodes);
+    });
+
     function renderNodeBar(nodes) {
         const bar = $('nodeBar');
         if ($('nastaveni').classList.contains('active')) { renderSettingsBar(nodes); return; }
         const tabWithNodes = $('dashboard').classList.contains('active');
         bar.classList.toggle('hidden', nodes.length < 2 || !tabWithNodes);
+        $('fnHub').classList.toggle('is-link', nodes.length >= 2);
+        $('fnHub').tabIndex = nodes.length >= 2 ? 0 : -1;
+        $('fnHub').setAttribute('aria-disabled', nodes.length >= 2 ? 'false' : 'true');
         bar.dataset.mode = 'dash';
         bar.textContent = '';
         const onDash = $('dashboard').classList.contains('active');
@@ -1376,10 +1347,7 @@
             all.setAttribute('aria-selected', allActive ? 'true' : 'false');
             const online = nodes.filter((n) => n.status === 'online').length;
             all.innerHTML = `Všechny nádrže <span class="pct">${online}/${nodes.length} online</span>`;
-            all.addEventListener('click', () => {
-                if (!$('dashboard').classList.contains('active')) showTab('dashboard', document.querySelector('.tab-btn[data-tab="dashboard"]'));
-                setViewAll(true); renderNodeBar(nodes); renderOverview(nodes); loadAllCharts();
-            });
+            all.addEventListener('click', () => showAllTanks(nodes));
             bar.appendChild(all);
         } else if (VIEW_ALL && nodes.length < 2) {
             setViewAll(false);

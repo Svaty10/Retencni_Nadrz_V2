@@ -410,6 +410,11 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .fl.flowing { opacity: 1; stroke-dasharray: 1 9; stroke-width: 4; animation: flow-run 0.9s linear infinite !important; }
 @keyframes flow-run { to { stroke-dashoffset: -10; } }
 
+/* „Spojení s hubem“ na detailu nádrže = cesta zpět na všechny nádrže */
+.fnode-btn { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: default; }
+.fnode-btn.is-link { cursor: pointer; }
+.fnode-btn.is-link:hover .fn-ring { transform: scale(1.06); }
+.fnode-btn:focus-visible .fn-ring { outline: 2px solid var(--accent); outline-offset: 3px; }
 .fnode {
     position: absolute; z-index: 1; width: 110px; transform: translate(-50%, -32px);
     display: flex; flex-direction: column; align-items: center; text-align: center;
@@ -556,15 +561,15 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .range-custom > span { font-size: 13px; color: var(--muted); }
 
 /* Přehled všech nádrží */
-.overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .ov-card {
-    display: flex; gap: 20px; align-items: stretch; width: 100%;
-    padding: 20px 22px; text-align: left; font: inherit; color: inherit; cursor: pointer;
+    display: flex; gap: 14px; align-items: stretch; width: 100%;
+    padding: 14px 16px; text-align: left; font: inherit; color: inherit; cursor: pointer;
     transition: border-color 120ms;
 }
 .ov-card:hover { border-color: var(--accent); }
 .ov-tank {
-    position: relative; flex-shrink: 0; align-self: center; width: 76px; height: 76px;
+    position: relative; flex-shrink: 0; align-self: center; width: 56px; height: 56px;
     border: 3px solid var(--line-strong); border-radius: 50%; background: var(--surface); overflow: hidden;
 }
 .ov-tank.online { border-color: var(--green); }
@@ -572,10 +577,10 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 .ov-tank.offline { border-color: var(--red); }
 .ov-body { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .ov-body h4 { margin: 0; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
-.ov-body .big { font-family: var(--font-num); font-size: 44px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 4px; }
+.ov-body .big { font-family: var(--font-num); font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 4px; }
 .ov-litres { font-family: var(--font-num); font-size: 15px; color: var(--ink-2); }
 .ov-body .meta {
-    display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: auto; padding-top: 10px;
+    display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: auto; padding-top: 6px;
     font-size: 13px; color: var(--muted);
 }
 .ov-body .meta > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -1374,41 +1379,4 @@ h3 .help-tip { margin-left: 6px; }
 .field-grid .date-cz { display: flex; }
 .field-grid .date-cz input[type="text"] { width: 100%; }
 
-/* --- Mapa systému (Všechny nádrže): hub uprostřed, nádrže kolem ------------- */
-.hubmap { position: relative; height: 360px; max-width: 880px; margin: 0 auto; }
 .fl.warn { stroke: var(--amber); stroke-dasharray: 2 6; }
-.hm-hub {
-    position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -32px);
-    display: flex; flex-direction: column; align-items: center; text-align: center; width: 120px;
-}
-.hm-hub .fn-ring { border-color: var(--accent); color: var(--accent); width: 68px; height: 68px; }
-.hm-tank {
-    position: absolute; z-index: 1; transform: translate(-50%, -40px);
-    display: flex; flex-direction: column; align-items: center; gap: 2px; width: 130px;
-    padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer;
-}
-.hm-circle {
-    position: relative; display: flex; align-items: center; justify-content: center;
-    width: 80px; height: 80px; border-radius: 50%; overflow: hidden;
-    background: var(--surface); border: 3px solid var(--line-strong);
-    transition: transform 120ms;
-}
-.hm-tank:hover .hm-circle { transform: scale(1.05); }
-.hm-tank.ok .hm-circle { border-color: var(--green); }
-.hm-tank.warn .hm-circle { border-color: var(--amber); }
-.hm-tank.bad .hm-circle { border-color: var(--red); }
-.hm-circle .water-level {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--water);
-    transition: height 1.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-}
-.hm-pct { position: relative; font-family: var(--font-num); font-size: 22px; font-weight: 600; }
-.hm-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; line-height: 1.25; padding: 1px 6px; border-radius: 4px; background: var(--surface); }
-.hm-hub .fn-val, .hm-hub .fn-lbl { padding: 0 6px; background: var(--surface); }
-.hm-tank.bad .hm-name { color: var(--red); }
-.hm-note { font-size: 12px; color: var(--green); display: inline-flex; align-items: center; gap: 3px; }
-@media (max-width: 640px) {
-    .hubmap { height: 320px; }
-    .hm-tank { width: 100px; transform: translate(-50%, -34px); }
-    .hm-circle { width: 64px; height: 64px; }
-    .hm-pct { font-size: 18px; }
-}
