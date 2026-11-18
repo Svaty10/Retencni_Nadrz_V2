@@ -974,6 +974,8 @@
         "Čidlo: offline": "Sensor: offline",
         "Hub odpojen": "Hub disconnected",
         "bez dat": "no data",
+        "Tabulka může mít nejvýše 30 řádků.": "The table can have at most 30 rows.",
+        "Vyplňte v tabulce u každého řádku výšku i objem.": "Fill in both level and volume in every table row.",
         "Zrušit čekání": "Cancel waiting",
         "Zrušit čekající dopouštění?": "Cancel pending refill?",
         "Ventil se zavře a probíhající dopouštění skončí.": "The valve will close and active refilling will stop.",

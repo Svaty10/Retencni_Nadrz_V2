@@ -1775,6 +1775,11 @@ class Core:
             out["refill"].append(int(r["rf"] or 0))
         out["bands"] = self.bands(nid, t_from, t_to)
         out["boots"] = self.boots(nid, t_from, t_to)
+        # oldest stored data of the sensor (raw or hourly after retention) – charts stop scrolling there
+        firsts = [self.db.scalar("SELECT MIN(ts) FROM measurements WHERE node_id=?", (nid,), None),
+                  self.db.scalar("SELECT MIN(hour) FROM hourly WHERE node_id=?", (nid,), None)]
+        firsts = [f for f in firsts if f is not None]
+        out["first_ts"] = min(firsts) * 1000 if firsts else None
         return out
 
     def bands(self, nid: int, t_from: int, t_to: int) -> list[dict]:
