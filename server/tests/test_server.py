@@ -288,6 +288,11 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(all(b["kind"] in ("refill", "rain") for b in js["bands"]))
         self.assertIsInstance(js["boots"], list)
         self.assertIn("rssi", js)
+        # first measurement of the sensor, also for a window with no data (chart scrolling stops there)
+        first = self.core.db.scalar("SELECT MIN(ts) FROM measurements WHERE node_id=?", (0x1234,), None)
+        st, js, _ = self.req("GET", "/api/history?node=1234&from=1000&to=2000", headers=h)
+        self.assertEqual(js["t"], [])
+        self.assertTrue((first - 3600) * 1000 <= js["first_ts"] <= first * 1000, js["first_ts"])   # hourly bucket start
 
         # backup download = valid gzip'd SQLite database
         c = http.client.HTTPConnection("127.0.0.1", self.web_port, timeout=15)

@@ -789,11 +789,18 @@
         node = node || CURRENT_NODE;
         const k = node + '|' + rangeQuery(r);
         const hit = histCache.get(k);
-        if (hit && Date.now() - hit.at < 60000) return hit.data;
+        const past = r.to * 1000 < Date.now() - 3600e3;                // uzavřené okno se už nemění
+        if (hit && Date.now() - hit.at < (past ? 600e3 : 60e3)) return hit.data;
         const data = await api('GET', `/api/history?node=${node}&` + rangeQuery(r));
-        histCache.set(k, { at: Date.now(), data });
-        if (histCache.size > 40) histCache.delete(histCache.keys().next().value);
+        histCache.delete(k);
+        histCache.set(k, { at: Date.now(), data, to: r.to });
+        if (histCache.size > 120) histCache.delete(histCache.keys().next().value);
         return data;
+    }
+    // živé obnovení: zahodit jen okna, která sahají do poslední hodiny (starší zůstanou v cache)
+    function dropLiveHistory() {
+        const edge = Date.now() / 1000 - 3600;
+        histCache.forEach((v, k) => { if (!v.to || v.to >= edge) histCache.delete(k); });
     }
 
     // ------------------------------------------------ posouvání čárových grafů (jako SwitchBot)
@@ -809,25 +816,48 @@
         return { from: r.from - o, to: r.to - o };
     }
     function mergeHist(a, b) {
+        const at = a.t || [], bt = b.t || [];
+        const n = at.length;
+        const series = (k) => Array.isArray(a[k]) && a[k].length === n && Array.isArray(b[k]) && b[k].length === bt.length;
+        const firstB = bt.find((x) => x != null);
+        let keep = n;                                     // řádky staršího okna, které nepřekrývají novější
+        if (firstB != null) while (keep > 0 && (at[keep - 1] == null || at[keep - 1] >= firstB)) keep--;
+        const lastA = keep ? at[keep - 1] : null;
+        const bucket = (b.bucket_s || a.bucket_s || 300) * 1000;
+        const gap = lastA != null && firstB != null && firstB - lastA > 3 * bucket + 600e3;
         const out = Object.assign({}, b);
-        Object.keys(b).forEach((k) => { if (Array.isArray(a[k]) && Array.isArray(b[k])) out[k] = a[k].concat(b[k]); });
+        Object.keys(b).forEach((k) => {
+            if (!Array.isArray(a[k]) || !Array.isArray(b[k])) return;
+            if (k === 't' || series(k)) {
+                const head = a[k].slice(0, keep);
+                if (gap) head.push(k === 't' ? lastA + bucket : null);   // přerušení čáry na švu oken
+                out[k] = head.concat(b[k]);
+            } else out[k] = a[k].concat(b[k]);              // seznamy událostí (bands, boots)
+        });
         return out;
     }
     // historie zobrazeného rozsahu + `chunks` starších oken stejné délky
+    // Starší okna mají hranice zarovnané na celé hodiny → stejné dotazy, dokud běží živý rozsah
+    // (cache), nejnovější okno sahá od té hranice do „teď“.
     async function histChunks(key, r, node) {
         const s = scrubState(key), span = r.to - r.from;
+        const anchor = r.live ? Math.floor(r.from / 3600) * 3600 : r.from;
         const wins = [];
-        for (let i = s.chunks; i >= 1; i--) wins.push({ from: r.from - i * span, to: r.from - (i - 1) * span });
-        wins.push(r);
+        for (let i = s.chunks; i >= 1; i--) wins.push({ from: anchor - i * span, to: anchor - (i - 1) * span });
+        wins.push({ from: anchor, to: r.to });
         const parts = await Promise.all(wins.map((w) => getHistory(w, node)));
         const d = parts.reduce(mergeHist);
-        d.oldestEmpty = !(parts[0].t || []).length;                  // nejstarší okno prázdné = začátek dat
-        if (!node) {                                                 // graf jedné nádrže; přehled to sčítá sám
-            s.exhausted = d.oldestEmpty;
-            const first = (d.t || []).find((x) => x != null);
-            s.first = first == null ? null : first;
-        }
+        d.loadedFrom = (anchor - s.chunks * span) * 1000;
+        d.first_ts = parts[parts.length - 1].first_ts;
+        if (!node) setScrubStart(key, [d]);                         // přehled to počítá ze všech nádrží
         return d;
+    }
+    // začátek dat (první uložené měření podle serveru) – dál do minulosti se posouvat nedá
+    function setScrubStart(key, list) {
+        const s = scrubState(key);
+        const firsts = list.map((d) => d.first_ts).filter((x) => x != null);
+        s.first = firsts.length ? Math.min(...firsts) : null;
+        s.exhausted = s.first == null || list.every((d) => d.loadedFrom <= s.first);
     }
     // index bodu nejblíž času ms (t seřazené), nebo -1, když je nejbližší dál než maxGap
     function nearestIdx(t, ms, maxGap, values) {
@@ -874,7 +904,6 @@
             if (!bub) {
                 bub = document.createElement('div');
                 bub.className = 'scrub-bubble';
-                bub.setAttribute('aria-live', 'polite');
                 box.appendChild(bub);
             }
             const lines = opts.text ? opts.text(ms) : [];
@@ -896,7 +925,8 @@
         const r = SCRUB_RANGE[key], s = scrubState(key), span = r.to - r.from;
         const min = r.live ? -span / 2 : 0;                       // „teď“ nejvýš pod čáru
         let max = s.chunks * span;                                // kam jsou data načtená
-        if (s.exhausted && s.first != null) max = Math.min(max, Math.max(0, r.from + span / 2 - s.first / 1000));
+        if (s.first != null) max = Math.min(max, Math.max(0, r.from + span / 2 - s.first / 1000));
+        else if (s.exhausted) max = 0;
         return { min, max: Math.max(min, max), span };
     }
     function scrubTo(key, offset) {
@@ -1122,10 +1152,7 @@
         const r = rangeOf('all');
         const res = (await Promise.all(nodes.map((n) =>
             histChunks('all', r, n.id).then((d) => ({ n, d })).catch(() => null)))).filter(Boolean);
-        // „konec dat“ až když už není nic u žádné nádrže
-        const firsts = res.map(({ d }) => (d.t || []).find((x) => x != null)).filter((x) => x != null);
-        scrubState('all').first = firsts.length ? Math.min(...firsts) : null;
-        scrubState('all').exhausted = res.length > 0 && res.every(({ d }) => d.oldestEmpty);
+        setScrubStart('all', res.map(({ d }) => d));            // začátek dat = nejstarší nádrž
         const pal = PALETTE();
         const datasets = res.map(({ n, d }, i) => line(pal[i % pal.length], {
             label: n.name, data: series(d.t, d.level_pct), spanGaps: false, ...lastDot(d.level_pct, pal[i % pal.length])
@@ -1303,7 +1330,7 @@
         if (LOADERS[key]) LOADERS[key]().catch((e) => console.error(key, e));
     }
     function loadAllCharts(onlyLive) {
-        if (onlyLive) { histCache.clear(); flowsCache.clear(); }
+        if (onlyLive) { dropLiveHistory(); flowsCache.clear(); }
         (VIEW_ALL ? ['all'] : NODE_CHARTS).forEach((k) => {
             if (!CURRENT_NODE && k !== 'weather') return;
             if (onlyLive && pickers[k] && !rangeOf(k).live) return;   // vlastní rozsah se nemění
@@ -1565,6 +1592,7 @@
             const el = e.target.closest(itemSel);
             if (!el || !container.contains(el) || items().length < 2) return;
             drag = { el, id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse', started: false, before: order() };
+            SORT.active = true;                 // ani během podržení lištu nepřekreslovat (odpojený prvek)
             if (drag.touch) drag.timer = setTimeout(() => { if (drag) { begin(drag); if (navigator.vibrate) navigator.vibrate(15); } }, 300);
             window.addEventListener('pointermove', move, { passive: false });
             window.addEventListener('pointerup', up);
@@ -1956,6 +1984,7 @@
         tr.querySelector('.tt-cm').focus();
         setCalDirty(true);
     });
+    $('tankTable').addEventListener('input', syncShapeFig);
     ['max_depth_cm', 'tank_diameter_cm', 'overflow_cm'].forEach((n) => {
         $('calForm').elements.namedItem(n).addEventListener('input', syncShapeFig);
     });
