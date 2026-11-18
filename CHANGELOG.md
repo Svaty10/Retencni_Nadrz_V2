@@ -8,6 +8,14 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 ### Přidáno
 - **Firmware čidla 16: smazání párování bez programátoru.** Při vložení baterie propojit drátkem piny 5 V a signál na konektoru sondy (sonda odpojená) a nechat aspoň 10 s: čidlo zapomene párování a nabízí ho jako nové. Postup: [docs/programovani_uzlu.md](docs/programovani_uzlu.md). Nový firmware je potřeba do čidla nahrát ručně.
 
+## [1.23.1] - 2026-11-18
+
+### Změněno
+- Posuvné grafy se otevírají s nejnovějšími daty pod čarou uprostřed; tlačítko **Aktuální →** (dřív *Teď*) je tam vrátí. Bublina s hodnotou je nad grafem a nepřekrývá legendu ani křivky.
+
+### Opraveno
+- Popisky os grafů bez dlouhých desetinných čísel (např. „22,400000000000004 °C“ → „22,4 °C“).
+
 ## [1.23.0] - 2026-11-18
 
 ### Přidáno
