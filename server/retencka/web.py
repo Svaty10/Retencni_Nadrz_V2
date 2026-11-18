@@ -662,7 +662,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             if not name:
                 return jerr("Zadejte název čidla.")
         core.start_pairing(nid, name, request["session"]["username"])
-        core.audit("NODE_PAIRING", f"Čeká se na párování čidla {nid:04X}", *user_of(request))
+        core.audit("NODE_PAIRING", f"Čeká se na párování čidla {core.node_label(nid, name)}", *user_of(request))
         return jresp({"ok": True, "pairing": core.pairing_status()})
 
     @need("admin")
@@ -672,7 +672,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         waiting = nid in core.pair_targets
         core.cancel_pairing(nid)
         if waiting:
-            core.audit("NODE_PAIRING_CANCELLED", f"Zrušeno čekání na párování čidla {nid:04X}", *user_of(request))
+            core.audit("NODE_PAIRING_CANCELLED", f"Zrušeno čekání na párování čidla {core.node_label(nid)}", *user_of(request))
         return jresp({"ok": True, "pairing": core.pairing_status()})
 
     @need("admin")
@@ -689,7 +689,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         if nid in core.refills:
             await core.refill_stop(nid, "Čidlo odpárováno", *user_of(request))
         if data.get("force") or not node.get("_secret"):
-            core.forget_node(nid, "NODE_REMOVED", f"Odebráno čidlo {nid:04X} ({node['name']}) bez potvrzení čidlem",
+            core.forget_node(nid, "NODE_REMOVED", f"Odebráno čidlo {core.node_label(nid)} bez potvrzení čidlem",
                              *user_of(request))
             return jresp({"ok": True, "removed": True})
         core.request_unpair(nid, *user_of(request))
@@ -719,7 +719,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         node = core.nodes.get(nid)
         if changed:
             core.invalidate()
-            core.audit("SETTINGS_CHANGED", f"Čidlo {nid:04X}: " + labels(changed), *user_of(request))
+            core.audit("SETTINGS_CHANGED", f"Čidlo {core.node_label(nid)}: " + labels(changed), *user_of(request))
         if "flow_rate_lpm" in changed:
             core.nodes.update(nid, {"real_flow_rate_lpm": None}, allow_internal=True)
         recalc = bool(set(changed) & RECALC_KEYS)
@@ -744,7 +744,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                 core.after_recompute(nid)
                 if nid not in recompute_again:
                     break
-            core.audit("CALIBRATION", f"Čidlo {nid:04X}: historie přepočítána automaticky ({n} záznamů)", *who)
+            core.audit("CALIBRATION", f"Čidlo {core.node_label(nid)}: historie přepočítána automaticky ({n} záznamů)", *who)
         except Exception:
             log.exception("history recompute of %04X failed", nid)
 
@@ -845,7 +845,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         except SettingsError as e:
             return jerr(str(e) + " Druhý bod změřte při výrazně jiné hladině.")
         core.invalidate()
-        core.audit("CALIBRATION", f"Čidlo {nid:04X}: bod {mv:.1f} mV = {column:.1f} cm nad sondou", *user_of(request))
+        core.audit("CALIBRATION", f"Čidlo {core.node_label(nid)}: bod {mv:.1f} mV = {column:.1f} cm nad sondou", *user_of(request))
         schedule_recompute(nid, user_of(request))
         return jresp({"ok": True, "recalc": True, "node": node_public(core.nodes.get(nid))})
 
@@ -854,7 +854,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         nid = node_of(request)
         n = await asyncio.to_thread(core.recompute_levels, nid)
         core.after_recompute(nid)
-        core.audit("CALIBRATION", f"Čidlo {nid:04X}: historie přepočítána ({n} záznamů)", *user_of(request))
+        core.audit("CALIBRATION", f"Čidlo {core.node_label(nid)}: historie přepočítána ({n} záznamů)", *user_of(request))
         return jresp({"ok": True, "updated": n})
 
     @need("admin")
@@ -874,7 +874,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
         except SettingsError:
             return jerr("Korekce mimo povolený rozsah ±20 % – zkontrolujte měření.")
         core.invalidate()
-        core.audit("CALIBRATION", f"Čidlo {nid:04X}: korekce baterie {trim:.4f}", *user_of(request))
+        core.audit("CALIBRATION", f"Čidlo {core.node_label(nid)}: korekce baterie {trim:.4f}", *user_of(request))
         return jresp({"ok": True, "battery_trim": round(trim, 4)})
 
     # ---------------------------------------------------------------- refill

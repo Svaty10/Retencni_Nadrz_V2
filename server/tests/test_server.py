@@ -190,6 +190,14 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(self.core.db.scalar("SELECT COUNT(*) FROM audit WHERE detail LIKE '%přepočítána automaticky%'", (), 0))
         st, js, _ = self.req("POST", "/api/node", {"name": "Zahrada"}, headers=h)
         self.assertFalse(js["recalc"])                           # a name does not touch the levels
+        # event history names the sensor next to its ID
+        self.assertTrue(self.core.db.scalar(
+            "SELECT COUNT(*) FROM audit WHERE action='NODE_PAIRED' AND detail LIKE 'Čidlo Nádrž (1234) %'", (), 0))
+        st, js, _ = self.req("POST", "/api/node", {"runoff_coef": 0.7}, headers=h)
+        last = self.core.db.one("SELECT detail FROM audit WHERE action='SETTINGS_CHANGED' ORDER BY id DESC LIMIT 1")
+        self.assertTrue(last["detail"].startswith("Čidlo Zahrada (1234): "), last["detail"])
+        self.assertEqual(self.core.node_label(0x1234), "Zahrada (1234)")
+        self.assertEqual(self.core.node_label(0xBEEF), "BEEF")
         st, js, _ = self.req("POST", "/api/node", {"max_depth_cm": -5}, headers=h)
         self.assertEqual(st, 400)
         st, js, _ = self.req("POST", "/api/settings", {"hydrawise_api_key": "secret-key-1234"}, headers=h)
