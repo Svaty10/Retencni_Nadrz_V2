@@ -36,11 +36,14 @@ COOKIE_PLAIN = "rt_sid"
 MAX_BODY = 64 * 1024
 # node parameters the stored levels / volumes depend on: saving one recomputes the history
 RECALC_KEYS = {"cal_points", "sensor_offset_cm", "max_depth_cm", "tank_area_m2", "tank_shape", "tank_diameter_cm",
-               "tank_length_cm", "tank_width_cm", "probe_accuracy_pct", "probe_range_cm"}
+               "tank_length_cm", "tank_width_cm", "probe_accuracy_pct", "probe_range_cm",
+               "tank_dome_cm", "tank_cone_cm", "tank_table", "overflow_cm"}
 
 FIELD_LABELS = {
     "name": "název", "tank_shape": "tvar nádrže", "max_depth_cm": "hloubka nádrže", "tank_area_m2": "plocha dna",
     "tank_diameter_cm": "průměr nádrže", "tank_length_cm": "délka nádrže", "tank_width_cm": "šířka nádrže",
+    "tank_dome_cm": "hloubka dna", "tank_cone_cm": "výška kužele", "tank_table": "tabulka objemu",
+    "overflow_cm": "výška přepadu",
     "catchment_area_m2": "plocha střechy", "runoff_coef": "odtokový součinitel",
     "sensor_offset_cm": "výška sondy", "cal_points": "kalibrační body", "probe_accuracy_pct": "přesnost sondy",
     "probe_range_cm": "rozsah sondy", "battery_trim": "korekce baterie", "battery_type": "typ baterie", "refill_provider": "ventil",

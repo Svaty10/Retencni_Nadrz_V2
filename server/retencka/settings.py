@@ -47,12 +47,17 @@ SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
 
 # Per-node configuration (tank + probe of that node)
 NODE_SCHEMA: dict[str, tuple[Any, str, Any, Any]] = {
-    "tank_shape":         ("area", "choice:area,cyl_h,cyl_v,rect", None, None),
+    "tank_shape":         ("area", "choice:area,cyl_h,cyl_v,rect,cyl_h_dished,sphere,oval_h,cyl_v_cone,table", None, None),
     "tank_area_m2":       (0.0, "float", 0.0, 1000.0),
     "max_depth_cm":       (0.0, "float", 0.0, 2000.0),
     "tank_diameter_cm":   (0.0, "float", 0.0, 2000.0),
     "tank_length_cm":     (0.0, "float", 0.0, 5000.0),
     "tank_width_cm":      (0.0, "float", 0.0, 5000.0),
+    "tank_dome_cm":       (0.0, "float", 0.0, 1000.0),     # depth of one dished end (cyl_h_dished)
+    "tank_cone_cm":       (0.0, "float", 0.0, 2000.0),     # height of the cone bottom (cyl_v_cone)
+    # manufacturer's table [[level_cm, litres], ...] for tank_shape "table"
+    "tank_table":         ([], "table", None, None),
+    "overflow_cm":        (0.0, "float", 0.0, 2000.0),     # overflow height above the bottom (0 = top of the tank)
     "sensor_offset_cm":   (1.0, "float", -100.0, 500.0),
     # [[probe_mV, water column above the sensor in cm], ...] – 2 points are enough
     "cal_points":         ([[120.0, 12.0], [1240.0, 92.0]], "points", None, None),
@@ -282,6 +287,14 @@ class Nodes:
     def all(self) -> list[dict]:
         return [self.get(i) for i in self.ids()]
 
+    def set_order(self, ids: list[int]) -> None:
+        """New display order of the tanks (top bar, overview); must list every node once."""
+        if sorted(ids) != sorted(self.ids()) or len(set(ids)) != len(ids):
+            raise SettingsError("Pořadí musí obsahovat všechna čidla.")
+        for i, nid in enumerate(ids):
+            self.db.execute("UPDATE nodes SET sort=? WHERE node_id=?", (i, nid))
+        self.reload()
+
     def add(self, node_id: int, name: str, config: Optional[dict] = None) -> None:
         if not 0 <= node_id <= 0xFFFF:
             raise SettingsError("Neplatné ID čidla (4 hexadecimální znaky).")
@@ -388,6 +401,7 @@ class Nodes:
         eff.update(self.defaults())
         eff.update(stored)
         _check_refill(eff)
+        _check_tank(eff)
         if changed:
             self.db.execute("UPDATE nodes SET name=?, config=? WHERE node_id=?",
                             (name, json.dumps(stored), node_id))
@@ -437,6 +451,23 @@ def _check_refill(cfg: dict, who: str = "") -> None:
         raise SettingsError(pre + "Cíl automatického dopouštění musí být vyšší než spouštěcí hranice")
     if cfg["auto_refill_target_pct"] > cfg["max_refill_pct"]:
         raise SettingsError(pre + "Cíl automatického dopouštění nesmí překročit maximální limit")
+
+
+def _check_tank(cfg: dict) -> None:
+    """Geometry that cannot be a real tank (the volume would be nonsense)."""
+    from . import model
+    shape = cfg.get("tank_shape")
+    if shape == "table" and len(cfg.get("tank_table") or []) < 2:
+        raise SettingsError("Pro tvar Vlastní tabulka vyplňte aspoň 2 řádky.")
+    if shape == "cyl_h_dished":
+        half = float(cfg.get("tank_diameter_cm") or 0.0) / 2.0
+        if float(cfg.get("tank_dome_cm") or 0.0) > half:
+            raise SettingsError(f"Hloubka dna může být nejvýše polovina průměru ({half:g} cm).")
+    if shape == "cyl_v_cone" and float(cfg.get("tank_cone_cm") or 0.0) >= float(cfg.get("max_depth_cm") or 0.0) > 0:
+        raise SettingsError("Kužel musí být nižší než celá nádrž.")
+    height = model.tank_height_cm(cfg)
+    if float(cfg.get("overflow_cm") or 0.0) > height > 0:
+        raise SettingsError(f"Přepad nemůže být výš než nádrž ({height:g} cm).")
 
 
 def check_host(raw: Any) -> str:
@@ -502,6 +533,20 @@ def coerce(schema: dict, key: str, raw: Any) -> Any:
                 if b[0] - a[0] < 20.0:
                     raise SettingsError("Kalibrační body musí být od sebe aspoň 20 mV (ideálně prázdná a plná nádrž).")
             return pts
+        if typ == "table":
+            rows = [[float(p[0]), float(p[1])] for p in (raw or [])]
+            if not rows:
+                return []
+            if not 2 <= len(rows) <= 30:
+                raise SettingsError("Tabulka objemu potřebuje aspoň 2 body (nejvýše 30).")
+            for cm, litres in rows:
+                if not (0 <= cm <= 2000 and 0 <= litres <= 10_000_000):
+                    raise SettingsError("Řádek tabulky objemu mimo rozsah (0–2000 cm, 0–10 000 000 L).")
+            rows.sort(key=lambda p: p[0])
+            for a, b in zip(rows, rows[1:]):
+                if not (b[0] > a[0] and b[1] > a[1]):
+                    raise SettingsError("Výška i objem v tabulce musí s každým řádkem růst.")
+            return rows
         if typ == "json":
             return raw
         if typ.startswith("choice:"):
