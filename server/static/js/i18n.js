@@ -772,6 +772,8 @@
         "Tvar nádrže": "Tank shape",
         "Válec naležato": "Horizontal cylinder",
         "Válec nastojato": "Vertical cylinder",
+        "Teď": "Now",
+        "Graf – šipkami vlevo a vpravo posunete čas, Home = teď": "Chart – left and right arrows move in time, Home = now",
         "Válec nastojato s kuželovým dnem": "Vertical cylinder with cone bottom",
         "Válec naležato s klenutými dny": "Horizontal cylinder with dished ends",
         "Ležatý ovál": "Horizontal oval",
