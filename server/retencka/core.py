@@ -154,6 +154,12 @@ class Core:
         self._sync_keys_mirror()
 
     # ================================================================ helpers
+    def node_label(self, nid: int, name: str = "") -> str:
+        """Sensor as shown in the event history: "Zahrada (BF1C)", only "BF1C" without a name."""
+        n = self.nodes.get(nid)
+        name = (n or {}).get("name") or name
+        return f"{name} ({nid:04X})" if name else f"{nid:04X}"
+
     def audit(self, action: str, detail: str = "", user: str = "system", ip: str = "") -> None:
         try:
             self.db.execute("INSERT INTO audit(ts, username, ip, action, detail) VALUES(?,?,?,?,?)",
@@ -787,7 +793,7 @@ class Core:
         self._save_ctr(nid, None)
         if nid in self.heard:
             self.heard[nid].pop("key_match", None)
-        self.audit("NODE_PAIRED", f"Čidlo {nid:04X} {'spárováno' if new else 'znovu spárováno (nový klíč)'}",
+        self.audit("NODE_PAIRED", f"Čidlo {self.node_label(nid)} {'spárováno' if new else 'znovu spárováno (nový klíč)'}",
                    t.get("user") or entry.get("user") or "system")
         self._sync_keys_mirror()
         log.info("Node %04X paired", nid)
@@ -829,7 +835,7 @@ class Core:
                     self._unpair_confirm.pop(nid, None)
                 continue
             self.forget_node(nid, "NODE_UNPAIRED",
-                             f"Čidlo {nid:04X} ({node['name']}) odpárováno – potvrzeno čidlem")
+                             f"Čidlo {self.node_label(nid)} odpárováno – potvrzeno čidlem")
 
     def _clear_unpair(self, nid: int) -> None:
         with self._pair_lock:
@@ -846,7 +852,7 @@ class Core:
         self.invalidate()
         node = self.nodes.get(nid) or {}
         self.audit("NODE_UNPAIR_REQUESTED",
-                   f"Odpárování čidla {nid:04X} ({node.get('name', '')}) – čeká na vložení baterie do čidla",
+                   f"Odpárování čidla {self.node_label(nid)} – čeká na vložení baterie do čidla",
                    user, ip)
 
     def cancel_unpair(self, nid: int, user: str, ip: str = "") -> None:
@@ -854,7 +860,7 @@ class Core:
         self._clear_unpair(nid)
         self._restore_node(nid)
         self.invalidate()
-        self.audit("NODE_UNPAIR_CANCELLED", f"Odpárování čidla {nid:04X} zrušeno", user, ip)
+        self.audit("NODE_UNPAIR_CANCELLED", f"Odpárování čidla {self.node_label(nid)} zrušeno", user, ip)
 
     def forget_node(self, nid: int, action: str, detail: str, user: str = "system", ip: str = "") -> None:
         """Delete the node (measured data stay in the database). Its key goes to the
@@ -1066,7 +1072,7 @@ class Core:
         if pkt.flags & model.FLAG_BOOT:
             why = (" (watchdog)" if pkt.flags & model.FLAG_WDT_RESET else
                    " (pokles napětí – zkontrolujte baterii)" if (pkt.diag or 0) & model.DIAG_BOD_RESET else "")
-            self.audit("NODE_BOOT", f"Čidlo {node['name']} ({nid:04X}) hlásí restart" + why)
+            self.audit("NODE_BOOT", f"Čidlo {self.node_label(nid)} hlásí restart" + why)
         self._spawn(self._refill_on_measurement(nid))
 
     # ============================================================ live state
