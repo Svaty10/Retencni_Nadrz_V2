@@ -911,7 +911,7 @@
             const away = key && Math.abs(scrubState(key).offset) > 1;
             bub.innerHTML = `<b>${esc(fmtDateTime(ms))}</b>` +
                 (lines.length ? lines.map((l) => `<span>${esc(l)}</span>`).join('') : `<span class="muted">${esc(tr('bez dat'))}</span>`) +
-                (away ? `<button type="button" class="scrub-now">${esc(tr('Teď'))}</button>` : '');
+                (away ? `<button type="button" class="scrub-now">${esc(tr('↩ Zpět na teď'))}</button>` : '');
             const now = bub.querySelector('.scrub-now');
             if (now) now.addEventListener('click', () => scrubTo(key, 0));
         }
