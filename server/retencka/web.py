@@ -436,11 +436,71 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     @need()
     async def api_me(request):
         s = request["session"]
-        row = db.one("SELECT theme, lang FROM users WHERE username=?", (s["username"],))
+        row = db.one("SELECT theme, lang, prefs FROM users WHERE username=?", (s["username"],))
         theme = (row["theme"] if row and row["theme"] else "auto") or "auto"
         lang = (row["lang"] if row and row["lang"] else "cs") or "cs"
         return jresp({"username": s["username"], "role": s["role"], "csrf": s["csrf"],
-                      "version": __version__, "hostnames": core.hostnames(), "theme": theme, "lang": lang})
+                      "version": __version__, "hostnames": core.hostnames(), "theme": theme, "lang": lang,
+                      "prefs": load_prefs(row["prefs"] if row else None)})
+
+    DASH_CARDS = ("tank", "level", "consumption", "refill", "klima", "weather", "battery")
+
+    def load_prefs(raw: Any) -> dict:
+        try:
+            p = json.loads(raw or "{}")
+        except ValueError:
+            return {}
+        return p if isinstance(p, dict) else {}
+
+    def check_pref(key: str, val: Any) -> Any:
+        """Validated value of one personal preference (raises ValueError with a Czech message)."""
+        if key == "node_order":
+            if not isinstance(val, list) or len(val) > 64:
+                raise ValueError("Pořadí nádrží musí být seznam (nejvýše 64).")
+            out = []
+            for x in val:
+                if not isinstance(x, str) or not re.fullmatch(r"[0-9A-Fa-f]{4}", x):
+                    raise ValueError("Neplatné ID nádrže v pořadí.")
+                out.append(x.upper())
+            if len(set(out)) != len(out):
+                raise ValueError("Nádrž je v pořadí dvakrát.")
+            return out
+        if key in ("dash_wide", "dash_narrow"):
+            if not isinstance(val, dict) or set(val) - {"order", "hidden"}:
+                raise ValueError("Neplatné rozložení dashboardu.")
+            out = {}
+            for part in ("order", "hidden"):
+                lst = val.get(part, [])
+                if (not isinstance(lst, list) or any(c not in DASH_CARDS for c in lst)
+                        or len(set(lst)) != len(lst)):
+                    raise ValueError("Neplatné rozložení dashboardu.")
+                out[part] = lst
+            if "tank" in out["hidden"]:
+                raise ValueError("Kartu nádrže nejde skrýt.")
+            return out
+        raise ValueError("Neznámé nastavení.")
+
+    @need()
+    async def api_me_prefs(request):
+        """Personal UI preferences (tank order, dashboard layouts); only the keys sent change,
+        null resets a key to the default. Stored with the account, so every device gets them."""
+        data = await read_json(request)
+        if not isinstance(data, dict) or not data:
+            return jerr("Chybí nastavení.")
+        user = request["session"]["username"]
+        row = db.one("SELECT prefs FROM users WHERE username=?", (user,))
+        prefs = load_prefs(row["prefs"] if row else None)
+        try:
+            for k, v in data.items():
+                if v is None:
+                    check_pref(k, [] if k == "node_order" else {})       # known key?
+                    prefs.pop(k, None)
+                else:
+                    prefs[k] = check_pref(k, v)
+        except ValueError as e:
+            return jerr(str(e))
+        db.execute("UPDATE users SET prefs=? WHERE username=?", (json.dumps(prefs, separators=(",", ":")), user))
+        return jresp({"ok": True, "prefs": prefs})
 
     @need()
     async def api_me_theme(request):
@@ -694,23 +754,6 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
             return jresp({"ok": True, "removed": True})
         core.request_unpair(nid, *user_of(request))
         return jresp({"ok": True, "removed": False})
-
-    @need("admin")
-    async def api_nodes_order(request):
-        """New display order of the tanks (top bar, overview)."""
-        data = await read_json(request)
-        raw = data.get("order")
-        if not isinstance(raw, list):
-            return jerr("Chybí pořadí čidel.")
-        ids = [parse_node_id(x) for x in raw]
-        try:
-            core.nodes.set_order(ids)
-        except SettingsError as e:
-            return jerr(str(e))
-        core.audit("NODES_REORDERED", "Pořadí nádrží: " + ", ".join(core.nodes.get(i)["name"] for i in ids),
-                   *user_of(request))
-        core.invalidate()
-        return jresp({"ok": True})
 
     @need("admin")
     async def api_nodes_unpair_cancel(request):
@@ -1499,6 +1542,7 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/auth/setup", api_setup)
     r.add_get("/api/me", api_me)
     r.add_post("/api/me/theme", api_me_theme)
+    r.add_post("/api/me/prefs", api_me_prefs)
     r.add_post("/api/me/lang", api_me_lang)
     r.add_post("/api/me/password", api_me_password)
     r.add_get("/api/state", api_state)
@@ -1526,7 +1570,6 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
     r.add_post("/api/pairing/cancel", api_pairing_cancel)
     r.add_post("/api/nodes/remove", api_nodes_remove)
     r.add_post("/api/nodes/unpair/cancel", api_nodes_unpair_cancel)
-    r.add_post("/api/nodes/order", api_nodes_order)
     r.add_get("/api/users", api_users)
     r.add_post("/api/users/add", api_users_add)
     r.add_post("/api/users/role", api_users_role)
