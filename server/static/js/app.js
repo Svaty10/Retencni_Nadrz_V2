@@ -809,13 +809,18 @@
     // délky (každé okno má svoje plné rozlišení), do budoucnosti se jde jen tak, aby „teď“
     // dojelo pod čáru.
     const SCRUB = {};      // key -> { offset (s, + = do minulosti), chunks, exhausted, first (ms), loading }
-    function scrubState(key) { return SCRUB[key] || (SCRUB[key] = { offset: null, chunks: 1, exhausted: false, first: null, loading: false }); }
-    // výchozí poloha: nejnovější data pod čarou (živý rozsah), u vlastního rozsahu jeho konec u pravého okraje
-    function homeOffset(r) { return r && r.live ? -(r.to - r.from) / 2 : 0; }
+    function scrubState(key) { return SCRUB[key] || (SCRUB[key] = { offset: null, home: true, chunks: 1, exhausted: false, first: null, last: null, loading: false }); }
+    // výchozí poloha: poslední měření pod čarou (živý rozsah), u vlastního rozsahu jeho konec u pravého okraje
+    function homeOffset(key, r) {
+        if (!r || !r.live) return 0;
+        const span = r.to - r.from, s = SCRUB[key];
+        if (!s || s.last == null) return -span / 2;
+        return Math.max(-span / 2, Math.min(s.chunks * span, r.from + span / 2 - s.last / 1000));
+    }
     function resetScrub(key) { delete SCRUB[key]; }
     function viewRange(key, r) {
         const s = scrubState(key);
-        if (s.offset == null) s.offset = homeOffset(r);
+        if (s.offset == null || s.home) s.offset = homeOffset(key, r);   // doma = drží se nového měření
         const o = s.offset;
         return { from: r.from - o, to: r.to - o };
     }
@@ -862,6 +867,9 @@
         const firsts = list.map((d) => d.first_ts).filter((x) => x != null);
         s.first = firsts.length ? Math.min(...firsts) : null;
         s.exhausted = s.first == null || list.every((d) => d.loadedFrom <= s.first);
+        const lasts = list.map((d) => { const t = d.t || []; let i = t.length - 1; while (i >= 0 && t[i] == null) i--; return i < 0 ? null : t[i]; })
+            .filter((x) => x != null);
+        s.last = lasts.length ? Math.max(...lasts) : null;
     }
     // index bodu nejblíž času ms (t seřazené), nebo -1, když je nejbližší dál než maxGap
     function nearestIdx(t, ms, maxGap, values) {
@@ -913,12 +921,12 @@
             }
             const lines = opts.text ? opts.text(ms) : [];
             const key = opts.key;
-            const away = key && SCRUB_RANGE[key] && Math.abs(scrubState(key).offset - homeOffset(SCRUB_RANGE[key])) > 1;
+            const away = key && SCRUB_RANGE[key] && !scrubState(key).home;
             bub.innerHTML = `<b>${esc(fmtDateTime(ms))}</b>` +
                 (lines.length ? lines.map((l) => `<span>${esc(l)}</span>`).join('') : `<span class="muted">${esc(tr('bez dat'))}</span>`) +
                 (away ? `<button type="button" class="scrub-now">${esc(tr('Aktuální →'))}</button>` : '');
             const now = bub.querySelector('.scrub-now');
-            if (now) now.addEventListener('click', () => scrubTo(key, homeOffset(SCRUB_RANGE[key])));
+            if (now) now.addEventListener('click', () => scrubTo(key, homeOffset(key, SCRUB_RANGE[key])));
         }
     };
     const SCRUB_RANGE = {};     // key -> poslední zobrazený rozsah (rangeOf) pro tažení
@@ -939,6 +947,7 @@
         if (!ch || !r) return;
         const s = scrubState(key), lim = scrubLimits(key);
         s.offset = Math.max(lim.min, Math.min(lim.max, offset));
+        s.home = Math.abs(s.offset - homeOffset(key, r)) < 1;
         const v = viewRange(key, r);
         ch.options.scales.x.min = v.from * 1000;
         ch.options.scales.x.max = v.to * 1000;
@@ -975,14 +984,14 @@
         };
         box.addEventListener('pointerup', up);
         box.addEventListener('pointercancel', up);
-        box.addEventListener('dblclick', () => scrubTo(key, homeOffset(SCRUB_RANGE[key])));
+        box.addEventListener('dblclick', () => scrubTo(key, homeOffset(key, SCRUB_RANGE[key])));
         canvas.addEventListener('keydown', (e) => {
             const r = SCRUB_RANGE[key];
             if (!r) return;
             const step = (r.to - r.from) / 10, o = scrubState(key).offset;
             if (e.key === 'ArrowLeft') scrubTo(key, o + step);
             else if (e.key === 'ArrowRight') scrubTo(key, o - step);
-            else if (e.key === 'Home') scrubTo(key, homeOffset(r));
+            else if (e.key === 'Home') scrubTo(key, homeOffset(key, r));
             else return;
             e.preventDefault();
         });
