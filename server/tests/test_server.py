@@ -567,21 +567,38 @@ class ServerTest(unittest.TestCase):
         row = self.core.db.one("SELECT detail FROM audit WHERE action='DATA_DELETED' ORDER BY id DESC")
         self.assertIn(node, row["detail"])
 
-    def test_1g_node_order_api(self):
+    def test_1g_prefs_per_user(self):
         h = self.login()
+        st, me, _ = self.req("GET", "/api/me", headers=h)
+        self.assertEqual(me["prefs"], {})
         if len(self.core.nodes.ids()) < 2:
             self.core.nodes.add(0x0B0B, "Druhá")
         ids = [f"{i:04X}" for i in self.core.nodes.ids()]
-        st, js, _ = self.req("POST", "/api/nodes/order", {"order": list(reversed(ids))}, headers=h)
+        st, js, _ = self.req("POST", "/api/me/prefs", {"node_order": list(reversed(ids))}, headers=h)
         self.assertEqual(st, 200, js)
-        st, js, _ = self.req("GET", "/api/state", headers=h)
-        self.assertEqual([n["id"] for n in js["nodes"]], list(reversed(ids)))
-        st, js, _ = self.req("POST", "/api/nodes/order", {"order": ids[:1]}, headers=h)
-        self.assertEqual(st, 400)
-        st, js, _ = self.req("POST", "/api/nodes/order", {"order": ids}, headers={"Cookie": h["Cookie"]})
+        st, js, _ = self.req("POST", "/api/me/prefs",
+                             {"dash_wide": {"order": ["level", "tank"], "hidden": ["weather"]}}, headers=h)
+        self.assertEqual(st, 200, js)
+        st, me, _ = self.req("GET", "/api/me", headers=self.login())     # new session, same user: merged
+        self.assertEqual(me["prefs"]["node_order"], list(reversed(ids)))
+        self.assertEqual(me["prefs"]["dash_wide"], {"order": ["level", "tank"], "hidden": ["weather"]})
+        self.assertNotIn("dash_narrow", me["prefs"])
+        self.assertFalse(self.core.db.scalar("SELECT COUNT(*) FROM audit WHERE action='NODES_REORDERED'", (), 0))
+        for bad in ({"node_order": ["ZZZZ"]}, {"node_order": [ids[0], ids[0]]}, {"node_order": "x"},
+                    {"dash_wide": {"order": ["nope"]}}, {"dash_wide": {"order": ["tank", "tank"]}},
+                    {"dash_wide": {"hidden": ["tank"]}}, {"dash_wide": []}, {"colour": "red"}, {},
+                    {"node_order": [f"{i:04X}" for i in range(70)]}):
+            st, js, _ = self.req("POST", "/api/me/prefs", bad, headers=h)
+            self.assertEqual(st, 400, bad)
+        st, js, _ = self.req("POST", "/api/me/prefs", {"dash_wide": None}, headers=h)   # reset
+        self.assertEqual(st, 200, js)
+        st, me, _ = self.req("GET", "/api/me", headers=h)
+        self.assertNotIn("dash_wide", me["prefs"])
+        st, js, _ = self.req("POST", "/api/me/prefs", {"node_order": ids}, headers={"Cookie": h["Cookie"]})
         self.assertEqual(st, 403)                                         # CSRF
-        self.assertTrue(self.core.db.scalar("SELECT COUNT(*) FROM audit WHERE action='NODES_REORDERED'", (), 0))
-        self.core.nodes.set_order([int(i, 16) for i in ids])
+        st, _, _ = self.req("POST", "/api/nodes/order", {"order": ids}, headers=h)
+        self.assertEqual(st, 404)                                         # global order is gone
+        self.req("POST", "/api/me/prefs", {"node_order": None}, headers=h)
 
     def test_1c_node_defaults_api(self):
         h = self.login()

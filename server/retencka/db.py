@@ -244,6 +244,10 @@ MIGRATIONS: list[str] = [
        AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'node_defaults' AND json_valid(value)
                        AND json_extract(value, '$.flow_rate_lpm') IS NOT NULL)
     """,
+    # --- v15: personal UI preferences per user (JSON: tank order, dashboard layouts)
+    """
+    ALTER TABLE users ADD COLUMN prefs TEXT NOT NULL DEFAULT '{}'
+    """,
 ]
 
 

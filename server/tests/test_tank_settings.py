@@ -70,16 +70,6 @@ class TankValidation(unittest.TestCase):
             self.nodes.update(0xA, {"tank_shape": "table"})
         self.nodes.update(0xA, {"tank_shape": "table", "tank_table": [[0, 0], [150, 3000]]})
 
-    def test_node_order(self):
-        self.assertEqual(self.nodes.ids(), [0xA, 0xB])
-        self.nodes.set_order([0xB, 0xA])
-        self.assertEqual(self.nodes.ids(), [0xB, 0xA])
-        self.assertEqual([n["node_id"] for n in Nodes(self.db).all()], [0xB, 0xA])
-        with self.assertRaisesRegex(SettingsError, "všechna čidla"):
-            self.nodes.set_order([0xA])
-        with self.assertRaisesRegex(SettingsError, "všechna čidla"):
-            self.nodes.set_order([0xA, 0xA])
-
 
 if __name__ == "__main__":
     unittest.main()

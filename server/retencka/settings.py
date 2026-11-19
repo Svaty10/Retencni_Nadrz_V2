@@ -287,14 +287,6 @@ class Nodes:
     def all(self) -> list[dict]:
         return [self.get(i) for i in self.ids()]
 
-    def set_order(self, ids: list[int]) -> None:
-        """New display order of the tanks (top bar, overview); must list every node once."""
-        if sorted(ids) != sorted(self.ids()) or len(set(ids)) != len(ids):
-            raise SettingsError("Pořadí musí obsahovat všechna čidla.")
-        for i, nid in enumerate(ids):
-            self.db.execute("UPDATE nodes SET sort=? WHERE node_id=?", (i, nid))
-        self.reload()
-
     def add(self, node_id: int, name: str, config: Optional[dict] = None) -> None:
         if not 0 <= node_id <= 0xFFFF:
             raise SettingsError("Neplatné ID čidla (4 hexadecimální znaky).")
