@@ -7,6 +7,11 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
 ### Přidáno
 - **Firmware čidla 16: smazání párování bez programátoru.** Při vložení baterie propojit drátkem piny 5 V a signál na konektoru sondy (sonda odpojená) a nechat aspoň 10 s: čidlo zapomene párování a nabízí ho jako nové. Postup: [docs/programovani_uzlu.md](docs/programovani_uzlu.md). Nový firmware je potřeba do čidla nahrát ručně.
+- **Rozložení dashboardu podle sebe:** tlačítko *Upravit rozložení* pod dashboardem – karty jdou přetáhnout, posunout šipkami a skrýt (kromě karty nádrže). Rozložení pro počítač a pro mobil (okno užší než 768 px) se ukládá zvlášť; mobil dokud ho neupravíte, přebírá rozložení z počítače. *Obnovit výchozí* vrátí původní stav.
+
+### Změněno
+- **Pořadí nádrží je osobní:** každý uživatel (nejen admin) si nádrže v liště a na přehledu seřadí po svém, pořadí se uloží k účtu a platí na všech jeho zařízeních. Přesunutí se už nezapisuje do historie událostí. API `POST /api/me/prefs` místo zrušeného `POST /api/nodes/order`.
+- Posuvné grafy se otevírají s posledním měřením pod čarou (ne s aktuálním časem), takže u čidla, které chvíli neposílá, není kurzor za koncem dat.
 
 ## [1.23.1] - 2026-11-18
 

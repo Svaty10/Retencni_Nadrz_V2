@@ -142,7 +142,16 @@
         </div>
 
         <div id="nodeDash">
-            <div class="dash-top">
+            <div class="dash-edit-bar hidden" id="dashEditBar" role="region" aria-label="Úprava rozložení">
+                <span id="dashEditWhat">Upravujete rozložení pro počítač</span>
+                <span class="dash-edit-actions">
+                    <button type="button" class="btn btn-outline" id="dashEditReset">Obnovit výchozí</button>
+                    <button type="button" class="btn btn-primary" id="dashEditDone">Hotovo</button>
+                </span>
+            </div>
+            <!-- Karty dashboardu v jedné mřížce: pořadí a skrytí si každý uživatel nastaví sám -->
+            <div class="chart-grid dash-cards" id="dashCards">
+            <div class="dash-top span-all" data-card="tank">
                 <!-- Hlavní blok: nádrž -->
                 <section class="card tank-card" aria-labelledby="tankTitle">
                     <div class="tank-head">
@@ -233,7 +242,7 @@
             </div>
 
             <!-- Graf hladiny přes celou šířku pod nádrží a údaji -->
-            <section class="card chart-card level-card">
+            <section class="card chart-card level-card span-all" data-card="level">
                 <div class="card-head">
                     <div class="card-head-text"><h2>Hladina vody</h2><p class="card-desc">Vývoj hladiny v čase; podbarvení značí dopouštění a přítok z deště.</p></div>
                     <div class="range-picker" data-chart="level" data-default="7d" data-kind="time"></div>
@@ -245,8 +254,7 @@
                 </div>
             </section>
 
-            <div class="chart-grid">
-                <section class="card chart-card">
+                <section class="card chart-card" data-card="consumption">
                     <div class="card-head">
                         <div class="card-head-text"><h2>Spotřeba vody</h2><p class="card-desc">Kolik vody za den z nádrže odešlo a kolik přiteklo ze srážek.</p></div>
                         <div class="range-picker" data-chart="consumption" data-default="7d" data-kind="days"></div>
@@ -254,7 +262,7 @@
                     <div class="chart-container"><canvas id="consumptionChart"></canvas></div>
                 </section>
 
-                <section class="card chart-card refill-only">
+                <section class="card chart-card refill-only" data-card="refill">
                     <div class="card-head">
                         <div class="card-head-text"><h2>Dopouštění z řadu</h2><p class="card-desc">Kolik litrů se za den dopustilo z vodovodu.</p></div>
                         <div class="range-picker" data-chart="refill" data-default="7d" data-kind="days"></div>
@@ -262,7 +270,7 @@
                     <div class="chart-container"><canvas id="refillChart"></canvas></div>
                 </section>
 
-                <section class="card chart-card">
+                <section class="card chart-card" data-card="klima">
                     <div class="card-head">
                         <div class="card-head-text"><h2>Klima v čidle</h2><p class="card-desc">Teplota a vlhkost uvnitř krabičky čidla.</p></div>
                         <div class="range-picker" data-chart="klima" data-default="7d" data-kind="time"></div>
@@ -270,14 +278,14 @@
                     <div class="chart-container"><canvas id="klimaChart"></canvas></div>
                 </section>
 
-                <section class="card chart-card wx-card">
+                <section class="card chart-card wx-card" data-card="weather">
                     <div class="card-head">
                         <div class="card-head-text"><h2>Předpověď počasí</h2><p class="card-desc">Očekávané srážky a nejvyšší denní teploty na 7 dní dopředu.</p></div>
                     </div>
                     <div class="chart-container"><canvas id="weatherChart"></canvas></div>
                 </section>
 
-                <section class="card chart-card span-2 bat-card">
+                <section class="card chart-card span-2 bat-card" data-card="battery">
                     <div class="card-head">
                         <div class="card-head-text"><h2>Baterie a signál</h2><p class="card-desc">Stav baterie a síla signálu, napětí po najetí na graf; značky ukazují vložení baterie nebo restart čidla.</p></div>
                         <div class="range-picker" data-chart="battery" data-default="30d" data-kind="time"></div>
@@ -285,6 +293,7 @@
                     <div class="chart-container"><canvas id="batteryChart"></canvas></div>
                 </section>
             </div>
+            <div class="dash-edit-open"><button type="button" class="btn btn-outline" id="dashEditBtn">Upravit rozložení</button></div>
         </div>
     </div>
 

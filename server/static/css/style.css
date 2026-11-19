@@ -567,13 +567,43 @@ symbol[id^="shape-"] text { fill: var(--accent); stroke: none; font: 700 14px va
     padding: 0 8px; font: inherit; color: var(--accent); cursor: pointer;
 }
 .chart-container.chart-tall { height: clamp(300px, 45vh, 560px); }
-/* Graf hladiny přes celou šířku pod nádrží a údaji */
-.level-card { margin-top: 16px; }
-/* grafy v mřížce: přepínač rozsahu vždy pod popisem, graf dole – karty v řadě stejně vysoké */
+/* grafy v mřížce: přepínač rozsahu vždy pod popisem, graf dole – karty v řadě stejně vysoké
+   (graf hladiny přes celou šířku má hlavičku vedle sebe jako dřív) */
 .chart-grid .chart-card { display: flex; flex-direction: column; }
-.chart-grid .card-head-text { flex-basis: 100%; }
-.chart-grid .range-picker { justify-content: flex-start; }
+.chart-grid .chart-card:not(.level-card) .card-head-text { flex-basis: 100%; }
+.chart-grid .chart-card:not(.level-card) .range-picker { justify-content: flex-start; }
 .chart-grid .chart-container { margin-top: auto; }
+.dash-cards { margin-top: 0; }
+/* Úprava rozložení dashboardu (osobní, u účtu) */
+#nodeDash:not(.dash-editing) .dash-hidden { display: none !important; }
+.dash-edit-open { display: flex; justify-content: center; margin-top: 20px; }
+.dash-edit-bar {
+    position: sticky; top: calc(var(--head-h, 64px) + 8px); z-index: 20;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 16px; padding: 10px 14px; border-radius: var(--radius-sm);
+    background: var(--surface); border: 1px solid var(--accent); box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+    font-weight: 600; color: var(--ink);
+}
+.dash-edit-actions { display: flex; gap: 8px; }
+.dash-editing .dash-edit-open { display: none; }
+.dash-editing [data-card] { position: relative; margin-top: 46px; outline: 2px dashed var(--line-strong); outline-offset: 3px; border-radius: var(--radius); }
+.dash-editing [data-card] > :not(.dash-tools) { pointer-events: none; user-select: none; -webkit-user-select: none; }
+.dash-editing .dash-hidden > :not(.dash-tools) { opacity: .35; }
+.dash-editing [data-card].dragging { outline-color: var(--accent); }
+.dash-tools {
+    position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 5;
+    display: flex; align-items: center; gap: 4px; padding: 4px;
+    border-radius: 10px; background: var(--surface); border: 1px solid var(--line-strong);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .2);
+}
+.dash-tools button {
+    min-width: 34px; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px;
+    background: none; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer;
+}
+.dash-tools button:hover { border-color: var(--accent); color: var(--accent); }
+.dash-tools button:disabled { opacity: .35; cursor: default; }
+.dash-tools .dash-grip { cursor: grab; touch-action: none; font-size: 16px; letter-spacing: -2px; }
+.dash-tools .dash-name { padding: 0 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .chart-legend-extra { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .chart-legend-extra span { display: inline-flex; align-items: center; gap: 6px; }
 .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
@@ -956,10 +986,8 @@ body:not(.show-adv) #nastaveni .adv { display: none; }
     background: var(--accent-soft); border-radius: var(--radius-sm); color: var(--ink);
 }
 
-/* Bez ventilu: vše o dopouštění na dashboardu pryč, mřížka grafů se přeskládá bez děr */
+/* Bez ventilu: vše o dopouštění na dashboardu pryč (díry v mřížce dorovná fitDash v app.js) */
 body.no-refill .refill-only { display: none !important; }
-@media (min-width: 641px) and (max-width: 1279px) { body.no-refill .wx-card { grid-column: 1 / -1; } }
-@media (min-width: 1280px) { body.no-refill .bat-card { grid-column: 1 / -1; } }
 
 /* --- Responzivita -------------------------------------------- */
 @media (min-width: 1280px) {
@@ -998,8 +1026,8 @@ body.no-refill .refill-only { display: none !important; }
     .nav-tab { font-size: 14px; padding: 0 10px; }
     .node-bar { margin: 0 -16px; padding: 12px 16px 0; }
     .chart-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+    .dash-cards { margin-top: 0; }
     .dash-top, .stack { gap: 12px; }
-    .level-card { margin-top: 12px; }
     .brand-name { font-size: 15px; }
     .card { padding: 16px; }
     .tab-content { padding-top: 16px; }

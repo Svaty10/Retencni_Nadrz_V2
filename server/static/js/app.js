@@ -8,7 +8,18 @@
 
     // ------------------------------------------------------------------ util
     const $ = (id) => document.getElementById(id);
-    const ME = { username: '', role: 'user', csrf: '', hostnames: [] };
+    const ME = { username: '', role: 'user', csrf: '', hostnames: [], prefs: {} };
+    // osobní nastavení u účtu (pořadí nádrží, rozložení dashboardu) – jen měněné klíče, null = výchozí
+    async function savePrefs(patch) {
+        const r = await api('POST', '/api/me/prefs', patch);
+        ME.prefs = r.prefs || {};
+    }
+    // nádrže v pořadí, které si uživatel nastavil; nové (v jeho pořadí chybí) na konci
+    function orderNodes(list) {
+        const ord = (ME.prefs && ME.prefs.node_order) || [];
+        const pos = (id) => { const i = ord.indexOf(String(id).toUpperCase()); return i < 0 ? ord.length : i; };
+        return (list || []).map((n, i) => ({ n, i })).sort((a, b) => pos(a.n.id) - pos(b.n.id) || a.i - b.i).map((x) => x.n);
+    }
     const charts = {};
     let lastTs = null;
     let CURRENT_NODE = null;
@@ -488,7 +499,8 @@
                 });
             }
             if (lastState) renderState(lastState);
-            if ($('dashboard').classList.contains('active')) loadAllCharts();
+            // při startu grafy ještě nejsou připravené (načte je init)
+            if (lastState && $('dashboard').classList.contains('active')) loadAllCharts();
         }
     }
     function bindLangSwitch() {
@@ -1351,6 +1363,7 @@
             if (!CURRENT_NODE && k !== 'weather') return;
             if (onlyLive && pickers[k] && !rangeOf(k).live) return;   // vlastní rozsah se nemění
             if (k === 'refill' && document.body.classList.contains('no-refill')) return;   // karta je skrytá
+            if (!VIEW_ALL && DASH_CARDS.includes(k) && dashCardHidden(k)) return;          // skrytá uživatelem
             reloadChart(k);
         });
     }
@@ -1426,6 +1439,7 @@
         const hasValve = !!rf.configured || !!rf.active;
         const wasHidden = document.body.classList.contains('no-refill');
         document.body.classList.toggle('no-refill', !hasValve);
+        if (wasHidden !== !hasValve) fitDash();
         if (wasHidden && hasValve && lastTs !== null && $('dashboard').classList.contains('active')) reloadChart('refill');
         $('refillBox').classList.toggle('hidden', !hasValve && !zc);
         $('refillTitle').classList.toggle('hidden', !hasValve);
@@ -1541,6 +1555,162 @@
         });
     }
 
+    // ------------------------------------------------ rozložení dashboardu (osobní, u účtu)
+    // Karty jsou v jedné mřížce, pořadí = pořadí v DOM, skryté mají .dash-hidden. Rozložení je
+    // zvlášť pro široké (≥ 768 px) a úzké okno; úzké dokud není upravené, přebírá široké.
+    const DASH_CARDS = ['tank', 'level', 'consumption', 'refill', 'klima', 'weather', 'battery'];
+    const DASH_NAMES = { tank: 'Nádrž', level: 'Hladina vody', consumption: 'Spotřeba vody', refill: 'Dopouštění z řadu',
+        klima: 'Klima v čidle', weather: 'Předpověď počasí', battery: 'Baterie a signál' };
+    const NARROW = window.matchMedia('(max-width: 767px)');
+    const dashMode = () => (NARROW.matches ? 'narrow' : 'wide');
+    const dashCard = (id) => $('dashCards').querySelector(`[data-card="${id}"]`);
+    const dashShown = () => Array.from($('dashCards').querySelectorAll('[data-card]')).filter((e) => getComputedStyle(e).display !== 'none');
+    function dashLayout(mode) {
+        const p = ME.prefs || {};
+        const l = (mode === 'narrow' && p.dash_narrow) || p.dash_wide || {};
+        // karty, které v uloženém pořadí chybějí (přibyly v nové verzi), za svého výchozího předchůdce
+        const order = (l.order || []).filter((c) => DASH_CARDS.includes(c));
+        DASH_CARDS.forEach((c, i) => {
+            if (order.includes(c)) return;
+            const prev = DASH_CARDS.slice(0, i).reverse().find((x) => order.includes(x));
+            order.splice(prev ? order.indexOf(prev) + 1 : 0, 0, c);
+        });
+        return { order, hidden: (l.hidden || []).filter((c) => DASH_CARDS.includes(c) && c !== 'tank') };
+    }
+    function applyDash(l) {
+        const grid = $('dashCards');
+        l.order.forEach((c) => grid.appendChild(dashCard(c)));
+        DASH_CARDS.forEach((c) => dashCard(c).classList.toggle('dash-hidden', l.hidden.includes(c)));
+        fitDash();
+    }
+    function readDash() {
+        const cards = Array.from($('dashCards').querySelectorAll('[data-card]'));
+        return { order: cards.map((e) => e.dataset.card), hidden: cards.filter((e) => e.classList.contains('dash-hidden')).map((e) => e.dataset.card) };
+    }
+    function dashCardHidden(id) {
+        return !$('nodeDash').classList.contains('dash-editing') && dashCard(id).classList.contains('dash-hidden');
+    }
+    // Neúplný řádek mřížky dorovnat: karta, za kterou zbylo místo, se roztáhne do konce řádku.
+    function fitDash() {
+        const grid = $('dashCards');
+        Array.from(grid.querySelectorAll('[data-card]')).forEach((e) => { e.style.gridColumn = ''; });
+        const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+        let col = 0, prev = null, prevSpan = 0;
+        const fill = () => { if (prev && col < cols) prev.style.gridColumn = 'span ' + (prevSpan + cols - col); };
+        dashShown().forEach((e) => {
+            const span = e.classList.contains('span-all') ? cols : e.classList.contains('span-2') ? Math.min(2, cols) : 1;
+            if (col && col + span > cols) { fill(); col = 0; }
+            e.style.gridColumn = 'span ' + span;
+            col += span;
+            prev = e; prevSpan = span;
+            if (col >= cols) col = 0;
+        });
+        if (col) fill();
+    }
+    NARROW.addEventListener('change', () => { if (!DASH_EDIT) applyDash(dashLayout(dashMode())); else fitDash(); });
+    // šířka mřížky se mění s oknem i s načtením stylů/písem → počet sloupců znovu
+    if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(fitDash)).observe($('dashCards'));
+    else window.addEventListener('resize', () => fitDash());
+
+    // režim úprav: lišta nahoře, u karet úchyt, šipky a skrytí; „Hotovo“ uloží
+    let DASH_EDIT = null;           // { mode, resetSig }
+    function dashTools(el) {
+        const id = el.dataset.card;
+        const t = document.createElement('div');
+        t.className = 'dash-tools';
+        t.innerHTML = `<button type="button" class="dash-grip" aria-label="${esc(tr('Přetáhnout'))}" title="${esc(tr('Přetáhnout'))}">⠿</button>
+            <span class="dash-name">${esc(tr(DASH_NAMES[id]))}</span>
+            <button type="button" data-move="-1" aria-label="${esc(tr('Posunout výš'))}" title="${esc(tr('Posunout výš'))}">↑</button>
+            <button type="button" data-move="1" aria-label="${esc(tr('Posunout níž'))}" title="${esc(tr('Posunout níž'))}">↓</button>` +
+            (id === 'tank' ? '' : '<button type="button" class="dash-hide"></button>');
+        t.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', () => {
+            const list = dashShown();
+            const i = list.indexOf(el), j = i + Number(b.dataset.move);
+            if (j < 0 || j >= list.length) return;
+            $('dashCards').insertBefore(el, j < i ? list[j] : list[j].nextSibling);
+            syncDashTools();
+            b.focus();
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }));
+        const hide = t.querySelector('.dash-hide');
+        if (hide) hide.addEventListener('click', () => { el.classList.toggle('dash-hidden'); syncDashTools(); });
+        const grip = t.querySelector('.dash-grip');
+        let drag = null;
+        grip.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            drag = { id: e.pointerId };
+            try { grip.setPointerCapture(e.pointerId); } catch (err) { /* syntetická událost */ }
+            el.classList.add('dragging');
+            e.preventDefault();
+        });
+        grip.addEventListener('pointermove', (e) => {
+            if (!drag || e.pointerId !== drag.id) return;
+            const hit = document.elementsFromPoint(e.clientX, e.clientY).map((x) => x.closest('[data-card]')).find((x) => x && x !== el);
+            if (!hit || !$('dashCards').contains(hit)) return;
+            const r = hit.getBoundingClientRect();
+            const after = (e.clientY - r.top) / r.height + (e.clientX - r.left) / r.width > 1;
+            if ((after ? hit.nextElementSibling : hit) === el) return;
+            $('dashCards').insertBefore(el, after ? hit.nextSibling : hit);
+            fitDash();
+        });
+        const up = (e) => {
+            if (!drag || e.pointerId !== drag.id) return;
+            drag = null;
+            el.classList.remove('dragging');
+            syncDashTools();
+        };
+        grip.addEventListener('pointerup', up);
+        grip.addEventListener('pointercancel', up);
+        el.appendChild(t);
+    }
+    function syncDashTools() {
+        const list = dashShown();
+        list.forEach((el, i) => {
+            const t = el.querySelector(':scope > .dash-tools');
+            if (!t) return;
+            t.querySelector('[data-move="-1"]').disabled = i === 0;
+            t.querySelector('[data-move="1"]').disabled = i === list.length - 1;
+            const h = t.querySelector('.dash-hide');
+            if (h) h.textContent = tr(el.classList.contains('dash-hidden') ? 'Zobrazit' : 'Skrýt');
+        });
+        fitDash();
+    }
+    const dashSig = () => JSON.stringify(readDash());
+    function dashEditStart() {
+        const mode = dashMode();
+        DASH_EDIT = { mode, resetSig: null };
+        $('nodeDash').classList.add('dash-editing');
+        $('dashEditWhat').textContent = tr(mode === 'narrow' ? 'Upravujete rozložení pro mobil' : 'Upravujete rozložení pro počítač');
+        $('dashEditBar').classList.remove('hidden');
+        DASH_CARDS.forEach((c) => dashTools(dashCard(c)));
+        syncDashTools();
+        $('dashEditBar').scrollIntoView({ block: 'nearest' });
+        $('dashEditDone').focus();
+    }
+    function dashEditEnd() {
+        DASH_EDIT = null;
+        $('nodeDash').classList.remove('dash-editing');
+        $('dashEditBar').classList.add('hidden');
+        $('dashCards').querySelectorAll('.dash-tools').forEach((t) => t.remove());
+        applyDash(dashLayout(dashMode()));
+    }
+    $('dashEditBtn').addEventListener('click', dashEditStart);
+    $('dashEditReset').addEventListener('click', () => {
+        // mobil se vrací k rozložení z počítače, počítač k výchozímu
+        applyDash(DASH_EDIT.mode === 'narrow' ? dashLayout('wide') : { order: DASH_CARDS.slice(), hidden: [] });
+        syncDashTools();
+        DASH_EDIT.resetSig = dashSig();
+    });
+    $('dashEditDone').addEventListener('click', async () => {
+        const key = DASH_EDIT.mode === 'narrow' ? 'dash_narrow' : 'dash_wide';
+        const val = DASH_EDIT.resetSig === dashSig() ? null : readDash();
+        try {
+            await savePrefs({ [key]: val });
+        } catch (e) { toast(e.message, true); return; }
+        dashEditEnd();
+        loadAllCharts();
+    });
+
     function selectNode(id, force) {
         if (!id || (id === CURRENT_NODE && !force)) return;
         CURRENT_NODE = id;
@@ -1550,8 +1720,8 @@
         pollState().then(() => { if ($('dashboard').classList.contains('active')) loadAllCharts(); });
     }
 
-    // Pořadí nádrží: admin přetáhne pilulku v liště nebo kartu na přehledu (myší hned,
-    // prstem po podržení), klávesnicí Alt+←/→. Během tažení se lišta ani karty nepřekreslují.
+    // Pořadí nádrží (osobní, u účtu): pilulka v liště nebo karta na přehledu se přetáhne (myší
+    // hned, prstem po podržení), klávesnicí Alt+←/→. Během tažení se lišta ani karty nepřekreslují.
     const SORT = { active: false, suppressClick: false };
     function sortable(container, itemSel) {
         let drag = null;
@@ -1561,9 +1731,9 @@
             const now = order();
             if (now.join() === before.join()) return;
             try {
-                await api('POST', '/api/nodes/order', { order: now });
-                await pollState();
-            } catch (e) { toast(e.message, true); pollState(); }
+                await savePrefs({ node_order: now });
+            } catch (e) { toast(e.message, true); }
+            pollState();
         }
         function end() {
             if (!drag) return;
@@ -1603,7 +1773,7 @@
         }
         function up(e) { if (drag && e.pointerId === drag.id) end(); }
         container.addEventListener('pointerdown', (e) => {
-            if (ME.role !== 'admin' || e.button !== 0 || drag) return;
+            if (e.button !== 0 || drag) return;
             if (container.dataset.mode && container.dataset.mode !== 'dash') return;    // lišta v Nastavení
             const el = e.target.closest(itemSel);
             if (!el || !container.contains(el) || items().length < 2) return;
@@ -1619,7 +1789,7 @@
         container.addEventListener('contextmenu', (e) => { if (drag) e.preventDefault(); });
         container.addEventListener('click', (e) => { if (SORT.suppressClick) { e.stopPropagation(); e.preventDefault(); } }, true);
         container.addEventListener('keydown', (e) => {
-            if (ME.role !== 'admin' || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+            if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
             if (container.dataset.mode && container.dataset.mode !== 'dash') return;
             const el = e.target.closest(itemSel);
             if (!el) return;
@@ -1766,10 +1936,12 @@
     async function pollState() {
         try {
             let s = await api('GET', '/api/state' + (CURRENT_NODE ? '?node=' + CURRENT_NODE : ''));
-            const ids = (s.nodes || []).map((n) => n.id);
+            s.nodes = orderNodes(s.nodes);
+            const ids = s.nodes.map((n) => n.id);
             if (ids.length && (!CURRENT_NODE || !ids.includes(CURRENT_NODE) || !s.node)) {
                 CURRENT_NODE = ids.includes(CURRENT_NODE) ? CURRENT_NODE : ids[0];
                 s = await api('GET', '/api/state?node=' + CURRENT_NODE);
+                s.nodes = orderNodes(s.nodes);
             }
             lastState = s;
             renderDiskBanner(s);
@@ -3534,6 +3706,7 @@
         } catch (e) { return; }
         applyTheme(ME.theme, false);
         applyLang(ME.lang || localStorage.getItem('lang') || 'cs', true);
+        applyDash(dashLayout(dashMode()));
         $('userBadge').textContent = ME.username;
         $('userRole').textContent = ME.role === 'admin' ? 'Administrátor' : 'Uživatel';
         const initial = (ME.username || '?').trim().charAt(0) || '?';
