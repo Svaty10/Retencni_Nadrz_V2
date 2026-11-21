@@ -8,6 +8,13 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 ### Přidáno
 - **Firmware čidla 16: smazání párování bez programátoru.** Při vložení baterie propojit drátkem piny 5 V a signál na konektoru sondy (sonda odpojená) a nechat aspoň 10 s: čidlo zapomene párování a nabízí ho jako nové. Postup: [docs/programovani_uzlu.md](docs/programovani_uzlu.md). Nový firmware je potřeba do čidla nahrát ručně.
 
+## [1.25.0] - 2026-11-21
+
+### Změněno
+- **Úprava rozložení dashboardu jen přetahováním:** v režimu *Upravit rozložení* se karta chytí kdekoli a přetáhne (na mobilu po podržení prstem) – lišta s úchytem a šipkami nad kartami je pryč, zůstala jen ikonka oka pro skrytí karty. Klávesnicí: karta s fokusem, šipky ←/→ v řádku, ↑/↓ mezi řádky.
+- **Karty v řádcích vedle sebe:** kartu lze pustit do řádku vedle jiných (na počítači nejvýš 3) nebo mezi řádky jako nový řádek. Šířka se dělí sama – jedna karta přes celou šířku, dvě napůl, tři po třetinách; skrytá karta uvolní místo ostatním. Na mobilu jsou karty vždy pod sebou. Dřív uložená rozložení se převedou automaticky.
+- **Plynulé přeskládání:** při přetahování karet na dashboardu, nádrží v liště i karet na přehledu ostatní hned uhýbají s krátkou animací (je vidět, co kam přeskočilo), místo aby se přeskládaly až po puštění.
+
 ## [1.24.0] - 2026-11-19
 
 ### Přidáno
