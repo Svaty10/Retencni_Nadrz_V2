@@ -466,10 +466,21 @@ def build_web_app(core: Core, static_dir: str) -> web.Application:
                 raise ValueError("Nádrž je v pořadí dvakrát.")
             return out
         if key in ("dash_wide", "dash_narrow"):
-            if not isinstance(val, dict) or set(val) - {"order", "hidden"}:
+            if not isinstance(val, dict) or set(val) - {"order", "hidden", "rows"}:
                 raise ValueError("Neplatné rozložení dashboardu.")
             out = {}
+            if "rows" in val:           # řádky karet vedle sebe (nové); „order“ = staré ploché pořadí
+                rows = val["rows"]
+                if (not isinstance(rows, list) or len(rows) > len(DASH_CARDS)
+                        or any(not isinstance(r, list) or not r for r in rows)):
+                    raise ValueError("Neplatné rozložení dashboardu.")
+                flat = [c for r in rows for c in r]
+                if any(c not in DASH_CARDS for c in flat) or len(set(flat)) != len(flat):
+                    raise ValueError("Neplatné rozložení dashboardu.")
+                out["rows"] = rows
             for part in ("order", "hidden"):
+                if part == "order" and "rows" in val and part not in val:
+                    continue
                 lst = val.get(part, [])
                 if (not isinstance(lst, list) or any(c not in DASH_CARDS for c in lst)
                         or len(set(lst)) != len(lst)):

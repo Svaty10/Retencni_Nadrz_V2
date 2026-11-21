@@ -292,7 +292,10 @@ body.has-save-bar .app-container { padding-bottom: 110px; }
 /* Přetahování pořadí nádrží (admin) */
 .is-sorting { user-select: none; -webkit-user-select: none; }
 .is-sorting, .is-sorting * { cursor: grabbing !important; }
-.sorting { outline: 2px dashed var(--accent); outline-offset: 2px; opacity: 0.85; }
+.sorting {
+    position: relative; z-index: 30; pointer-events: none; transition: none !important;
+    outline: 2px solid var(--accent); outline-offset: 2px; opacity: .92; box-shadow: 0 10px 28px rgba(0, 0, 0, .3);
+}
 /* Obrázek tvaru nádrže v nastavení */
 .shape-row { align-items: end; }
 .shape-fig { position: relative; max-width: 220px; width: 100%; justify-self: center; color: var(--ink-2); }
@@ -573,7 +576,17 @@ symbol[id^="shape-"] text { fill: var(--accent); stroke: none; font: 700 14px va
 .chart-grid .chart-card:not(.level-card) .card-head-text { flex-basis: 100%; }
 .chart-grid .chart-card:not(.level-card) .range-picker { justify-content: flex-start; }
 .chart-grid .chart-container { margin-top: auto; }
-.dash-cards { margin-top: 0; }
+/* Dashboard: řádky karet; v řádku si karty dělí šířku rovným dílem (1–3 vedle sebe).
+   Když se do okna nevejdou, zalomí se (min. šířka karty). */
+.chart-grid.dash-cards { display: flex; flex-direction: column; gap: 16px; margin-top: 0; position: relative; }
+.dash-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+.dash-row.is-empty { display: none; }
+.dash-row > [data-card] { flex: 1 1 0; min-width: 260px; }
+.dash-row > .dash-top { min-width: 320px; }
+/* nádrž nebo graf hladiny vedle jiné karty: obsah pod sebe */
+.dash-row:not([data-n="1"]) > .dash-top { grid-template-columns: minmax(0, 1fr); }
+.dash-row:not([data-n="1"]) > .level-card .card-head-text { flex-basis: 100%; }
+.dash-row:not([data-n="1"]) > .level-card .range-picker { justify-content: flex-start; }
 /* Úprava rozložení dashboardu (osobní, u účtu) */
 #nodeDash:not(.dash-editing) .dash-hidden { display: none !important; }
 .dash-edit-open { display: flex; justify-content: center; margin-top: 20px; }
@@ -586,24 +599,27 @@ symbol[id^="shape-"] text { fill: var(--accent); stroke: none; font: 700 14px va
 }
 .dash-edit-actions { display: flex; gap: 8px; }
 .dash-editing .dash-edit-open { display: none; }
-.dash-editing [data-card] { position: relative; margin-top: 46px; outline: 2px dashed var(--line-strong); outline-offset: 3px; border-radius: var(--radius); }
-.dash-editing [data-card] > :not(.dash-tools) { pointer-events: none; user-select: none; -webkit-user-select: none; }
-.dash-editing .dash-hidden > :not(.dash-tools) { opacity: .35; }
-.dash-editing [data-card].dragging { outline-color: var(--accent); }
-.dash-tools {
-    position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 5;
-    display: flex; align-items: center; gap: 4px; padding: 4px;
-    border-radius: 10px; background: var(--surface); border: 1px solid var(--line-strong);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, .2);
+.dash-editing [data-card] {
+    position: relative; cursor: grab; outline: 2px dashed var(--line-strong); outline-offset: 3px; border-radius: var(--radius);
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
-.dash-tools button {
-    min-width: 34px; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px;
-    background: none; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer;
+.dash-editing [data-card]:focus-visible { outline: 2px solid var(--accent); }
+.dash-editing [data-card] > :not(.dash-hide) { pointer-events: none; }
+.dash-editing .dash-hidden > :not(.dash-hide) { opacity: .35; }
+.dash-editing [data-card].dragging {
+    z-index: 30; pointer-events: none; opacity: .9; outline: 2px solid var(--accent);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .3); transition: none;
 }
-.dash-tools button:hover { border-color: var(--accent); color: var(--accent); }
-.dash-tools button:disabled { opacity: .35; cursor: default; }
-.dash-tools .dash-grip { cursor: grab; touch-action: none; font-size: 16px; letter-spacing: -2px; }
-.dash-tools .dash-name { padding: 0 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.dash-dragging, .dash-dragging * { cursor: grabbing !important; }
+.dash-hide {
+    position: absolute; top: 8px; right: 8px; z-index: 6;
+    display: grid; place-items: center; width: 34px; height: 34px; padding: 0;
+    border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: var(--ink-2); cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+}
+.dash-hide:hover { border-color: var(--accent); color: var(--accent); }
+.dash-editing [data-card] .card-head { padding-right: 40px; }
+.dash-hide .ico { width: 18px; height: 18px; }
 .chart-legend-extra { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .chart-legend-extra span { display: inline-flex; align-items: center; gap: 6px; }
 .lg { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
@@ -1026,7 +1042,9 @@ body.no-refill .refill-only { display: none !important; }
     .nav-tab { font-size: 14px; padding: 0 10px; }
     .node-bar { margin: 0 -16px; padding: 12px 16px 0; }
     .chart-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 12px; }
-    .dash-cards { margin-top: 0; }
+    .chart-grid.dash-cards, .dash-row { gap: 12px; }
+    .dash-row { flex-direction: column; }
+    .dash-row > [data-card], .dash-row > .dash-top { min-width: 0; flex: none; }
     .dash-top, .stack { gap: 12px; }
     .brand-name { font-size: 15px; }
     .card { padding: 16px; }

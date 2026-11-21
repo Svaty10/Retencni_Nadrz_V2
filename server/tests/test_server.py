@@ -583,10 +583,18 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(me["prefs"]["node_order"], list(reversed(ids)))
         self.assertEqual(me["prefs"]["dash_wide"], {"order": ["level", "tank"], "hidden": ["weather"]})
         self.assertNotIn("dash_narrow", me["prefs"])
+        rows = {"rows": [["tank"], ["level", "klima", "weather"]], "hidden": ["klima"]}
+        st, js, _ = self.req("POST", "/api/me/prefs", {"dash_narrow": rows}, headers=h)
+        self.assertEqual(st, 200, js)
+        st, me, _ = self.req("GET", "/api/me", headers=h)
+        self.assertEqual(me["prefs"]["dash_narrow"], rows)
+        self.req("POST", "/api/me/prefs", {"dash_narrow": None}, headers=h)
         self.assertFalse(self.core.db.scalar("SELECT COUNT(*) FROM audit WHERE action='NODES_REORDERED'", (), 0))
         for bad in ({"node_order": ["ZZZZ"]}, {"node_order": [ids[0], ids[0]]}, {"node_order": "x"},
                     {"dash_wide": {"order": ["nope"]}}, {"dash_wide": {"order": ["tank", "tank"]}},
                     {"dash_wide": {"hidden": ["tank"]}}, {"dash_wide": []}, {"colour": "red"}, {},
+                    {"dash_wide": {"rows": [["tank"], []]}}, {"dash_wide": {"rows": [["tank"], ["tank"]]}},
+                    {"dash_wide": {"rows": ["tank"]}}, {"dash_wide": {"rows": [["nope"]]}},
                     {"node_order": [f"{i:04X}" for i in range(70)]}):
             st, js, _ = self.req("POST", "/api/me/prefs", bad, headers=h)
             self.assertEqual(st, 400, bad)

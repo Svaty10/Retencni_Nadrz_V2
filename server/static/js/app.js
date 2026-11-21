@@ -130,6 +130,35 @@
         return `<svg class="ico${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
     }
 
+    // Plynulé přeskládání (FLIP): změří prvky, provede změnu v DOM a každý prvek, který se
+    // posunul, nechá dojet ze staré polohy do nové. Je to přímá odezva na tažení (je vidět, co
+    // kam přeskočilo), proto běží i při „omezit pohyb“ v systému – jen kratší.
+    const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const flipMs = () => (REDUCED.matches ? 140 : 220);
+    const canAnimate = () => !!Element.prototype.animate;
+    function flipMove(els, mutate) {
+        const first = new Map(els.map((e) => [e, e.getBoundingClientRect()]));
+        mutate();
+        if (!canAnimate()) return;
+        els.forEach((e) => {
+            const f = first.get(e);
+            if (e._flip) { e._flip.cancel(); e._flip = null; }
+            const l = e.getBoundingClientRect();
+            if (!f.width || !l.width) return;
+            const dx = f.left - l.left, dy = f.top - l.top;
+            if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+            const a = e.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+                { duration: flipMs(), easing: 'cubic-bezier(.2, .8, .2, 1)' });
+            e._flip = a;
+            a.onfinish = () => { if (e._flip === a) e._flip = null; };
+        });
+    }
+    // tažený prvek po puštění plynule dosedne na své místo (from = jeho transform při tažení)
+    function settle(el, from) {
+        if (!from || from === 'none' || !canAnimate()) return;
+        el.animate([{ transform: from }, { transform: 'none' }], { duration: flipMs(), easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    }
+
     // Výběry jsou nativní <select> (styl v CSS) – jen nastavení hodnoty
     function setSelect(select, value) {
         select.value = String(value);
@@ -1556,148 +1585,287 @@
     }
 
     // ------------------------------------------------ rozložení dashboardu (osobní, u účtu)
-    // Karty jsou v jedné mřížce, pořadí = pořadí v DOM, skryté mají .dash-hidden. Rozložení je
-    // zvlášť pro široké (≥ 768 px) a úzké okno; úzké dokud není upravené, přebírá široké.
+    // Karty jsou v řádcích (.dash-row), na počítači nejvýš 3 vedle sebe; šířku si dělí rovným
+    // dílem podle toho, kolik jich v řádku je vidět. Skryté mají .dash-hidden. Rozložení je
+    // zvlášť pro široké (≥ 768 px) a úzké okno (tam jedna pod druhou); úzké přebírá široké.
     const DASH_CARDS = ['tank', 'level', 'consumption', 'refill', 'klima', 'weather', 'battery'];
-    const DASH_NAMES = { tank: 'Nádrž', level: 'Hladina vody', consumption: 'Spotřeba vody', refill: 'Dopouštění z řadu',
-        klima: 'Klima v čidle', weather: 'Předpověď počasí', battery: 'Baterie a signál' };
+    const DASH_DEFAULT = [['tank'], ['level'], ['consumption', 'refill', 'klima'], ['weather', 'battery']];
     const NARROW = window.matchMedia('(max-width: 767px)');
     const dashMode = () => (NARROW.matches ? 'narrow' : 'wide');
+    const dashMax = () => (NARROW.matches ? 1 : 3);
     const dashCard = (id) => $('dashCards').querySelector(`[data-card="${id}"]`);
-    const dashShown = () => Array.from($('dashCards').querySelectorAll('[data-card]')).filter((e) => getComputedStyle(e).display !== 'none');
+    const dashRows = () => Array.from($('dashCards').querySelectorAll(':scope > .dash-row'));
+    const shownIn = (row) => Array.from(row.querySelectorAll(':scope > [data-card]')).filter((e) => getComputedStyle(e).display !== 'none');
+    // staré ploché pořadí → řádky (nádrž a hladina samy, ostatní po třech; baterie byla dvojitá)
+    function packRows(order) {
+        const rows = [];
+        let cur = [], w = 0;
+        order.forEach((c) => {
+            const cw = c === 'battery' ? 2 : 1;
+            if (c === 'tank' || c === 'level') { if (cur.length) rows.push(cur); rows.push([c]); cur = []; w = 0; return; }
+            if (w + cw > 3) { rows.push(cur); cur = []; w = 0; }
+            cur.push(c); w += cw;
+        });
+        if (cur.length) rows.push(cur);
+        return rows;
+    }
     function dashLayout(mode) {
         const p = ME.prefs || {};
         const l = (mode === 'narrow' && p.dash_narrow) || p.dash_wide || {};
-        // karty, které v uloženém pořadí chybějí (přibyly v nové verzi), za svého výchozího předchůdce
-        const order = (l.order || []).filter((c) => DASH_CARDS.includes(c));
+        let rows = Array.isArray(l.rows) ? l.rows : Array.isArray(l.order) ? packRows(l.order) : DASH_DEFAULT;
+        const seen = new Set();
+        rows = rows.map((r) => r.filter((c) => DASH_CARDS.includes(c) && !seen.has(c) && seen.add(c))).filter((r) => r.length);
+        // karty, které v uloženém rozložení chybějí (přibyly v nové verzi): nový řádek za výchozím předchůdcem
         DASH_CARDS.forEach((c, i) => {
-            if (order.includes(c)) return;
-            const prev = DASH_CARDS.slice(0, i).reverse().find((x) => order.includes(x));
-            order.splice(prev ? order.indexOf(prev) + 1 : 0, 0, c);
+            if (seen.has(c)) return;
+            const prev = DASH_CARDS.slice(0, i).reverse().find((x) => seen.has(x));
+            const at = prev ? rows.findIndex((r) => r.includes(prev)) + 1 : 0;
+            rows.splice(at, 0, [c]);
+            seen.add(c);
         });
-        return { order, hidden: (l.hidden || []).filter((c) => DASH_CARDS.includes(c) && c !== 'tank') };
+        return { rows, hidden: (l.hidden || []).filter((c) => DASH_CARDS.includes(c) && c !== 'tank') };
     }
     function applyDash(l) {
         const grid = $('dashCards');
-        l.order.forEach((c) => grid.appendChild(dashCard(c)));
+        const cards = DASH_CARDS.map(dashCard);
+        dashRows().forEach((r) => r.remove());
+        l.rows.forEach((ids) => {
+            const row = document.createElement('div');
+            row.className = 'dash-row';
+            ids.forEach((c) => row.appendChild(dashCard(c) || cards[DASH_CARDS.indexOf(c)]));
+            grid.appendChild(row);
+        });
         DASH_CARDS.forEach((c) => dashCard(c).classList.toggle('dash-hidden', l.hidden.includes(c)));
         fitDash();
     }
     function readDash() {
-        const cards = Array.from($('dashCards').querySelectorAll('[data-card]'));
-        return { order: cards.map((e) => e.dataset.card), hidden: cards.filter((e) => e.classList.contains('dash-hidden')).map((e) => e.dataset.card) };
+        const rows = dashRows().map((r) => Array.from(r.querySelectorAll(':scope > [data-card]')).map((e) => e.dataset.card)).filter((r) => r.length);
+        return { rows, hidden: DASH_CARDS.filter((c) => dashCard(c).classList.contains('dash-hidden')) };
     }
     function dashCardHidden(id) {
         return !$('nodeDash').classList.contains('dash-editing') && dashCard(id).classList.contains('dash-hidden');
     }
-    // Neúplný řádek mřížky dorovnat: karta, za kterou zbylo místo, se roztáhne do konce řádku.
+    // řádek ví, kolik karet v něm je vidět (šířky a vnitřní rozložení karet podle toho v CSS)
     function fitDash() {
-        const grid = $('dashCards');
-        Array.from(grid.querySelectorAll('[data-card]')).forEach((e) => { e.style.gridColumn = ''; });
-        const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
-        let col = 0, prev = null, prevSpan = 0;
-        const fill = () => { if (prev && col < cols) prev.style.gridColumn = 'span ' + (prevSpan + cols - col); };
-        dashShown().forEach((e) => {
-            const span = e.classList.contains('span-all') ? cols : e.classList.contains('span-2') ? Math.min(2, cols) : 1;
-            if (col && col + span > cols) { fill(); col = 0; }
-            e.style.gridColumn = 'span ' + span;
-            col += span;
-            prev = e; prevSpan = span;
-            if (col >= cols) col = 0;
+        dashRows().forEach((r) => {
+            if (!r.querySelector('[data-card]')) { r.remove(); return; }
+            const n = shownIn(r).length;
+            r.dataset.n = n;
+            r.classList.toggle('is-empty', !n);
         });
-        if (col) fill();
     }
     NARROW.addEventListener('change', () => { if (!DASH_EDIT) applyDash(dashLayout(dashMode())); else fitDash(); });
-    // šířka mřížky se mění s oknem i s načtením stylů/písem → počet sloupců znovu
-    if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(fitDash)).observe($('dashCards'));
-    else window.addEventListener('resize', () => fitDash());
 
-    // režim úprav: lišta nahoře, u karet úchyt, šipky a skrytí; „Hotovo“ uloží
+    // Režim úprav: kartu stačí chytit a přetáhnout (myší hned, prstem po podržení). Pustí se
+    // buď do řádku vedle jiných karet (je-li v něm místo), nebo mezi řádky jako nový řádek.
+    // Klávesnice: karta má fokus, ←/→ v řádku, ↑/↓ mezi řádky. Roh karty: skrýt / zobrazit.
     let DASH_EDIT = null;           // { mode, resetSig }
-    function dashTools(el) {
-        const id = el.dataset.card;
-        const t = document.createElement('div');
-        t.className = 'dash-tools';
-        t.innerHTML = `<button type="button" class="dash-grip" aria-label="${esc(tr('Přetáhnout'))}" title="${esc(tr('Přetáhnout'))}">⠿</button>
-            <span class="dash-name">${esc(tr(DASH_NAMES[id]))}</span>
-            <button type="button" data-move="-1" aria-label="${esc(tr('Posunout výš'))}" title="${esc(tr('Posunout výš'))}">↑</button>
-            <button type="button" data-move="1" aria-label="${esc(tr('Posunout níž'))}" title="${esc(tr('Posunout níž'))}">↓</button>` +
-            (id === 'tank' ? '' : '<button type="button" class="dash-hide"></button>');
-        t.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', () => {
-            const list = dashShown();
-            const i = list.indexOf(el), j = i + Number(b.dataset.move);
-            if (j < 0 || j >= list.length) return;
-            $('dashCards').insertBefore(el, j < i ? list[j] : list[j].nextSibling);
-            syncDashTools();
-            b.focus();
-            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        }));
-        const hide = t.querySelector('.dash-hide');
-        if (hide) hide.addEventListener('click', () => { el.classList.toggle('dash-hidden'); syncDashTools(); });
-        const grip = t.querySelector('.dash-grip');
-        let drag = null;
-        grip.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
-            drag = { id: e.pointerId };
-            try { grip.setPointerCapture(e.pointerId); } catch (err) { /* syntetická událost */ }
-            el.classList.add('dragging');
-            e.preventDefault();
-        });
-        grip.addEventListener('pointermove', (e) => {
-            if (!drag || e.pointerId !== drag.id) return;
-            const hit = document.elementsFromPoint(e.clientX, e.clientY).map((x) => x.closest('[data-card]')).find((x) => x && x !== el);
-            if (!hit || !$('dashCards').contains(hit)) return;
-            const r = hit.getBoundingClientRect();
-            const after = (e.clientY - r.top) / r.height + (e.clientX - r.left) / r.width > 1;
-            if ((after ? hit.nextElementSibling : hit) === el) return;
-            $('dashCards').insertBefore(el, after ? hit.nextSibling : hit);
-            fitDash();
-        });
-        const up = (e) => {
-            if (!drag || e.pointerId !== drag.id) return;
-            drag = null;
-            el.classList.remove('dragging');
-            syncDashTools();
-        };
-        grip.addEventListener('pointerup', up);
-        grip.addEventListener('pointercancel', up);
-        el.appendChild(t);
+    let DDRAG = null;
+    function dashHideBtn(el) {
+        if (el.dataset.card === 'tank') return;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'dash-hide';
+        b.addEventListener('click', (e) => { e.stopPropagation(); el.classList.toggle('dash-hidden'); syncDashTools(); });
+        el.appendChild(b);
     }
     function syncDashTools() {
-        const list = dashShown();
-        list.forEach((el, i) => {
-            const t = el.querySelector(':scope > .dash-tools');
-            if (!t) return;
-            t.querySelector('[data-move="-1"]').disabled = i === 0;
-            t.querySelector('[data-move="1"]').disabled = i === list.length - 1;
-            const h = t.querySelector('.dash-hide');
-            if (h) h.textContent = tr(el.classList.contains('dash-hidden') ? 'Zobrazit' : 'Skrýt');
+        DASH_CARDS.forEach((c) => {
+            const el = dashCard(c);
+            const hidden = el.classList.contains('dash-hidden');
+            const b = el.querySelector(':scope > .dash-hide');
+            if (b) {
+                b.innerHTML = ico(hidden ? 'eye-off' : 'eye');
+                b.title = tr(hidden ? 'Zobrazit' : 'Skrýt');
+                b.setAttribute('aria-label', b.title);
+            }
         });
         fitDash();
     }
+    // kam by karta spadla: { row, index } do řádku, nebo { before: řádek | null } jako nový řádek
+    function dashTarget(el, x, y) {
+        const rows = dashRows().filter((r) => !r.classList.contains('is-empty'));
+        if (!rows.length) return null;
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i], rr = r.getBoundingClientRect();
+            const next = rows[i + 1];
+            const bottom = next ? (rr.bottom + next.getBoundingClientRect().top) / 2 : Infinity;
+            if (i === 0 && y < rr.top) return { before: r };
+            if (y > bottom) continue;
+            const band = Math.min(36, rr.height * 0.22);
+            if (y < rr.top + band) return { before: r };
+            if (y > rr.bottom - band) return { before: next || null, after: r };
+            const others = shownIn(r).filter((e) => e !== el);
+            if (others.length >= dashMax()) return { before: y < rr.top + rr.height / 2 ? r : (next || null), after: r };
+            let index = others.length;
+            for (let k = 0; k < others.length; k++) {
+                const cr = others[k].getBoundingClientRect();
+                if (x < cr.left + cr.width / 2) { index = k; break; }
+            }
+            return { row: r, index, others };
+        }
+        return { before: null, after: rows[rows.length - 1] };
+    }
+    function dashPlace(el, t) {
+        if (!t) return;
+        if (t.row) {
+            if (t.index < t.others.length) t.row.insertBefore(el, t.others[t.index]);
+            else if (t.others.length) t.others[t.others.length - 1].after(el);
+            else t.row.appendChild(el);
+        } else {
+            const row = document.createElement('div');
+            row.className = 'dash-row';
+            row.appendChild(el);
+            if (t.before) $('dashCards').insertBefore(row, t.before);
+            else (t.after ? t.after.after(row) : $('dashCards').appendChild(row));
+        }
+        syncDashTools();
+    }
+    // poloha karet: stejné řádky i pořadí → nic se nezměnilo
+    const dashSigOf = () => dashRows().map((r) => Array.from(r.querySelectorAll(':scope > [data-card]')).map((e) => e.dataset.card).join('+')).filter(Boolean).join('|');
+    // Karta pod prstem: jen posun (transform), aby držela tam, kde se chytila, i když se její
+    // místo v rozložení mezitím přesunulo nebo změnilo šířku.
+    function dashFollow(d) {
+        d.el.style.transform = '';
+        const r = d.el.getBoundingClientRect();
+        d.el.style.transform = `translate(${d.cx - d.fx * r.width - r.left}px, ${d.cy - d.fy * r.height - r.top}px)`;
+    }
+    function dashDragFrame() {
+        const d = DDRAG;
+        if (!d || !d.started) return;
+        const edge = 70, vh = window.innerHeight;
+        const head = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h')) || 64;
+        let v = 0;
+        if (d.cy < head + edge) v = -Math.ceil((head + edge - d.cy) / 6);
+        else if (d.cy > vh - edge) v = Math.ceil((d.cy - (vh - edge)) / 6);
+        if (v) window.scrollBy(0, v);
+        // Ostatní karty uhýbají hned během tažení (plynule). Po přeskládání se počká, až animace
+        // dojede, a prst se musí kousek pohnout – jinak by karty přeskakovaly sem a tam.
+        const now = performance.now();
+        if (now >= d.calm && (v || d.px == null || Math.hypot(d.cx - d.px, d.cy - d.py) > 12)) {
+            const t = dashTarget(d.el, d.cx, d.cy);
+            if (t) {
+                const before = dashSigOf();
+                flipMove(DASH_CARDS.map(dashCard).filter((e) => e !== d.el), () => dashPlace(d.el, t));
+                if (dashSigOf() !== before) { d.calm = now + flipMs() + 20; d.px = d.cx; d.py = d.cy; }
+                else if (d.px == null) { d.px = d.cx; d.py = d.cy; }
+            }
+        }
+        dashFollow(d);
+        d.raf = requestAnimationFrame(dashDragFrame);
+    }
+    function dashDragBegin() {
+        const d = DDRAG;
+        d.started = true;
+        clearTimeout(d.timer);
+        const r = d.el.getBoundingClientRect();
+        d.fx = Math.min(Math.max((d.x - r.left) / r.width, 0), 1);
+        d.fy = Math.min(Math.max((d.y - r.top) / r.height, 0), 1);
+        d.calm = 0; d.px = null;
+        d.el.classList.add('dragging');
+        $('nodeDash').classList.add('dash-dragging');
+        if (d.touch && navigator.vibrate) navigator.vibrate(15);
+        d.raf = requestAnimationFrame(dashDragFrame);
+    }
+    function dashDragEnd() {
+        const d = DDRAG;
+        if (!d) return;
+        DDRAG = null;
+        clearTimeout(d.timer);
+        window.removeEventListener('pointermove', dashDragMove);
+        window.removeEventListener('pointerup', dashDragUp);
+        window.removeEventListener('pointercancel', dashDragCancel);
+        if (!d.started) return;
+        cancelAnimationFrame(d.raf);
+        // karta už je na svém místě (přeskládává se během tažení), jen do něj plynule dosedne
+        const from = d.el.style.transform;
+        d.el.classList.remove('dragging');
+        d.el.style.transform = '';
+        $('nodeDash').classList.remove('dash-dragging');
+        settle(d.el, from);
+        syncDashTools();
+    }
+    function dashDragMove(e) {
+        const d = DDRAG;
+        if (!d || e.pointerId !== d.id) return;
+        d.cx = e.clientX; d.cy = e.clientY;
+        if (!d.started) {
+            const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
+            if (d.touch) { if (dist > 10) dashDragEnd(false); return; }     // prst se posunul dřív = scroll
+            if (dist < 6) return;
+            dashDragBegin();
+        }
+        e.preventDefault();
+    }
+    function dashDragUp(e) { if (DDRAG && e.pointerId === DDRAG.id) dashDragEnd(true); }
+    function dashDragCancel(e) { if (DDRAG && e.pointerId === DDRAG.id) dashDragEnd(false); }
+    $('dashCards').addEventListener('pointerdown', (e) => {
+        if (!DASH_EDIT || DDRAG || e.button !== 0 || e.target.closest('.dash-hide')) return;
+        const el = e.target.closest('[data-card]');
+        if (!el) return;
+        DDRAG = { el, id: e.pointerId, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY,
+            sx: window.scrollX, sy: window.scrollY, touch: e.pointerType !== 'mouse', started: false };
+        if (DDRAG.touch) DDRAG.timer = setTimeout(() => { if (DDRAG && !DDRAG.started) dashDragBegin(); }, 280);
+        else e.preventDefault();            // myš: žádné označování textu
+        window.addEventListener('pointermove', dashDragMove, { passive: false });
+        window.addEventListener('pointerup', dashDragUp);
+        window.addEventListener('pointercancel', dashDragCancel);
+    });
+    // prst: po podržení už stránka nesmí scrollovat
+    $('dashCards').addEventListener('touchmove', (e) => { if (DDRAG && DDRAG.started) e.preventDefault(); }, { passive: false });
+    $('dashCards').addEventListener('contextmenu', (e) => { if (DASH_EDIT) e.preventDefault(); });
+    $('dashCards').addEventListener('keydown', (e) => {
+        if (!DASH_EDIT || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+        const el = e.target;
+        if (!el.matches || !el.matches('[data-card]')) return;
+        e.preventDefault();
+        const row = el.parentElement;
+        const rows = dashRows().filter((r) => !r.classList.contains('is-empty'));
+        const ri = rows.indexOf(row);
+        const inRow = shownIn(row);
+        const ci = inRow.indexOf(el);
+        if (e.key === 'ArrowLeft' && ci > 0) row.insertBefore(el, inRow[ci - 1]);
+        else if (e.key === 'ArrowRight' && ci < inRow.length - 1) inRow[ci + 1].after(el);
+        else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            const up = e.key === 'ArrowUp';
+            const nb = rows[ri + (up ? -1 : 1)];
+            if (inRow.length > 1) dashPlace(el, up ? { before: row } : { before: rows[ri + 1] || null, after: row });
+            else if (nb && shownIn(nb).length < dashMax()) { nb.appendChild(el); syncDashTools(); }
+            else if (nb) $('dashCards').insertBefore(row, up ? nb : nb.nextSibling);
+        }
+        syncDashTools();
+        el.focus();
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+
     const dashSig = () => JSON.stringify(readDash());
     function dashEditStart() {
         const mode = dashMode();
         DASH_EDIT = { mode, resetSig: null };
+        // na mobilu jedna karta na řádek (i když se přebírá rozložení z počítače)
+        if (mode === 'narrow') applyDash({ rows: readDash().rows.flat().map((c) => [c]), hidden: readDash().hidden });
         $('nodeDash').classList.add('dash-editing');
-        $('dashEditWhat').textContent = tr(mode === 'narrow' ? 'Upravujete rozložení pro mobil' : 'Upravujete rozložení pro počítač');
+        $('dashEditWhat').textContent = tr(mode === 'narrow' ? 'Podržte kartu prstem a přetáhněte ji' : 'Karty přetáhněte myší – vedle sebe se vejdou nejvýš tři');
         $('dashEditBar').classList.remove('hidden');
-        DASH_CARDS.forEach((c) => dashTools(dashCard(c)));
+        DASH_CARDS.forEach((c) => { const el = dashCard(c); el.tabIndex = 0; dashHideBtn(el); });
         syncDashTools();
         $('dashEditBar').scrollIntoView({ block: 'nearest' });
         $('dashEditDone').focus();
     }
     function dashEditEnd() {
+        dashDragEnd(false);
         DASH_EDIT = null;
         $('nodeDash').classList.remove('dash-editing');
         $('dashEditBar').classList.add('hidden');
-        $('dashCards').querySelectorAll('.dash-tools').forEach((t) => t.remove());
+        $('dashCards').querySelectorAll('.dash-hide').forEach((t) => t.remove());
+        DASH_CARDS.forEach((c) => dashCard(c).removeAttribute('tabindex'));
         applyDash(dashLayout(dashMode()));
     }
     $('dashEditBtn').addEventListener('click', dashEditStart);
     $('dashEditReset').addEventListener('click', () => {
         // mobil se vrací k rozložení z počítače, počítač k výchozímu
-        applyDash(DASH_EDIT.mode === 'narrow' ? dashLayout('wide') : { order: DASH_CARDS.slice(), hidden: [] });
+        const l = DASH_EDIT.mode === 'narrow' ? dashLayout('wide') : { rows: DASH_DEFAULT, hidden: [] };
+        applyDash(DASH_EDIT.mode === 'narrow' ? { rows: l.rows.flat().map((c) => [c]), hidden: l.hidden } : l);
         syncDashTools();
         DASH_EDIT.resetSig = dashSig();
     });
@@ -1725,6 +1893,7 @@
     const SORT = { active: false, suppressClick: false };
     function sortable(container, itemSel) {
         let drag = null;
+        const axisX = container.id === 'nodeBar';
         const items = () => Array.from(container.querySelectorAll(itemSel));
         const order = () => items().map((e) => e.dataset.id);
         async function save(before) {
@@ -1743,20 +1912,36 @@
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', up);
             window.removeEventListener('pointercancel', end);
+            const from = d.el.style.transform;
+            d.el.style.transform = '';
             d.el.classList.remove('sorting');
             container.classList.remove('is-sorting');
+            settle(d.el, from);                 // tažená položka plynule dosedne na své místo
             SORT.active = false;
             if (d.started) { SORT.suppressClick = true; setTimeout(() => { SORT.suppressClick = false; }, 0); save(d.before); }
+        }
+        // tažená položka drží pod prstem tam, kde se chytila (v liště jen vodorovně)
+        function follow(d) {
+            d.el.style.transform = '';
+            const r = d.el.getBoundingClientRect();
+            d.home = r;
+            const dx = d.cx - d.fx * r.width - r.left, dy = axisX ? 0 : d.cy - d.fy * r.height - r.top;
+            d.el.style.transform = `translate(${dx}px, ${dy}px)`;
         }
         function begin(d) {
             d.started = true;
             SORT.active = true;
+            const r = d.el.getBoundingClientRect();
+            d.fx = (d.x - r.left) / r.width; d.fy = (d.y - r.top) / r.height;
+            d.calm = 0;
             d.el.classList.add('sorting');
             container.classList.add('is-sorting');
+            follow(d);
         }
         function move(e) {
             const d = drag;
             if (!d || e.pointerId !== d.id) return;
+            d.cx = e.clientX; d.cy = e.clientY;
             const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
             if (!d.started) {
                 if (d.touch) { if (dist > 8) end(); return; }        // prst se posunul dřív = scroll
@@ -1764,12 +1949,25 @@
                 begin(d);
             }
             e.preventDefault();
-            const hit = document.elementFromPoint(e.clientX, e.clientY);
-            const over = hit && hit.closest(itemSel);
-            if (!over || over === d.el || !container.contains(over)) return;
-            const r = over.getBoundingClientRect();
-            const after = e.clientX > r.left + r.width / 2;
-            container.insertBefore(d.el, after ? over.nextSibling : over);
+            // Ostatní uhýbají hned, jak se přes ně táhne (plynule). Během jejich animace se
+            // nerozhoduje znovu, jinak by se položky přehazovaly sem a tam.
+            if (performance.now() >= d.calm) {
+                const hit = document.elementFromPoint(e.clientX, axisX ? d.home.top + d.home.height / 2 : e.clientY);
+                const over = hit && hit.closest(itemSel);
+                if (over && over !== d.el && container.contains(over)) {
+                    const r = over.getBoundingClientRect();
+                    const list = items();
+                    const fwd = list.indexOf(over) > list.indexOf(d.el);
+                    // na stejném řádku až za polovinou sousední položky, o řádek vedle hned
+                    const sameLine = Math.abs(r.top - d.home.top) < Math.min(r.height, d.home.height) / 2;
+                    const past = !sameLine || (fwd ? e.clientX > r.left + r.width / 2 : e.clientX < r.left + r.width / 2);
+                    if (past) {
+                        flipMove(list.filter((x) => x !== d.el), () => container.insertBefore(d.el, fwd ? over.nextSibling : over));
+                        d.calm = performance.now() + flipMs();
+                    }
+                }
+            }
+            follow(d);
         }
         function up(e) { if (drag && e.pointerId === drag.id) end(); }
         container.addEventListener('pointerdown', (e) => {
@@ -1777,7 +1975,7 @@
             if (container.dataset.mode && container.dataset.mode !== 'dash') return;    // lišta v Nastavení
             const el = e.target.closest(itemSel);
             if (!el || !container.contains(el) || items().length < 2) return;
-            drag = { el, id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse', started: false, before: order() };
+            drag = { el, id: e.pointerId, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, touch: e.pointerType !== 'mouse', started: false, before: order() };
             SORT.active = true;                 // ani během podržení lištu nepřekreslovat (odpojený prvek)
             if (drag.touch) drag.timer = setTimeout(() => { if (drag) { begin(drag); if (navigator.vibrate) navigator.vibrate(15); } }, 300);
             window.addEventListener('pointermove', move, { passive: false });
@@ -1799,7 +1997,7 @@
             if (i < 0 || j < 0 || j >= list.length) return;
             e.preventDefault();
             const before = order();
-            container.insertBefore(el, e.key === 'ArrowLeft' ? list[j] : list[j].nextSibling);
+            flipMove(list, () => container.insertBefore(el, e.key === 'ArrowLeft' ? list[j] : list[j].nextSibling));
             el.focus();
             save(before);
         });
