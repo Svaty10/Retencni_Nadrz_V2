@@ -11,6 +11,11 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 - **Logo vlevo nahoře vrací na přehled:** klik na kapku s názvem otevře záložku *Přehled* z kterékoli jiné záložky.
 - **Diagnostický firmware čidla (jen přes programátor):** `uzel/6-diagnostika.cmd` nahraje test rádia CC1101 (linky SPI, odpověď čipu, PLL, vysílání, příjem ostatních čidel), SHT40 a sondy; `uzel/7-precist-diagnostiku.cmd` výsledek vyčte z EEPROM a napíše, co zkontrolovat. Párování v čidle zůstává, na hubu se nic nemění. Postup: [docs/diagnostika_uzlu.md](docs/diagnostika_uzlu.md).
 
+### Plánováno (zatím není hotové, příští verze)
+- **Automatické aktualizace systému Raspberry Pi:** systémové balíčky (bezpečnostní opravy Raspberry Pi OS) se budou instalovat samy, v nastavené době a s restartem jen když je potřeba; výsledek poslední aktualizace uvidí admin v *Nastavení*.
+- **Systém jen pro čtení kvůli SD kartě:** systémová část karty bude běžně zamčená (read-only), aby ji neopotřebovávaly zápisy a nepoškodil ji výpadek proudu. Na dobu aktualizace systému se na chvíli odemkne a hned zase zamkne.
+- **Rozdělení SD karty:** k tomu je potřeba oddělit zamčený systém od zapisovatelné části s daty (databáze retenčky i větru, zálohy, nastavení); logy do RAM. Promyslet převod stávající instalace bez ztráty dat a bez nové instalace od nuly.
+
 ## [1.25.0] - 2026-11-21
 
 ### Změněno
