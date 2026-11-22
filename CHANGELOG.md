@@ -9,6 +9,7 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 - **Firmware čidla 16: smazání párování bez programátoru.** Při vložení baterie propojit drátkem piny 5 V a signál na konektoru sondy (sonda odpojená) a nechat aspoň 10 s: čidlo zapomene párování a nabízí ho jako nové. Postup: [docs/programovani_uzlu.md](docs/programovani_uzlu.md). Nový firmware je potřeba do čidla nahrát ručně.
 - **Verze firmwaru čidel v nastavení:** tabulka *Čidla* má sloupec *Firmware* s verzí, kterou čidlo hlásí v paketech (např. 16). API `GET /api/nodes` má u každého čidla položku `fw`.
 - **Logo vlevo nahoře vrací na přehled:** klik na kapku s názvem otevře záložku *Přehled* z kterékoli jiné záložky.
+- **Diagnostický firmware čidla (jen přes programátor):** `uzel/7-diagnostika.cmd` nahraje test rádia CC1101 (linky SPI, odpověď čipu, PLL, vysílání, příjem ostatních čidel), SHT40 a sondy; `uzel/8-precist-diagnostiku.cmd` výsledek vyčte z EEPROM a napíše, co zkontrolovat. Párování v čidle zůstává, na hubu se nic nemění. Postup: [docs/diagnostika_uzlu.md](docs/diagnostika_uzlu.md).
 
 ## [1.25.0] - 2026-11-21
 

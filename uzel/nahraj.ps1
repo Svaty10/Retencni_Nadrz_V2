@@ -15,6 +15,8 @@
   .\nahraj.ps1 -Build      # firmware přeložit z této složky (potřebuje avr-gcc v PATH nebo C:\avr)
   .\nahraj.ps1 -PripravArduino   # z Arduina Uno/Nano udělá programátor jtag2updi (pin 6)
   .\nahraj.ps1 -TestSpanku       # testovací firmware, který jen spí (měření klidového proudu)
+  .\nahraj.ps1 -Diagnostika      # DIAGNOSTICKÝ firmware: test rádia, SHT40 a sondy (..\docs\diagnostika_uzlu.md)
+  .\nahraj.ps1 -Cti              # vyčte a vysvětlí výsledek diagnostiky z čidla
 
   Programátor se pozná sám: Arduino/převodník na pinech 0/1 (SerialUPDI), nebo Arduino
   s jtag2updi (pin 6). Ručně: -Programmer serialupdi | jtag2updi.
@@ -27,6 +29,8 @@ param(
     [switch]$PripravArduino,
     [switch]$SmazatParovani,
     [switch]$TestSpanku,
+    [switch]$Diagnostika,
+    [switch]$Cti,
     [int]$Baud = 115200,
     [string]$Programmer = "auto",
     [string]$ToolsDir = "C:\avr"
@@ -241,6 +245,192 @@ if ($TestSpanku) {
     Invoke-Avrdude ($FuseArgs + @("-U", "flash:w:tools\test_spanku.hex:i"))
     Write-Host "Hotovo. Čidlo teď jen spí: nic neměří a nevysílá, párování zůstalo." -ForegroundColor Green
     Write-Host "Před měřením ODPOJTE převodník (UPDI i GND). Zpět: 3-aktualizace-firmwaru.cmd" -ForegroundColor Green
+    return
+}
+
+# ---------------------------------------------------------------- diagnostika
+# Záznam diagnostického firmwaru (tools\diag.c) v EEPROM od 0xC0:
+#   magic "DIAG" u32 | cycles u16 | heard_total u16 | heard_best i8 | pkt[25] | lines | lines2 | clk_edges | crc16
+# pkt = testovací paket DIAG (0x07), stejný jako čidlo vysílá (nikdo ho nezpracovává).
+function Get-Crc16([byte[]]$d, [int]$off, [int]$n) {
+    $crc = 0xFFFF
+    for ($i = 0; $i -lt $n; $i++) {
+        $crc = $crc -bxor ([int]$d[$off + $i] -shl 8)
+        for ($b = 0; $b -lt 8; $b++) {
+            if ($crc -band 0x8000) { $crc = (($crc -shl 1) -bxor 0x1021) -band 0xFFFF } else { $crc = ($crc -shl 1) -band 0xFFFF }
+        }
+    }
+    return $crc
+}
+
+function Show-Diagnostika([byte[]]$ee) {
+    $i8 = { param($v) if ($v -ge 128) { $v - 256 } else { $v } }
+    $u16 = { param($o) [int]$ee[$o] + 256 * [int]$ee[$o + 1] }
+    $ano = { param($ok) if ($ok) { "ANO" } else { "NE" } }
+    $base = 0xC0
+    $magic = [System.Text.Encoding]::ASCII.GetString($ee, $base, 4)
+    # klíč párování normálního firmwaru: 2 kopie po 59 B, magic "RTK1" + příznak spárováno
+    $key = $false
+    foreach ($a in @(0, 59)) {
+        if ([System.Text.Encoding]::ASCII.GetString($ee, $a, 4) -eq "RTK1" -and $ee[$a + 4] -eq 1) { $key = $true }
+    }
+    Write-Host ""
+    if ($magic -ne "DIAG") {
+        Write-Host "V čidle není záznam diagnostiky." -ForegroundColor Yellow
+        Write-Host "  • nahrajte diagnostický firmware (7-diagnostika.cmd) a nechte čidlo aspoň 30 s běžet,"
+        Write-Host "  • když už nahraný je a záznam pořád chybí, čip se po startu hned restartuje (napájení!)."
+        Write-Host ("Párovací klíč v EEPROM: " + $(if ($key) { "ANO (čidlo je spárované)" } else { "NE" }))
+        return
+    }
+    $n = 39
+    $crc = Get-Crc16 $ee $base ($n - 2)
+    if ($crc -ne (& $u16 ($base + $n - 2))) {
+        Write-Host "Záznam diagnostiky je poškozený (čtení během zápisu?) – zkuste vyčíst znovu." -ForegroundColor Yellow
+        return
+    }
+    $cycles = & $u16 ($base + 4)
+    $heardTotal = & $u16 ($base + 6)
+    $heardBest = & $i8 $ee[$base + 8]
+    $p = $base + 9
+    $id = "{0:X4}" -f (& $u16 ($p + 1))
+    $rst = $ee[$p + 5]
+    $vbat = & $u16 ($p + 6)
+    $t = & $u16 ($p + 8); if ($t -ge 32768) { $t -= 65536 }
+    $hum = $ee[$p + 10]
+    $probe = & $u16 ($p + 11)
+    $part = $ee[$p + 13]; $ver = $ee[$p + 14]; $f = $ee[$p + 15]
+    $marc = $ee[$p + 16]; $fscal = $ee[$p + 17]
+    $heard = $ee[$p + 18]; $bad = $ee[$p + 19]
+    $best = & $i8 $ee[$p + 20]; $floor = & $i8 $ee[$p + 21]
+    $ltype = $ee[$p + 22]; $lid = "{0:X4}" -f (& $u16 ($p + 23))
+    $so = ($f -band 0x01) -ne 0; $spi = ($f -band 0x02) -ne 0; $pll = ($f -band 0x04) -ne 0
+    $gdo = ($f -band 0x08) -ne 0; $txok = ($f -band 0x10) -ne 0
+    $clip = ($f -band 0x20) -ne 0; $sht = ($f -band 0x80) -ne 0
+    $why = @()
+    if ($rst -band 0x01) { $why += "zapnutí napájení" }
+    if ($rst -band 0x02) { $why += "PODPĚTÍ (brown-out)" }
+    if ($rst -band 0x08) { $why += "watchdog" }
+    if ($rst -band 0x10) { $why += "software" }
+    if ($rst -band 0x20) { $why += "programátor (UPDI)" }
+    if ($rst -band 0x04) { $why += "pin RESET" }
+    $types = @{ 0x03 = "data retenčky"; 0x04 = "párování retenčky"; 0x05 = "hub retenčky"; 0x06 = "retenčka";
+                0x07 = "test jiného čidla retenčky"; 0x13 = "data anemometru"; 0x14 = "párování anemometru";
+                0x17 = "test anemometru" }
+    $tname = if ($types.ContainsKey([int]$ltype)) { $types[[int]$ltype] } else { "neznámý" }
+
+    Write-Host ("Diagnostika čidla – poslední záznam (cyklus $cycles, běží asi {0} min)" -f [math]::Round($cycles * 6.5 / 60)) -ForegroundColor Cyan
+    Write-Host ("  ID čidla:               $id")
+    Write-Host ("  Poslední restart:       " + $(if ($why) { $why -join ", " } else { "–" }))
+    Write-Host ("  Baterie:                " + $(if ($vbat -eq 0xFFFF) { "chyba měření" } else { "{0:N3} V" -f ($vbat / 1000.0) }))
+    Write-Host ("  Párovací klíč v EEPROM: " + $(if ($key) { "ANO – hub musí mít čidlo spárované" } else { "NE – čidlo s normálním firmwarem nabízí párování" }))
+    Write-Host ("  SHT40 (teplota, vlhk.): " + $(if ($sht) { "{0:N1} °C, $hum %" -f ($t / 100.0) } else { "NEODPOVÍDÁ" }))
+    Write-Host ("  Sonda (napětí):         " + $(if ($probe -eq 0xFFFF) { "chyba měření" } else { "{0:N3} V" -f ($probe / 10000.0) }) + $(if ($clip) { "  (na plném rozsahu ADC)" } else { "" }))
+
+    $l = $ee[$base + 34]; $l2 = $ee[$base + 35]; $edges = $ee[$base + 36]
+    $idle = ($l -band 0x01) -ne 0
+    $bMosi = ($l -band 0x02) -ne 0; $bSck = ($l -band 0x04) -ne 0
+    $soLow = ($l -band 0x08) -ne 0; $soRel = ($l -band 0x10) -ne 0
+    $clk = ($l -band 0x20) -ne 0
+    $wr = (($l -band 0x40) -ne 0) -and (($l -band 0x80) -ne 0)
+    $soDrv = (($l2 -band 0x01) -ne 0) -and (($l2 -band 0x02) -ne 0)
+    Write-Host "Test linek SPI (bez čtení dat přes MISO)" -ForegroundColor Cyan
+    Write-Host ("  MISO volná (CSn=1, pull-up):     " + $(if ($idle) { "ANO" } else { "NE – trvale v nule" }))
+    if ($idle) {
+        Write-Host ("  MISO spojená s MOSI / SCLK:      " + (& $ano $bMosi) + " / " + (& $ano $bSck))
+        Write-Host ("  Rádio stáhne SO po CSn=0:        " + (& $ano $soLow))
+        Write-Host ("  ... a pustí ho po CSn=1:         " + (& $ano $soRel))
+    }
+    Write-Host ("  Hodiny na GDO0 po resetu rádia:  " + (& $ano $clk) + "  ($edges změn)")
+    Write-Host ("  Rádio přijme zápis (GDO0 0 a 1): " + (& $ano $wr))
+    Write-Host ("  Rádio ovládá pin SO (0 a 1):     " + (& $ano $soDrv))
+    Write-Host "Rádio CC1101" -ForegroundColor Cyan
+    Write-Host ("  Odpovídá (SO, krystal): " + (& $ano $so))
+    Write-Host ("  PARTNUM / VERSION:      0x{0:X2} / 0x{1:X2}" -f $part, $ver)
+    Write-Host ("  Zápis a čtení registru: " + (& $ano $spi))
+    Write-Host ("  PLL zamčená:            " + (& $ano $pll) + ("  (MARCSTATE 0x{0:X2}, FSCAL1 0x{1:X2})" -f $marc, $fscal))
+    Write-Host ("  Vysílání dokončeno:     " + (& $ano $txok))
+    Write-Host ("  GDO0 při vysílání:      " + (& $ano $gdo))
+    Write-Host "Příjem na čidle (2 s poslechu v každém cyklu)" -ForegroundColor Cyan
+    Write-Host ("  Šum kanálu:             " + $(if ($floor -eq -128) { "–" } else { "$floor dBm" }))
+    Write-Host ("  Zachyceno od startu:    $heardTotal paketů" + $(if ($heardTotal) { ", nejsilnější $heardBest dBm" } else { "" }))
+    Write-Host ("  V posledním cyklu:      $heard (chybných $bad)" + $(if ($heard) { ", poslední: $tname (0x{0:X2}) od $lid" -f $ltype } else { "" }))
+
+    $tips = @()
+    $lineFault = $true
+    if (-not $idle -and $wr) {
+        $tips += ("VERDIKT: rádio příkazy přijímá (GDO0 poslouchá zápisy), ale linka SO/MISO je trvale v nule,`n" +
+                  "     i když rádio vybrané není. Vadný výstup SO čipu CC1101 – vyměňte modul." +
+                  $(if (-not $soDrv) { "`n     (Ani na povel rádio pin SO nezvedne – potvrzuje to.)" } else { "" }))
+    } elseif (-not $idle) {
+        $tips += ("VERDIKT: linka SO/MISO je trvale v nule a rádio nepřijímá žádné příkazy (GDO0 na zápis nereaguje).`n" +
+                  $(if ($clk) { "     Čip je napájený a krystal běží (hodiny na GDO0), ale SPI rozhraní čipu je mrtvé.`n" } else { "" }) +
+                  "     Vadný čip CC1101 – vyměňte modul (nebo jej zkuste na funkční desce).")
+    } elseif ($bMosi -or $bSck) {
+        $tips += "VERDIKT: MISO je spojená s " + $(if ($bMosi) { "MOSI" } else { "SCLK" }) + " – můstek mezi spoji (na desce nebo uvnitř modulu)."
+    } elseif (-not $soLow) {
+        $tips += ("VERDIKT: rádio po CSn=0 nestáhne SO – " +
+                  $(if ($clk) { "krystal přitom běží, nereaguje na CSn: vadný čip nebo spoj CSn na modulu." } else { "bez hodin na GDO0: čip nemá napájení/krystal, nebo je mrtvý." }))
+    } elseif (-not $soRel) {
+        $tips += "VERDIKT: rádio po CSn=1 nepustí SO (drží ho v nule) – vadný čip CC1101, vyměňte modul."
+    } elseif (-not $wr) {
+        $tips += "VERDIKT: linky jsou v pořádku, ale rádio zápisy nepřijímá (GDO0 nereaguje) – SI/MOSI nebo SCLK na modulu, případně vadný čip."
+    } else {
+        $lineFault = $false
+    }
+    if ($lineFault) {
+        $tips += "Ostatní údaje rádia (PARTNUM, PLL, vysílání, šum) jsou kvůli tomu bez významu."
+    } elseif (-not $spi -and $part -eq 0x00 -and $ver -eq 0x00) {
+        $tips += ("Linky SPI i ovládání rádia prošly, přesto se při čtení registrů vrací jen nuly:`n" +
+                  "     rádio nevydává data na SO – vadný čip CC1101, vyměňte modul.")
+    } else {
+        if (-not $spi) { $tips += "Rádio odpovídá, ale zápis/čtení registru nesedí: spoje SI/MOSI (PA1, pin 11) a SCLK (PA3, pin 13)." }
+        if ($part -ne 0x00 -or ($ver -ne 0x14 -and $ver -ne 0x04)) { $tips += "Neobvyklé PARTNUM/VERSION – čip nejspíš není CC1101 nebo SPI čte nesmysly." }
+        if (-not $pll) { $tips += "Syntezátor se nezamkl: krystal 26 MHz (a jeho kondenzátory), napájení rádia." }
+        if (-not $txok) { $tips += "Vysílání se nedokončilo: rádio zůstalo ve vysílání – napájení při zátěži (~30 mA), PLL." }
+        if ($txok -and -not $gdo) { $tips += "GDO0 (PB2, pin 7) se při vysílání nehnul: přerušený spoj GDO0 – čidlo pak NEPOZNÁ odpověď hubu (párování nefunguje)." }
+        if ($floor -gt -80) { $tips += "Vysoký šum na kanálu ($floor dBm): rušení v okolí nebo zvlněné napájení rádia." }
+        if ($heardTotal -eq 0 -and $cycles -ge 50) {
+            $tips += ("Za ~5 min poslechu čidlo nezachytilo žádný paket. Pokud v dosahu vysílá jiné čidlo (anemometr`n" +
+                      "     každou minutu, ostatní čidla retenčky každých 5 min), nefunguje příjem: anténa, krystal, spoj GDO0 (PB2).")
+        } elseif ($heardTotal -eq 0) {
+            $tips += "Zatím nic nezachyceno – nechte diagnostiku běžet aspoň 5 minut a vyčtěte znovu."
+        }
+        if ($heardTotal -gt 0 -and $heardBest -lt -95) { $tips += "Ostatní čidla slyší jen slabě (nejvýš $heardBest dBm) – anténa nebo dosah." }
+    }
+    if (-not $sht) { $tips += "SHT40 neodpovídá: spoje SDA (PB1, pin 8) a SCL (PB0, pin 9), napájení senzoru, pull-up rezistory I2C." }
+    if ($probe -eq 0xFFFF) { $tips += "Měření sondy selhalo (převodník ADC nedokončil měření)." }
+    elseif ($clip) { $tips += "Sonda je na plném rozsahu ADC: zkrat signálu sondy na 5 V, vadná sonda, nebo propojený konektor." }
+    if ($rst -band 0x02) { $tips += "Restart kvůli podpětí: baterie nebo napájení z programátoru nestačí na vysílání nebo na 5 V pro sondu." }
+    if ($vbat -ne 0xFFFF -and $vbat -lt 3000) { $tips += "Napětí pod 3,0 V – normální firmware by se vypnul." }
+    Write-Host ""
+    if ($tips) {
+        Write-Host "Co zkontrolovat:" -ForegroundColor Yellow
+        $tips | ForEach-Object { Write-Host "  • $_" }
+    } else {
+        Write-Host "Rádio, SHT40 i sonda v pořádku – čidlo vysílá i přijímá." -ForegroundColor Green
+    }
+    Write-Host "  Napětí sondy porovnejte s výškou hladiny (odpojená sonda ≈ 0 V)."
+    Write-Host ""
+    Write-Host "Zpět na normální firmware: 3-aktualizace-firmwaru.cmd (párování zůstane)."
+}
+
+if ($Cti) {
+    New-Item -ItemType Directory -Force build | Out-Null
+    $bin = Join-Path (Get-Location) "build\eeprom-diag.bin"
+    if (Test-Path $bin) { Remove-Item $bin }
+    Invoke-Avrdude @("-U", "eeprom:r:${bin}:r")
+    Show-Diagnostika ([System.IO.File]::ReadAllBytes($bin))
+    return
+}
+
+if ($Diagnostika) {
+    # Hotový hex je v repozitáři (make diag); fuses stejné jako u normálního firmwaru (EESAVE: klíče zůstanou).
+    Invoke-Avrdude ($FuseArgs + @("-U", "flash:w:tools\diag.hex:i"))
+    Write-Host ""
+    Write-Host "Diagnostický firmware běží: každých ~6 s otestuje rádio, SHT40 a sondu." -ForegroundColor Green
+    Write-Host "  • nechte čidlo běžet aspoň 5 minut (poslouchá ostatní čidla v dosahu),"
+    Write-Host "  • výsledek z čidla: 8-precist-diagnostiku.cmd (vyčtení čidlo restartuje, test začne znovu),"
+    Write-Host "  • zpět: 3-aktualizace-firmwaru.cmd – párování v čidle zůstává."
     return
 }
 

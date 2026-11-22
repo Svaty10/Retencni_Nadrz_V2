@@ -43,3 +43,4 @@ demo/
 
 # hotový testovací firmware, který jen spí (nahrává 5-test-spanku.cmd)
 !uzel/tools/test_spanku.hex
+!uzel/tools/diag.hex

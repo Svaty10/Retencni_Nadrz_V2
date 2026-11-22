@@ -254,10 +254,21 @@ static uint8_t read_status_stable(uint8_t reg)
 
 /** End of transmission: the MCU sleeps in 4 ms steps until the radio is back in IDLE
  *  (MCSM1: TX -> IDLE) and the TX FIFO is empty (the frame really went out). */
+/* Diagnostic build only (-DCC1101_DIAG, diag.c): the normal firmware stays unchanged. */
+#ifdef CC1101_DIAG
+bool cc1101_gdo0_seen = false;
+#define NOTE_GDO0()  do { if (PORTB.IN & PIN_RF_GDO0) { cc1101_gdo0_seen = true; } } while (0)
+#define CLEAR_GDO0() do { cc1101_gdo0_seen = false; } while (0)
+#else
+#define NOTE_GDO0()  do { } while (0)
+#define CLEAR_GDO0() do { } while (0)
+#endif
+
 static bool wait_tx_done(void)
 {
     for (uint8_t i = 0; i < TX_TIMEOUT_MS / 4U; i++) {
         power_sleep_ms(4);
+        NOTE_GDO0();                             /* sync word sent (IOCFG0 = 0x06) */
         if ((read_status_stable(CC1101_MARCSTATE) & 0x1F) == 0x01) {
             return (read_status_stable(CC1101_TXBYTES) & 0x7F) == 0;
         }
@@ -306,6 +317,7 @@ int8_t cc1101_send(const uint8_t *tx, uint8_t txlen, uint8_t *rx, uint8_t rxmax,
         cc1101_lbt_backoffs++;
         power_sleep_ms((uint16_t)(LBT_BACKOFF_MIN_MS + (rng_next() & (LBT_BACKOFF_SPAN_MS - 1U))));
     }
+    CLEAR_GDO0();
     (void)strobe(CC1101_STX);                    /* calibrates, then sends */
     if (cc1101_tx_hook != NULL) {
         cc1101_tx_hook();                        /* runs while the frame is on air */
@@ -343,3 +355,276 @@ out:
     (void)enter_sleep();                         /* failure -> cc1101_sleep_ok = false */
     return result;
 }
+
+/* ======================================================================== */
+/* Diagnostics (diagnostic firmware diag.c only, built with -DCC1101_DIAG)   */
+/* ======================================================================== */
+#ifdef CC1101_DIAG
+
+/** RSSI register / appended status byte -> dBm (datasheet 17.3, offset 74 at 4.8 kBaud). */
+static int8_t rssi_dbm(uint8_t raw)
+{
+    int16_t dbm = (int16_t)(int8_t)raw / 2 - 74;
+    return (int8_t)(dbm < -128 ? -128 : dbm);
+}
+
+static uint8_t read_reg(uint8_t reg)
+{
+    if (!cs_select_wait_ready()) {
+        return 0xFF;
+    }
+    (void)spi_xfer((reg & 0x3F) | 0x80);         /* single read of a config register */
+    uint8_t v = spi_xfer(0x00);
+    cs_high();
+    return v;
+}
+
+void cc1101_probe(cc1101_probe_t *p)
+{
+    p->so_ready = false;
+    p->spi_rw = false;
+    p->pll_lock = false;
+    p->partnum = 0xFF;
+    p->version = 0xFF;
+    p->marcstate = 0xFF;
+    p->fscal1 = 0xFF;
+
+    spi_open();
+    cs_high();                                   /* manual power-on reset, as in cc1101_init */
+    _delay_us(5);
+    cs_low();
+    _delay_us(10);
+    cs_high();
+    _delay_us(45);
+    if (!strobe(CC1101_SRES)) {                  /* SO never went low */
+        spi_close();
+        return;
+    }
+    p->so_ready = true;
+    _delay_ms(1);
+    p->partnum = read_status(0x30);              /* PARTNUM */
+    p->version = read_status(CC1101_VERSION);
+
+    /* bus test: two complementary patterns written and read back */
+    write_reg(CC1101_ADDR, 0xA5);
+    uint8_t a = read_reg(CC1101_ADDR);
+    write_reg(CC1101_ADDR, 0x5A);
+    uint8_t b = read_reg(CC1101_ADDR);
+    p->spi_rw = (a == 0xA5) && (b == 0x5A);
+
+    for (uint8_t i = 0; i < sizeof(k_cfg) / sizeof(k_cfg[0]); i++) {
+        write_reg(k_cfg[i][0], k_cfg[i][1]);
+    }
+    restore_volatile_regs();
+
+    /* manual calibration of the synthesizer (~0.8 ms), then back in IDLE */
+    (void)strobe(CC1101_SIDLE);
+    (void)strobe(CC1101_SCAL);
+    for (uint8_t i = 0; i < 20U; i++) {
+        _delay_ms(1);
+        if ((read_status_stable(CC1101_MARCSTATE) & 0x1F) == 0x01) {
+            break;
+        }
+    }
+    p->marcstate = read_status_stable(CC1101_MARCSTATE) & 0x1F;
+    p->fscal1 = read_reg(CC1101_FSCAL1);
+    p->pll_lock = p->marcstate == 0x01 && p->fscal1 != 0x3F;
+    (void)enter_sleep();
+}
+
+#define CC1101_IOCFG1       0x01
+
+static bool miso_high(void) { return (PORTA.IN & PIN_SPI_MISO) != 0; }
+
+/** Level changes on GDO0 in ~3 ms of polling (a clock of 135 kHz gives dozens). */
+static uint8_t gdo0_edges(void)
+{
+    uint8_t n = 0;
+    uint8_t last = PORTB.IN & PIN_RF_GDO0;
+    for (uint16_t i = 0; i < 1500U; i++) {
+        uint8_t v = PORTB.IN & PIN_RF_GDO0;
+        if (v != last) {
+            last = v;
+            if (n < 255U) {
+                n++;
+            }
+        }
+    }
+    return n;
+}
+
+static bool gdo0_steady(bool high)
+{
+    _delay_us(50);
+    for (uint16_t i = 0; i < 500U; i++) {
+        if (((PORTB.IN & PIN_RF_GDO0) != 0) != high) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void cc1101_lines(cc1101_lines_t *l)
+{
+    uint8_t f = 0, g = 0;
+
+    /* 1) the pins as plain I/O: SPI off, MISO with the internal pull-up, CSn high
+     *    (the CC1101 keeps SO in high impedance while CSn is high) */
+    SPI0.CTRLA = 0;
+    PORTA.DIRSET = PIN_SPI_MOSI | PIN_SPI_SCK | PIN_SPI_CSN;
+    PORTA.DIRCLR = PIN_SPI_MISO;
+    PORTA.PIN2CTRL = PORT_PULLUPEN_bm;
+    cs_high();
+    PORTA.OUTSET = PIN_SPI_MOSI | PIN_SPI_SCK;
+    _delay_us(200);
+    bool idle = miso_high();
+    if (idle) {
+        f |= CL_MISO_IDLE_HI;
+    }
+    PORTA.OUTCLR = PIN_SPI_MOSI;
+    _delay_us(100);
+    if (idle && !miso_high()) {
+        f |= CL_MISO_MOSI;
+    }
+    PORTA.OUTSET = PIN_SPI_MOSI;
+    PORTA.OUTCLR = PIN_SPI_SCK;
+    _delay_us(100);
+    if (idle && !miso_high()) {
+        f |= CL_MISO_SCK;
+    }
+    PORTA.OUTCLR = PIN_SPI_MOSI;
+
+    /* 2) CSn low: the chip wakes up and pulls SO low once its crystal runs */
+    cs_low();
+    for (uint16_t t = 0; t < 3000U; t++) {
+        if (!miso_high()) {
+            f |= CL_SO_LOW;
+            break;
+        }
+        _delay_us(1);
+    }
+    _delay_us(50);
+    cs_high();
+    _delay_us(200);
+    if (miso_high()) {
+        f |= CL_SO_RELEASE;
+    }
+
+    /* 3) does the radio take commands? Checked on GDO0 and on SO driven as GDO1,
+     *    not by reading registers back over MISO. */
+    spi_open();
+    PORTB.PIN2CTRL = 0;                          /* GDO0 input buffer on */
+    (void)strobe(CC1101_SRES);
+    _delay_ms(1);
+    l->clk_edges = gdo0_edges();
+    if (l->clk_edges >= 8U) {
+        f |= CL_GDO0_CLK;
+    }
+    write_reg(CC1101_IOCFG0, 0x2F);              /* GDO0: constant 0 */
+    if (gdo0_steady(false)) {
+        f |= CL_GDO0_LO;
+    }
+    write_reg(CC1101_IOCFG0, 0x6F);              /* GDO0: constant 0, inverted = 1 */
+    if (gdo0_steady(true)) {
+        f |= CL_GDO0_HI;
+    }
+    write_reg(CC1101_IOCFG1, 0x2F);              /* SO/GDO1 while CSn high: constant 0 */
+    PORTA.PIN2CTRL = PORT_PULLUPEN_bm;
+    _delay_us(200);
+    if (!miso_high()) {
+        g |= CL2_SO_DRIVE_LO;
+    }
+    PORTA.PIN2CTRL = 0;
+    write_reg(CC1101_IOCFG1, 0x6F);              /* ... constant 1 (pull-up off: the chip must drive it) */
+    _delay_us(200);
+    if (miso_high()) {
+        g |= CL2_SO_DRIVE_HI;
+    }
+    write_reg(CC1101_IOCFG1, 0x2E);
+    (void)strobe(CC1101_SRES);
+    PORTB.PIN2CTRL = PORT_ISC_INPUT_DISABLE_gc;
+    spi_close();
+
+    l->flags = f;
+    l->flags2 = g;
+}
+
+void cc1101_listen(uint16_t ms, cc1101_heard_t *h)
+{
+    uint8_t buf[64];
+
+    h->count = 0;
+    h->errors = 0;
+    h->best_dbm = -128;
+    h->floor_dbm = -128;
+    h->last_type = 0;
+    h->last_id = 0;
+
+    spi_open();
+    PORTB.PIN2CTRL = 0;                          /* GDO0 input buffer on */
+    if (!cs_select_wait_ready()) {
+        goto out;
+    }
+    cs_high();
+    _delay_us(20);
+    restore_volatile_regs();
+    (void)strobe(CC1101_SIDLE);
+    (void)strobe(CC1101_SFRX);
+    (void)strobe(CC1101_SRX);
+    _delay_us(2500);                             /* calibration + RSSI valid */
+    h->floor_dbm = rssi_dbm(read_status(CC1101_RSSI));
+
+    while (ms > 0) {
+        if (!(PORTB.IN & PIN_RF_GDO0)) {         /* no sync word yet */
+            _delay_ms(1);
+            ms--;
+            if ((ms & 0xFFU) == 0U) {
+                wdt_kick();
+            }
+            continue;
+        }
+        uint8_t t = 0;                           /* receiving: wait for the end of the packet */
+        while ((PORTB.IN & PIN_RF_GDO0) && t < TX_TIMEOUT_MS) {
+            _delay_ms(1);
+            t++;
+        }
+        ms = (ms > t) ? (uint16_t)(ms - t) : 0U;
+        uint8_t n = read_status_stable(CC1101_RXBYTES);
+        uint8_t len = 0;
+        bool good = false;
+        if (!(n & 0x80) && (n & 0x7F) >= 3U) {   /* no overflow, length + status at least */
+            (void)read_burst(CC1101_FIFO, &len, 1);
+            if (len > 0 && len <= sizeof(buf) - 2U && (uint8_t)(len + 3U) <= (n & 0x7F)) {
+                uint8_t st[2];
+                (void)read_burst(CC1101_FIFO, buf, len);
+                (void)read_burst(CC1101_FIFO, st, 2);
+                if (st[1] & 0x80) {              /* CRC_OK */
+                    good = true;
+                    int8_t dbm = rssi_dbm(st[0]);
+                    if (h->count < 255U) {
+                        h->count++;
+                    }
+                    if (dbm > h->best_dbm) {
+                        h->best_dbm = dbm;
+                    }
+                    h->last_type = buf[0];
+                    h->last_id = (len >= 3U) ? (uint16_t)(buf[1] | ((uint16_t)buf[2] << 8)) : 0U;
+                }
+            }
+        }
+        if (!good && h->errors < 255U) {
+            h->errors++;
+        }
+        (void)strobe(CC1101_SIDLE);              /* MCSM1: RX -> IDLE after a packet */
+        (void)strobe(CC1101_SFRX);
+        (void)strobe(CC1101_SRX);
+        wdt_kick();
+    }
+    (void)strobe(CC1101_SIDLE);
+    (void)strobe(CC1101_SFRX);
+out:
+    PORTB.PIN2CTRL = PORT_ISC_INPUT_DISABLE_gc;
+    (void)enter_sleep();
+}
+
+#endif /* CC1101_DIAG */
