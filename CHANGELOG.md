@@ -14,7 +14,7 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 ### Plánováno (zatím není hotové, příští verze)
 - **Automatické aktualizace systému Raspberry Pi:** systémové balíčky (bezpečnostní opravy Raspberry Pi OS) se budou instalovat samy, v nastavené době a s restartem jen když je potřeba; výsledek poslední aktualizace uvidí admin v *Nastavení*.
 - **Systém jen pro čtení kvůli SD kartě:** systémová část karty bude běžně zamčená (read-only), aby ji neopotřebovávaly zápisy a nepoškodil ji výpadek proudu. Na dobu aktualizace systému se na chvíli odemkne a hned zase zamkne.
-- **Rozdělení SD karty:** k tomu je potřeba oddělit zamčený systém od zapisovatelné části s daty (databáze retenčky i větru, zálohy, nastavení); logy do RAM. Promyslet převod stávající instalace bez ztráty dat a bez nové instalace od nuly.
+- **Rozdělení SD karty:** k tomu je potřeba oddělit zamčený systém od zapisovatelné části s daty (databáze retenčky i větru, zálohy, nastavení); logy do RAM. Nová instalace od nuly je přípustná – stačí převést data (záloha z webu a obnovení po instalaci).
 
 ## [1.25.0] - 2026-11-21
 
