@@ -8,11 +8,11 @@ i s úplně mrtvým rádiem.
 ## Postup
 
 1. Programátor zapojte stejně jako při nahrávání firmwaru ([programovani_uzlu.md](programovani_uzlu.md)).
-2. Dvojklik na **`uzel/7-diagnostika.cmd`** – nahraje diagnostický firmware.
+2. Dvojklik na **`uzel/6-diagnostika.cmd`** – nahraje diagnostický firmware.
    Párovací klíč v čidle zůstává (EEPROM se při nahrávání nemaže).
 3. Nechte čidlo běžet **aspoň 5 minut** (napájené baterií, nebo 3,3 V z programátoru).
    Programátor může zůstat zapojený. Sonda může být připojená – změří se i ona.
-4. Dvojklik na **`uzel/8-precist-diagnostiku.cmd`** – vyčte výsledek a vypíše, co je v pořádku
+4. Dvojklik na **`uzel/7-precist-diagnostiku.cmd`** – vyčte výsledek a vypíše, co je v pořádku
    a co zkontrolovat. Vyčtení čidlo restartuje a test začne znovu.
 5. Zpět na normální firmware: **`uzel/3-aktualizace-firmwaru.cmd`** (párování zůstane).
 

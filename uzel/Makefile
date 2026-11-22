@@ -9,7 +9,7 @@
 #   make flash      flash via SerialUPDI (PORT=COM3 or PORT=/dev/ttyUSB0)
 #   make fuses      write fuses (once per chip)
 #   make spanek     build tools/test_spanku.hex (sleep-only firmware, 5-test-spanku.cmd)
-#   make diag       build tools/diag.hex (diagnostic firmware, 7-diagnostika.cmd)
+#   make diag       build tools/diag.hex (diagnostic firmware, 6-diagnostika.cmd)
 # ==============================================================================
 
 MCU        = attiny1624
@@ -76,7 +76,7 @@ spanek:
 	$(SIZE) $(BUILD_DIR)/test_spanku.elf
 
 # Diagnostic firmware (docs/diagnostika_uzlu.md): radio, battery, SHT40 and probe self-test,
-# result in the EEPROM from 0xC0, read by 8-precist-diagnostiku.cmd
+# result in the EEPROM from 0xC0, read by 7-precist-diagnostiku.cmd
 DIAG_SRCS = tools/diag.c src/power.c src/adc.c src/sht40.c src/cc1101.c
 
 diag:

@@ -170,7 +170,7 @@ Místo Arduina stačí **USB-TTL převodník přepnutý na 3,3 V** (skript ho po
 Hodnota v řádu desítek µA a víc znamená problém s některou součástkou. Stovky µA až mA obvykle znamenají
 probuzené rádio (např. špatně osazený CC1101), protože tento firmware chybu nijak nehlásí.
 
-### Diagnostika čidla (`7-diagnostika.cmd`, `8-precist-diagnostiku.cmd`)
+### Diagnostika čidla (`6-diagnostika.cmd`, `7-precist-diagnostiku.cmd`)
 Když se čidlo neobjeví na hubu: diagnostický firmware otestuje rádio CC1101 (včetně jednotlivých linek SPI),
 SHT40 a sondu a výsledek vyčte a vysvětlí přes programátor. Postup a význam výsledků:
 [diagnostika_uzlu.md](diagnostika_uzlu.md).

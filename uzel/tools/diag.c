@@ -1,9 +1,9 @@
 /**
  * @file diag.c
  * @brief Diagnostic firmware of the tank sensor node (separate build: make diag,
- *        7-diagnostika.cmd). Tests the board and the radio over and over and keeps
+ *        6-diagnostika.cmd). Tests the board and the radio over and over and keeps
  *        the last result in the EEPROM (0xC0.., outside the pairing keys);
- *        8-precist-diagnostiku.cmd reads it over UPDI and explains it
+ *        7-precist-diagnostiku.cmd reads it over UPDI and explains it
  *        (docs/diagnostika_uzlu.md). Works even with a dead radio; nothing on the hub.
  *
  * Cycle (~6 s): line test of the SPI pins (cc1101_lines) -> radio probe (SPI bus,

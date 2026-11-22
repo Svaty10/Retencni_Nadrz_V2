@@ -277,7 +277,7 @@ function Show-Diagnostika([byte[]]$ee) {
     Write-Host ""
     if ($magic -ne "DIAG") {
         Write-Host "V čidle není záznam diagnostiky." -ForegroundColor Yellow
-        Write-Host "  • nahrajte diagnostický firmware (7-diagnostika.cmd) a nechte čidlo aspoň 30 s běžet,"
+        Write-Host "  • nahrajte diagnostický firmware (6-diagnostika.cmd) a nechte čidlo aspoň 30 s běžet,"
         Write-Host "  • když už nahraný je a záznam pořád chybí, čip se po startu hned restartuje (napájení!)."
         Write-Host ("Párovací klíč v EEPROM: " + $(if ($key) { "ANO (čidlo je spárované)" } else { "NE" }))
         return
@@ -429,7 +429,7 @@ if ($Diagnostika) {
     Write-Host ""
     Write-Host "Diagnostický firmware běží: každých ~6 s otestuje rádio, SHT40 a sondu." -ForegroundColor Green
     Write-Host "  • nechte čidlo běžet aspoň 5 minut (poslouchá ostatní čidla v dosahu),"
-    Write-Host "  • výsledek z čidla: 8-precist-diagnostiku.cmd (vyčtení čidlo restartuje, test začne znovu),"
+    Write-Host "  • výsledek z čidla: 7-precist-diagnostiku.cmd (vyčtení čidlo restartuje, test začne znovu),"
     Write-Host "  • zpět: 3-aktualizace-firmwaru.cmd – párování v čidle zůstává."
     return
 }
