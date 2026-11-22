@@ -3117,6 +3117,9 @@
         } catch (e) { /* ignore */ }
     }
 
+    /** Firmware number reported by the sensor (e.g. 16), '–' before its first packet. */
+    const fwTxt = (fw) => (fw == null ? '–' : String(fw));
+
     function renderNodes(d) {
         const r = d.radio || {};
         $('radioInfo').innerHTML = `
@@ -3127,14 +3130,14 @@
 
         const body = $('nodesBody');
         body.textContent = '';
-        if (!d.summaries.length) body.innerHTML = '<tr><td colspan="6" class="muted">Zatím žádné čidlo</td></tr>';
+        if (!d.summaries.length) body.innerHTML = '<tr><td colspan="7" class="muted">Zatím žádné čidlo</td></tr>';
         d.summaries.forEach((n) => {
             const tr = document.createElement('tr');
             const st = n.unpairing ? 'odpárování – vyjměte a vložte baterii'
                 : ({ online: 'online', stale: 'zpožděná data', offline: 'offline' }[n.status] || n.status);
             tr.innerHTML = `<td><strong>${nm(n.name)}</strong>${n.refill_configured ? `<span title="Ovládá dopouštění">${ico('drop', 'ico-sm')}</span>` : ''}${n.paired ? `<span title="Spárováno">${ico('lock', 'ico-sm')}</span>` : ' <span class="muted small">(nespárováno)</span>'}</td><td><code>${esc(n.id)}</code></td>
                 <td>${esc(st)}${!n.unpairing && n.age_s != null ? ' · ' + fmtAgo(n.age_s) : ''}</td><td>${sigTxt(n.rssi)}</td>
-                <td>${num(n.battery && n.battery.percent, 0, ' %')}</td><td class="td-actions"></td>`;
+                <td>${num(n.battery && n.battery.percent, 0, ' %')}</td><td>${fwTxt(n.fw)}</td><td class="td-actions"></td>`;
             const btn = (label, cls, fn) => {
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = label;
@@ -3932,6 +3935,7 @@
         }
 
         document.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab, b)));
+        $('brandHome').addEventListener('click', () => showTab('dashboard', document.querySelector('.tab-btn[data-tab="dashboard"]')));
         $('logoutBtn').addEventListener('click', () => {
             api('POST', '/api/auth/logout', {}).finally(() => window.location.replace('/login'));
         });

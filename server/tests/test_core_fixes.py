@@ -244,6 +244,14 @@ class CalibrationTest(Base):
         row = self.core.db.one("SELECT seq, level_mm, probe_100uv FROM measurements")
         self.assertEqual((row["seq"], row["level_mm"], row["probe_100uv"]), (1, None, 7000))
 
+    def test_node_summary_reports_firmware(self):
+        n = Node(self.core, 0x4545)
+        self.core.start_pairing(0x4545, "Nádrž", "admin")
+        self.assertEqual(n.try_pair(), "paired")
+        n.send(ctr=1)                                                 # build_telemetry default fw = 10
+        summary = next(s for s in self.core.node_summaries() if s["id"] == "4545")
+        self.assertEqual(summary["fw"], 10)
+
 
 class RefillBase(Base):
     def setUp(self):

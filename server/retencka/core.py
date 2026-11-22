@@ -1180,6 +1180,7 @@ class Core:
                         "volume_l": None if lv is None else round(lv.volume_l),
                         "max_l": round(model.max_volume_l(n)),
                         "rssi": None if last.get("rssi_x2") is None else last["rssi_x2"] / 2.0,
+                        "fw": last.get("fw"),
                         "age_s": self.age_s(nid), "battery": self.battery(nid),
                         "refilling": nid in self.refills,
                         "refill_configured": self._provider(n) is not None,

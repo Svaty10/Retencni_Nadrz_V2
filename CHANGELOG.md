@@ -7,6 +7,8 @@ Postup vydání nové verze: [docs/vydani.md](docs/vydani.md).
 
 ### Přidáno
 - **Firmware čidla 16: smazání párování bez programátoru.** Při vložení baterie propojit drátkem piny 5 V a signál na konektoru sondy (sonda odpojená) a nechat aspoň 10 s: čidlo zapomene párování a nabízí ho jako nové. Postup: [docs/programovani_uzlu.md](docs/programovani_uzlu.md). Nový firmware je potřeba do čidla nahrát ručně.
+- **Verze firmwaru čidel v nastavení:** tabulka *Čidla* má sloupec *Firmware* s verzí, kterou čidlo hlásí v paketech (např. 16). API `GET /api/nodes` má u každého čidla položku `fw`.
+- **Logo vlevo nahoře vrací na přehled:** klik na kapku s názvem otevře záložku *Přehled* z kterékoli jiné záložky.
 
 ## [1.25.0] - 2026-11-21
 

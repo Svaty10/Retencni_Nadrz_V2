@@ -64,10 +64,10 @@
 
 <div class="app-container">
     <header class="app-header">
-        <div class="brand">
+        <button class="brand" id="brandHome" type="button" title="Přehled">
             <svg class="ico brand-mark" aria-hidden="true"><use href="#i-drop"/></svg>
             <span class="brand-name">Retenční nádrž</span>
-        </div>
+        </button>
         <nav class="main-nav" id="tabNav" aria-label="Hlavní navigace">
             <button class="tab-btn nav-tab active" data-tab="dashboard" type="button">Přehled</button>
             <button class="tab-btn nav-tab admin-only hidden" data-tab="nastaveni" type="button">Nastavení<span class="badge-dot hidden" id="menuUpdDot" title="K dispozici je aktualizace"></span></button>
@@ -322,7 +322,7 @@
 
                 <div class="table-responsive">
                     <table class="user-table">
-                        <thead><tr><th>Čidlo</th><th>ID</th><th>Stav</th><th>Signál</th><th>Baterie</th><th></th></tr></thead>
+                        <thead><tr><th>Čidlo</th><th>ID</th><th>Stav</th><th>Signál</th><th>Baterie</th><th>Firmware</th><th></th></tr></thead>
                         <tbody id="nodesBody"></tbody>
                     </table>
                 </div>
